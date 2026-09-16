@@ -1,9 +1,9 @@
 # Handoff F0 — issue #1
 
-- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/1
+- Issue: <https://github.com/tears-mysthrala/chat-overlay/issues/1>
 - Rama: `chore/1-bootstrap`
 - Worktree: `D:\github\chat-overlay-worktrees\1-bootstrap`
-- PR: https://github.com/tears-mysthrala/chat-overlay/pull/2 (draft; no se ha hecho merge).
+- PR: <https://github.com/tears-mysthrala/chat-overlay/pull/2> (draft; no se ha hecho merge).
 
 ## Cambios
 
