@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9d4
+      - name: Check toolchain availability
+        run: |
+          elixir --version
+          mix --version
+      - name: Check format and tests
+        run: mix check
+      - name: Check issue traceability
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Eq '#[0-9]+' || {
+              echo 'PR title or body must reference a real issue number'; exit 1;
+            }
+            printf '%s' "$HEAD_REF" | grep -Eq '^(feat|fix|test|docs|chore|security)/[0-9]+-' || {
+              echo 'PR branch must start with an issue number'; exit 1;
+            }
+          fi
