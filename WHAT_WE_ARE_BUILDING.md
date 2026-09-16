@@ -35,16 +35,16 @@ El hostname debe ser configurable. El servicio entrega frontend y eventos en el 
 
 **PROD-04.** Repositorios de referencia, no servicios que haya que exponer tal cual:
 
-- https://github.com/tears-mysthrala/chatterino-multichat-overlay
-- https://github.com/tears-mysthrala/chatterino-yt-chat
-- https://github.com/tears-mysthrala/chatterino-kick-chat
+- <https://github.com/tears-mysthrala/chatterino-multichat-overlay>
+- <https://github.com/tears-mysthrala/chatterino-yt-chat>
+- <https://github.com/tears-mysthrala/chatterino-kick-chat>
 
 Revisar fuentes y licencias antes de reutilizar; registrar commit de origen y cambios. Conservar atribuciones, incluido el origen previo del lector de YouTube. El nuevo servicio no depende de `c2`, del agente local ni de un Chatterino abierto. Los conectores no documentados constituyen un riesgo de compatibilidad que debe quedar visible.
 
 ### Fases y puertas de entrada
 
 | Fase | Alcance | Condición de salida o activación |
-|---|---|---|
+| --- | --- | --- |
 | F0: fundamento | Trazabilidad, esqueleto mínimo, CI, amenaza inicial, contrato de eventos y una prueba técnica limitada de conectores. | PR revisable, ejecución local reproducible y riesgos concretos identificados. No es un lanzamiento público. |
 | F1: overlay | Tres lectores autónomos, normalización, SSE, vista OBS, estados, borrados y recuperación. | Pruebas funcionales, de seguridad y de carga; validación real por plataforma; revisión de publicación. |
 | F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. | Autorización específica; aislamiento y ciclo de vida de datos verificados antes de cuentas reales. |
@@ -207,7 +207,7 @@ No confundir «compila», «tests unitarios pasan», «PR integrada» y «apto p
 ### Casos obligatorios antes de publicar F1
 
 | Área | Prueba de aceptación |
-|---|---|
+| --- | --- |
 | Conectores | Tres plataformas validadas desde el servidor previsto; estado offline y fallos de autorización/cuota diferenciados. Limitaciones documentadas. |
 | Entrega | Mensajes Unicode, orden local, duplicados, eventos desconocidos, borrados y reset/snapshot; sin resurrección tras replay dentro del contrato soportado. |
 | Recuperación | Reiniciar un lector no interrumpe otros; cortar SSE y recargar OBS no duplica historial ni deja recursos huérfanos. |
@@ -251,7 +251,7 @@ No escribir «cumple toda la normativa europea», «certificado CRA» o «ASVS L
 Crear documentos cuando su fase lo requiera; no llenar el repositorio de plantillas vacías. Mantener una sola fuente de verdad y enlaces desde issues/PR. Las evidencias grandes pertenecen al almacenamiento de artefactos con acceso y retención adecuados, no a commits con datos de usuarios.
 
 | Documento | Momento y contenido mínimo |
-|---|---|
+| --- | --- |
 | `WHAT_WE_ARE_BUILDING.md` / `AGENTS.md` | Contrato y entrada de agentes; cambios del contrato por PR. |
 | `README.md` | Arranque, configuración, limitaciones y estado real de soporte; sin claims de producción prematuros. |
 | `docs/architecture.md` / `docs/event-contract.md` | F0: fronteras y contrato necesarios para repartir trabajo. |
