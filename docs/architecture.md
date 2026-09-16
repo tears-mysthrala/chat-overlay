@@ -3,7 +3,9 @@
 ## Frontera actual
 
 ```text
-mix run -> ChatOverlay.Application (Supervisor OTP sin hijos) -> ChatOverlay.phase/0
+mix run -> ChatOverlay.Application -> Supervisor OTP (sin hijos)
+
+consulta explícita -> ChatOverlay.phase/0 -> :f0
 ```
 
 F0 no escucha red, no resuelve URLs, no conecta plataformas y no persiste datos. La aplicación es una semilla ejecutable para validar el toolchain y la trazabilidad sin abrir superficies prematuras.
