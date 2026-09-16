@@ -8,9 +8,12 @@ defmodule ChatOverlay.MixProject do
       elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: [],
-      aliases: [check: ["format --check-formatted", "test"]],
-      preferred_cli_env: [check: :test]
+      aliases: [check: ["format --check-formatted", "test"]]
     ]
+  end
+
+  def cli do
+    [preferred_envs: [check: :test]]
   end
 
   def application do
