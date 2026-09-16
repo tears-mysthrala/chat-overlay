@@ -16,7 +16,7 @@ Aplicación Elixir/OTP mínima, prueba de fase F0, README, workflow CI con permi
 ## Pendientes y riesgos
 
 - Abrir PR enlazada y obtener revisión humana.
-- Validar CI real, revisar el pin de la acción checkout y completar SBOM/licencias/escaneo.
+- Validar CI real y completar SBOM/licencias/escaneo.
 - Crear issues separados para contrato ejecutable, simulador y validación técnica de plataformas.
 - No se validaron plataformas en vivo; no se conectaron cuentas, no se desplegó y no se modificó DNS/túnel.
 

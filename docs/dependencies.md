@@ -6,7 +6,7 @@
 - Erlang/OTP compatible, runtime necesario para la VM.
 - Dependencias Mix de producción: ninguna.
 
-La versión exacta de OTP y el árbol resuelto deben fijarse en el entorno de CI cuando se disponga de un runner ejecutable. El checkout actual no puede verificarlo porque `erl.exe` no está disponible.
+CI fija Elixir 1.20.4 y Erlang/OTP 29.0.6 mediante commits inmutables de las acciones. El árbol Mix está vacío en F0; cualquier dependencia futura deberá registrar finalidad, licencia, transitivas, mantenimiento, avisos, permisos y retirada.
 
 ## Decisiones
 
