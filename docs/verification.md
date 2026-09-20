@@ -17,7 +17,7 @@ Estado de implementación local: en revisión. **F1 no ha superado su puerta de 
 | SUP-02/06 | Hex 2.5.1 y `scripts/inventory.exs` | 0 avisos/retirados Hex; 10 paquetes con licencias/textos/hashes |
 | SUP-04 | `scripts/audit_image.py` | CycloneDX 1.7 válido, aplicación + runtime + imagen; 292 componentes en artefacto inspeccionado |
 | SUP-07 | Grype, sin supresión | FAIL: 4 coincidencias (1 High, 3 Medium; 2 CVE), ver dependencies.md |
-| REL-08 | `scripts/load.exs 60`, Docker 2 CPU/1 GiB | 4.500 eventos emitidos, 45.000/45.000 entregas, 0 errores, p95 49 ms; RAM BEAM 343.084.240 → 368.988.880 bytes |
+| REL-08 | `scripts/load.exs 60`, Docker 2 CPU/1 GiB | 4.500 eventos emitidos, 45.000/45.000 entregas, 0 errores, p95 51 ms; RAM BEAM 343.278.104 → 373.720.184 bytes |
 | DEV-13/REL-08 | Vivo, OBS y 4 h/24 h | Pendientes; bloquean candidata/publicación según contrato |
 | COMP-01/10/SUP-05 | Matriz normativa, condiciones de plataforma, firma/procedencia | Pendientes de revisión humana antes de publicar |
 
