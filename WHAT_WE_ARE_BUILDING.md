@@ -3,7 +3,7 @@
 **Proyecto:** `chat-overlay` · **Responsable del producto y aprobación final:** Kalista  
 **Versión del documento:** 1.0 · **Fecha de referencia:** 2026-09-16  
 **Estado:** contrato de trabajo inicial; no acredita implementación, pruebas ni conformidad legal.  
-**Fase autorizada inicialmente:** F0. F1 es el primer objetivo de producto; F2–F4 requieren autorización explícita.
+**Fase autorizada vigente:** completar F0 y construir F1, confirmado por Kalista el 20-09-2026 (issue #3). F2–F4 requieren autorización explícita. Esta autorización no incluye merge, despliegue ni registro de aplicaciones externas.
 
 ## 0. Lectura y reglas de decisión
 
@@ -57,7 +57,7 @@ Revisar fuentes y licencias antes de reutilizar; registrar commit de origen y ca
 
 ## 2. Arquitectura inicial y límites de confianza
 
-**ARCH-01.** Base: Elixir sobre Erlang/OTP, aplicación pequeña y frontend estático propio. Candidatos iniciales de transporte: Cowboy para HTTP/SSE y Gun para HTTP/WebSocket. Fijar versiones soportadas y compatibles en F0; revisar el árbol resuelto, no asumir un número de dependencias. Utilizar JSON del runtime cuando la versión elegida lo proporcione y cumpla el contrato.
+**ARCH-01.** Base: Elixir sobre Erlang/OTP, aplicación pequeña y frontend estático propio. Transporte aprobado por Kalista el 20-09-2026 (issue #3 y ADR 0001): Bandit para HTTP/SSE y Mint/Mint.WebSocket para HTTP/WebSocket, sustituyendo los candidatos Cowboy/Gun. Fijar versiones soportadas y compatibles en F0; revisar el árbol resuelto, no asumir un número de dependencias. Utilizar JSON del runtime cuando la versión elegida lo proporcione y cumpla el contrato.
 
 No introducir inicialmente Phoenix, LiveView, Ecto, Redis, Kafka, Broadway, Node/npm ni un framework frontend. No es una prohibición permanente: una necesidad futura puede justificar una dependencia mediante issue y ADR. Herramientas de desarrollo y pruebas se evalúan por separado y no viajan por defecto en la imagen de ejecución.
 
@@ -117,7 +117,7 @@ Prueba breve automatizada en PRs relevantes; prueba de al menos 4 horas para can
 
 **SEC-08.** Contenedor no root, sin privilegios ni socket de Docker, capacidades eliminadas salvo necesidad justificada, `no-new-privileges`, límites efectivos de CPU/memoria/PID y filesystem de ejecución de solo lectura con temporales acotados. Segmentar el servicio respecto al resto de la infraestructura. La configuración debe funcionar en el entorno real y verificarse, no limitarse a comentarios del Compose. [S11]
 
-**SEC-09.** Las URLs de F1 seleccionan únicamente perfiles públicos expresamente habilitados por el operador. No enumerar perfiles privados ni exponer una API de ingestión. Al añadir acceso privado, usar capacidades revocables de solo lectura, aisladas de las sesiones administrativas; un identificador opaco por sí solo no es autorización. Proteger también las conexiones SSE ya abiertas al revocar acceso.
+**SEC-09.** Las URLs de F1 seleccionan únicamente perfiles públicos expresamente habilitados por el operador. No enumerar perfiles privados ni exponer una API de ingestión general. La recepción oficial de Kick utiliza exclusivamente un callback firmado y validado contra suscripciones y canales configurados; no acepta ingestión arbitraria. Al añadir acceso privado, usar capacidades revocables de solo lectura, aisladas de las sesiones administrativas; un identificador opaco por sí solo no es autorización. Proteger también las conexiones SSE ya abiertas al revocar acceso.
 
 **SEC-10.** Ningún secreto en Git, imagen, issues, prompts, fixtures, URL pública o logs. Inyectarlos en ejecución mediante un mecanismo documentado y con permisos mínimos. Suprimir cuerpos de error sensibles y proteger volcados de memoria. No introducir telemetría, rastreadores, CDN de scripts o LLM externo en producción.
 
@@ -178,7 +178,7 @@ Usar `fix/`, `test/`, `docs/`, `chore/` o `security/` cuando corresponda. Antes 
 
 **DEV-05.** Una unidad de necesidad puede tener varias PR pequeñas. Usar `Refs #123` en cambios parciales y `Closes #123` solo en la entrega que complete aceptación; el cierre automático depende de la integración en la rama predeterminada. PR enlazada no significa requisito terminado. Revisar manualmente tareas acumuladas y dependencias. [S9]
 
-**DEV-06.** Abrir draft PR temprano cuando aporte visibilidad. Incluir necesidad, issue, cambios, IDs de contrato, pruebas ejecutadas y sus resultados, pruebas no ejecutadas, impacto de datos/permisos/dependencias, evidencia y rollback. El revisor debe poder reconstruir la decisión sin buscar una conversación privada.
+**DEV-06.** Abrir siempre PR lista para revisión, nunca draft, para permitir la revisión de agentes cloud (instrucción de Kalista, 20-09-2026). Incluir necesidad, issue, cambios, IDs de contrato, pruebas ejecutadas y sus resultados, pruebas no ejecutadas, impacto de datos/permisos/dependencias, evidencia y rollback. Los pendientes bloquean el merge y se describen explícitamente. El revisor debe poder reconstruir la decisión sin buscar una conversación privada.
 
 **DEV-07.** Los agentes no hacen merge ni despliegan producción sin instrucción humana expresa. Proteger rama predeterminada con PR, checks y revisión humana cuando el plan/repositorio lo permita; documentar un control alternativo si una función de GitHub no está disponible. No desactivar controles para pasar una PR ni atribuir revisión independiente a una autorrevisión del mismo agente.
 

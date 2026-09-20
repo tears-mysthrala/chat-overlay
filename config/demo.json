@@ -1,0 +1,1 @@
+{"profiles":[{"handle":"demo","sources":[{"platform":"twitch","channel":"demo-twitch","mode":"demo"},{"platform":"youtube","channel":"demo-youtube","mode":"demo"},{"platform":"kick","channel":"demo-kick","mode":"demo"}]}]}

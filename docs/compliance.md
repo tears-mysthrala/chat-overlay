@@ -1,13 +1,16 @@
-# Alcance de cumplimiento F0
+# Cumplimiento y condiciones de publicación
 
-Este documento no es una certificación ni una conclusión jurídica.
+Implementación local F1 con datos sintéticos. No constituye certificación ni conclusión jurídica. Responsable de decisiones y revisión antes de publicación: Kalista.
 
-| Referencia | Estado F0 | Alcance/evidencia |
+| Referencia | Estado | Fundamento y siguiente evidencia |
 | --- | --- | --- |
-| NIST SSDF 1.1 | Adoptado como baseline | Issue, worktree, pruebas y CI documentados; revisión humana pendiente |
-| OWASP ASVS 5.0.0 | Parcial/no aplicable aún | No hay superficie web, sesión ni autenticación en F0 |
-| RGPD/LOPDGDD | Evaluación pendiente para publicación | No se almacenan datos; pruebas sintéticas |
-| ePrivacy/LSSI/DSA/NIS2 | Pendiente de alcance | No hay servicio publicado ni usuarios en F0 |
-| CRA | Evaluación pendiente de distribución | No se distribuye artefacto ni se afirma exención |
+| SSDF | Baseline adoptado parcialmente | Trazabilidad, pruebas, inventario y revisión; evidencias en verification.md |
+| ASVS 5.0.0 | Cobertura parcial; no se afirma L2 verificado | Controles de entrada, salida, red y configuración en threat-model.md; mapeo formal pendiente |
+| RGPD/LOPDGDD | Evaluación de vivo pendiente | Chat público puede contener datos personales; 100 mensajes/30 min en RAM no elimina obligaciones de información/base/roles |
+| ePrivacy/LSSI | Publicación pendiente | Sin cookies, analytics, CDN o almacenamiento local; verificar información del prestador y entorno final |
+| DSA/NIS2 | Aplicabilidad pendiente | Depende de entidad/actividad/servicio; no inferida por el lenguaje o autoalojamiento |
+| CRA | Evaluación de distribución pendiente | Evaluar servicio, frontend e imagen y actividad comercial por separado; no afirmar exención universal |
+| Plataformas | Acceso y visualización pendientes de validación real | APIs oficiales; límites y permisos en platforms.md; mezcla en lector y emisión configurable |
+| Licencias | Dependencias Hex inventariadas en build | Textos incluidos; revisar también obligaciones de imagen/runtime antes de distribuir |
 
-Antes de publicar o activar nuevas capacidades debe actualizarse esta matriz con responsable, fundamento y evidencia verificable.
+Fuentes normativas y fechas están en el [contrato](../WHAT_WE_ARE_BUILDING.md#10-fuentes-y-vigencia). No se han reinterpretado en esta entrega. Antes de publicación hay que verificar su vigencia, completar fundamento/aplicabilidad, soporte, información a usuarios, proveedores/transferencias y respuesta a incidentes. Estos pendientes bloquean publicación, no las pruebas locales sintéticas.

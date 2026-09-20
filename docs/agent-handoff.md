@@ -1,25 +1,13 @@
-# Handoff F0 — issue #1
+# Handoff F1 — issue #3
 
-- Issue: <https://github.com/tears-mysthrala/chat-overlay/issues/1>
-- Rama: `chore/1-bootstrap`
-- Worktree: `D:\github\chat-overlay-worktrees\1-bootstrap`
-- PR: <https://github.com/tears-mysthrala/chat-overlay/pull/2> (draft; no se ha hecho merge).
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/3
+- Rama: `feat/3-f1-overlay`.
+- Worktree: `C:/Users/unaiu/.t3/worktrees/chat-overlay-worktrees/3-f1-overlay`.
+- PR: pendiente de anotar al crearla; siempre lista para revisión, nunca draft.
+- Autorizado: completar F0 y construir F1; Bandit/Mint aprobados. No merge ni despliegue.
 
-## Cambios
+Implementados: stores acotados, dedup/borrados/replay, supervisión y demanda, tres conectores oficiales, callback Kick firmado, SSE, lector/overlay estático, demo, contenedor limitado, CI e inventario/escaneo. README ofrece arranque local y docs/platforms.md la preparación real.
 
-Aplicación Elixir/OTP mínima, prueba de fase F0, README, workflow CI con permisos `contents: read`, contrato de eventos, arquitectura, threat model, dependencias, compliance y matriz de verificación.
+[Verificación](verification.md) y [registro](workflows/f1-delivery/runs/2026-09-20.md) distinguen pruebas locales de publicación. Hallazgos de imagen: **4 abiertos** (1 High, 3 Medium; 2 CVE); gate no verde. Canal público gilraennr indicado por la usuaria; no hay aplicaciones/API registradas. No hay validación de vivo/OBS/4 h/24 h.
 
-## Pruebas
-
-`mix check` pasa localmente con Elixir 1.20.4 y Erlang/OTP 29.0.6 usando el PATH de la instalación Scoop; resultado: 2 tests pasados. El PATH no se modificó globalmente. La CI queda configurada para repetir formato, tests y comprobación de trazabilidad en GitHub.
-
-## Pendientes y riesgos
-
-- Obtener revisión humana; la PR draft ya está abierta.
-- Validar CI real y completar SBOM/licencias/escaneo.
-- Crear issues separados para contrato ejecutable, simulador y validación técnica de plataformas.
-- No se validaron plataformas en vivo; no se conectaron cuentas, no se desplegó y no se modificó DNS/túnel.
-
-## Rollback
-
-Revertir la PR; no hay migraciones, secretos ni datos durables.
+Siguiente paso: revisión humana de PR y cierre de [#4](https://github.com/tears-mysthrala/chat-overlay/issues/4). No solicitar tokens en chat. No registrar apps ni publicar callback/túnel con la autorización de implementación local. Rollback: revertir los commits de la PR o volver al digest aprobado; no existen migraciones ni historial durable.

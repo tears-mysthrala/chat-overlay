@@ -1,23 +1,18 @@
-# Modelo de amenazas inicial F0
+# Modelo de amenazas F1
 
-## Activos
+Activos: tokens de lectura, disponibilidad, integridad del overlay y separación de perfiles. Entradas no confiables: visitantes HTTP, mensajes y errores upstream, DNS, callbacks y dependencias. La configuración del operador es una entrada privilegiada validada; nunca procede de una URL pública.
 
-Código, configuración de operación, futuras credenciales de plataformas, disponibilidad del proceso y separación entre overlays. F0 no maneja credenciales ni contenido de chat persistente.
-
-## Entradas y actores
-
-La entrada actual es el propio artefacto del repositorio y la configuración de build. En F1 se añadirán selectores públicos y eventos upstream no confiables. Actores considerados: visitante, operador, plataforma upstream, dependencia comprometida y atacante con capacidad de enviar texto.
-
-## Abusos y mitigaciones
-
-| Riesgo | Mitigación F0 | Riesgo residual |
+| Abuso | Control implementado y evidencia | Límite residual |
 | --- | --- | --- |
-| XSS/inyección desde chats | No existe renderizador ni entrada de chat | Requiere pruebas DOM antes de F1 |
-| SSRF por selector de canal | No se aceptan URLs ni peticiones de red | Validar destinos y DNS en issues de conectores |
-| Fuga entre perfiles | No hay perfiles ni estado compartido | Diseñar aislamiento antes de F2 |
-| Robo de tokens | No hay tokens ni secretos en fixtures/logs | Revisar custodia antes de F2/F3 |
-| Agotamiento de recursos | Sin listener ni ingestión; contrato fija límites futuros | Probar límites y backpressure en F1 |
-| Dependencia comprometida | Dependencias Mix vacías; workflow con permiso mínimo | Añadir SBOM/escaneo de artefactos en F0 posterior |
-| Administración expuesta | No hay endpoints administrativos | Revisar publicación antes de cualquier despliegue |
+| XSS desde chat | textContent, CSP, assets locales; caso literal HTML en demo y prueba DOM | CSP requiere prueba real en OBS |
+| SSRF/red doméstica | hosts cerrados, IP pública fijada, TLS/hostname, sin redirects, sin URLs de usuario | DNS falla cerrado; solo IPv4 |
+| Fuga entre perfiles | stores por handle, selección configurada, fuentes/autorización identificadas; tests A/B | F1 solo ofrece perfiles públicos |
+| Robo de token | env en ejecución, cabeceras salientes, errores cerrados, format_status redactado | Administrador del host y volcados de VM pueden acceder; proteger el host |
+| Callback falso/replay | RSA SHA-256 con clave oficial, timestamp ±300 s, IDs y dedup; pruebas de firma/tamper | Rotación de clave requiere actualización revisada; no conserva una cola durable |
+| Saturación | límites de JSON, cuerpos, historial, replay, tombstones, SSE, conexiones, escritura y contenedor | Un atacante puede consumir las 100 plazas públicas: proxy/segmentación antes de publicar |
+| Resurrección tras borrado | barreras por mensaje/autor/canal, compactación, reset y limpieza tras huecos | Kick no proporciona borrado individual en la API usada |
+| Caída de lector | tareas enlazadas, gracia, supervisión independiente; prueba de kill/reinicio | Corte completo del proceso pierde historial |
+| Dependencia vulnerable | lock, digests, Hex audit, inventario, Grype sin supresiones | Hallazgos de imagen pendientes: ver dependencies.md |
+| Administración expuesta | rutas cerradas, sin ingestión general, métodos limitados | TLS/proxy y revisión de publicación pendientes |
 
-No se ejecuta código desde datos, no se crean átomos desde entrada externa, no se usa deserialización de términos no confiables ni shell controlada por usuario.
+No hay eval, átomos externos, shell de usuario, deserialización Erlang de datos de chat, HTML arbitrario, telemetría o llamadas a modelos. Los scripts de inventario procesan metadatos de build y no forman parte del servidor.

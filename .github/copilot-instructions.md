@@ -2,7 +2,7 @@
 
 Antes de modificar este proyecto, leer `AGENTS.md` y `WHAT_WE_ARE_BUILDING.md` en la raíz. El segundo contiene alcance, fases, requisitos de seguridad, pruebas y trazabilidad; no inferirlos del nombre del repositorio.
 
-La fase inicial es F0. No implementar cuentas, bots, runners o funciones futuras sin autorización. No desarrollar directamente en la rama principal.
+Las fases autorizadas son completar F0 y construir F1 (issue #3). Los PR siempre se abren listos para revisión, nunca draft. No implementar cuentas, bots, runners o funciones futuras sin autorización. No desarrollar directamente en la rama principal.
 
 Cada necesidad se registra en un issue real ANTES de implementar. Usar rama y worktree propios con su número, y enlazar commits/PR. Si GitHub o worktrees no están disponibles, comunicar el bloqueo; no simular el cumplimiento ni crear la trazabilidad a posteriori.
 

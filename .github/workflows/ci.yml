@@ -1,46 +1,63 @@
 name: CI
-
 on:
   push:
     branches: [main]
   pull_request:
-
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * 1"
 permissions:
   contents: read
-
+  issues: read
 jobs:
-  test:
+  source-and-tests:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - name: Check out repository
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Set up Elixir and OTP
-        uses: erlef/setup-beam@0f75c29430f34bb5af4cce5e3b7f6a8860fca236
-        with:
-          otp-version: "29.0.6"
-          elixir-version: "1.20.4"
-          install-hex: true
-          install-rebar: false
-      - name: Check toolchain availability
-        run: |
-          elixir --version
-          mix --version
-      - name: Check format and tests
-        run: mix check
-      - name: Check issue traceability
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Verify issue traceability
         env:
-          HEAD_REF: ${{ github.head_ref }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_BODY: ${{ github.event.pull_request.body }}
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/check_traceability.py
+      - name: Project static checks
         run: |
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            BRANCH_ISSUE="$(printf '%s' "$HEAD_REF" | sed -nE 's#^(feat|fix|test|docs|chore|security)/([1-9][0-9]*)-.*#\2#p')"
-            if [ -z "$BRANCH_ISSUE" ]; then
-              echo 'PR branch must start with an issue number'; exit 1;
-            fi
-
-            ISSUE_REFERENCES="$(printf '%s\n%s\n' "$PR_TITLE" "$PR_BODY" | grep -Eo '#[1-9][0-9]*' | sort -u || true)"
-            printf '%s\n' "$ISSUE_REFERENCES" | grep -Fxq "#$BRANCH_ISSUE" || {
-              echo 'PR branch issue number must match a PR title or body reference'; exit 1;
-            }
-          fi
+          python3 scripts/security_static.py
+          node --check priv/static/app.js
+      - name: Scan repository source for secrets
+        run: python3 scripts/scan_secrets.py
+      - name: Compile, audit Hex, check licenses and run ExUnit in Linux
+        run: docker build --target validation -t chat-overlay:validation .
+      - name: Synthetic load (no platform access)
+        run: |
+          set -o pipefail
+          docker run --rm --network none --cpus 2 --memory 1g -e ERL_FLAGS='+S 2:2' chat-overlay:validation mix run --no-start scripts/load.exs 30 | tee output/load.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: source-evidence
+          path: |
+            output/load.json
+            output/secrets/gitleaks.json
+          retention-days: 14
+  image-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build release image
+        run: docker build -t chat-overlay:review .
+      - name: Verify hardened runtime
+        run: python3 scripts/smoke_image.py chat-overlay:review
+      - name: Install SBOM schema validator (development only)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/overlay-audit"
+          "$RUNNER_TEMP/overlay-audit/bin/python" -m pip install jsonschema==4.26.0 referencing==0.37.0
+      - name: SBOM schema and all-severity vulnerability gate
+        run: '"$RUNNER_TEMP/overlay-audit/bin/python" scripts/audit_image.py chat-overlay:review'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: image-evidence
+          path: |
+            output/audit/*.json
+          retention-days: 14

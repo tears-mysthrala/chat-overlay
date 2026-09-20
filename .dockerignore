@@ -1,0 +1,9 @@
+.git
+_build
+deps
+output
+.env
+*.pem
+*.key
+config/local*
+docs
