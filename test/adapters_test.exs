@@ -42,6 +42,56 @@ defmodule ChatOverlay.AdaptersTest do
              )
   end
 
+  test "Twitch adapter extracts emote fragments from EventSub message data" do
+    source = %{"platform" => "twitch", "channel" => "123"}
+
+    data = %{
+      "metadata" => %{
+        "message_id" => "event-emote",
+        "message_timestamp" => "2026-09-21T12:00:00Z",
+        "subscription_type" => "channel.chat.message"
+      },
+      "payload" => %{
+        "event" => %{
+          "broadcaster_user_id" => "123",
+          "message_id" => "msg-emote",
+          "chatter_user_id" => "456",
+          "chatter_user_name" => "Alice",
+          "message" => %{
+            "text" => "Hi tearsmyGG world",
+            "fragments" => [
+              %{"type" => "text", "text" => "Hi "},
+              %{
+                "type" => "emote",
+                "text" => "tearsmyGG",
+                "emote" => %{
+                  "id" => "emotesv2_abc123",
+                  "emote_set_id" => "set1",
+                  "owner_id" => "789",
+                  "format" => ["static", "animated"]
+                }
+              },
+              %{"type" => "text", "text" => " world"}
+            ]
+          }
+        }
+      }
+    }
+
+    assert {:ok, event} = Adapters.twitch(data, source)
+    assert event["payload"]["text"] == "Hi tearsmyGG world"
+
+    assert [
+             %{"type" => "text", "text" => "Hi "},
+             %{"type" => "emote", "text" => "tearsmyGG", "id" => "emotesv2_abc123"},
+             %{"type" => "text", "text" => " world"}
+           ] = event["payload"]["fragments"]
+
+    # Upstream-only fields (emote_set_id, owner_id, format) must not leak
+    refute inspect(event) =~ "emote_set_id"
+    refute inspect(event) =~ "owner_id"
+  end
+
   test "YouTube deleted messages and banned authors retain session scope" do
     source = %{"platform" => "youtube", "channel" => "channel", "live_chat_id" => "session"}
 
