@@ -19,7 +19,16 @@ COPY scripts scripts
 RUN mix check
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
-RUN apk add --no-cache ca-certificates libstdc++ ncurses-libs libcrypto3 libssl3
+# APK pineados exactos (SUP-03): verificados en el repo v3.24 el 2026-09-21.
+# Política de upgrade: si un rebuild falla por pin obsoleto, NO se quita el pin;
+# se actualiza a la revisión nueva en PR con justificación, rebuild, re-escaneo
+# (audit_image.py) y registro en docs/dependencies.md.
+RUN apk add --no-cache \
+  ca-certificates=20260909-r0 \
+  libstdc++=15.2.0-r5 \
+  ncurses-libs=6.6_p20260516-r0 \
+  libcrypto3=3.5.8-r0 \
+  libssl3=3.5.8-r0
 WORKDIR /app
 COPY --from=build --chown=65532:65532 /build/_build/prod/rel/chat_overlay ./
 COPY mix.lock /app/share/mix.lock
