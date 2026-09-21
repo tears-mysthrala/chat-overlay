@@ -36,6 +36,42 @@
     if (text !== undefined) node.textContent = text;
     return node;
   };
+  const EMOTE_ID_RE = /^[a-zA-Z0-9_\-:]+$/;
+  const emoteURL = (id, platform) => {
+    if (!EMOTE_ID_RE.test(id) || id.length > 256) return null;
+    if (platform === "twitch") return `https://static-cdn.jtvnw.net/emoticons/v2/${encodeURIComponent(id)}/default/dark/1.0`;
+    return null;
+  };
+  const renderBody = (container, payload, platform) => {
+    const frags = payload.fragments;
+    if (!Array.isArray(frags) || frags.length === 0 || frags.length > 100) {
+      container.textContent = payload.text;
+      return;
+    }
+    for (const frag of frags) {
+      if (!frag || typeof frag !== "object") continue;
+      const text = typeof frag.text === "string" ? frag.text : "";
+      if (frag.type === "emote" && typeof frag.id === "string") {
+        const url = emoteURL(frag.id, platform);
+        if (url) {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = text;
+          img.title = text;
+          img.className = "emote";
+          img.width = 28;
+          img.height = 28;
+          img.loading = "lazy";
+          img.draggable = false;
+          container.appendChild(img);
+        } else {
+          container.appendChild(document.createTextNode(text));
+        }
+      } else {
+        container.appendChild(document.createTextNode(text));
+      }
+    }
+  };
   document.getElementById("follow").addEventListener("click", event => {
     follow = !follow;
     event.target.setAttribute("aria-pressed", String(follow));
@@ -82,7 +118,9 @@
       meta.append(element("span", "platform", labels[m.platform]), element("bdi", "author", m.payload.author_display));
       const time = element("time", "", new Date(m.received_at).toLocaleTimeString("es", {hour:"2-digit", minute:"2-digit"}));
       time.dateTime = m.received_at; meta.append(time);
-      item.append(meta, element("p", "", m.payload.text)); return item;
+      const body = element("p");
+      renderBody(body, m.payload, m.platform);
+      item.append(meta, body); return item;
     });
     const scroll = list.scrollTop;
     list.replaceChildren(...nodes);

@@ -43,7 +43,7 @@ defmodule ChatOverlay.HTTP do
       {"x-content-type-options", "nosniff"},
       {"referrer-policy", "no-referrer"},
       {"content-security-policy",
-       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"},
+       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' https://static-cdn.jtvnw.net; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"},
       {"permissions-policy", "camera=(), microphone=(), geolocation=()"}
     ]
 end

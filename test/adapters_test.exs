@@ -42,6 +42,123 @@ defmodule ChatOverlay.AdaptersTest do
              )
   end
 
+  test "Twitch adapter extracts emote fragments from EventSub message data" do
+    source = %{"platform" => "twitch", "channel" => "123"}
+
+    data = %{
+      "metadata" => %{
+        "message_id" => "event-emote",
+        "message_timestamp" => "2026-09-21T12:00:00Z",
+        "subscription_type" => "channel.chat.message"
+      },
+      "payload" => %{
+        "event" => %{
+          "broadcaster_user_id" => "123",
+          "message_id" => "msg-emote",
+          "chatter_user_id" => "456",
+          "chatter_user_name" => "Alice",
+          "message" => %{
+            "text" => "Hi tearsmyGG world",
+            "fragments" => [
+              %{"type" => "text", "text" => "Hi "},
+              %{
+                "type" => "emote",
+                "text" => "tearsmyGG",
+                "emote" => %{
+                  "id" => "emotesv2_abc123",
+                  "emote_set_id" => "set1",
+                  "owner_id" => "789",
+                  "format" => ["static", "animated"]
+                }
+              },
+              %{"type" => "text", "text" => " world"}
+            ]
+          }
+        }
+      }
+    }
+
+    assert {:ok, event} = Adapters.twitch(data, source)
+    assert event["payload"]["text"] == "Hi tearsmyGG world"
+
+    assert [
+             %{"type" => "text", "text" => "Hi "},
+             %{"type" => "emote", "text" => "tearsmyGG", "id" => "emotesv2_abc123"},
+             %{"type" => "text", "text" => " world"}
+           ] = event["payload"]["fragments"]
+
+    # Upstream-only fields (emote_set_id, owner_id, format) must not leak
+    refute inspect(event) =~ "emote_set_id"
+    refute inspect(event) =~ "owner_id"
+  end
+
+  test "Twitch adapter degrades a bad emote id to text instead of dropping the message" do
+    source = %{"platform" => "twitch", "channel" => "123"}
+
+    data = %{
+      "metadata" => %{
+        "message_id" => "event-bad-emote",
+        "message_timestamp" => "2026-09-21T12:00:00Z",
+        "subscription_type" => "channel.chat.message"
+      },
+      "payload" => %{
+        "event" => %{
+          "broadcaster_user_id" => "123",
+          "message_id" => "msg-bad-emote",
+          "chatter_user_id" => "456",
+          "chatter_user_name" => "Alice",
+          "message" => %{
+            "text" => "Hi <script> world",
+            "fragments" => [
+              %{"type" => "text", "text" => "Hi "},
+              %{
+                "type" => "emote",
+                "text" => "<script>",
+                "emote" => %{"id" => "../evil"}
+              },
+              %{"type" => "text", "text" => " world"}
+            ]
+          }
+        }
+      }
+    }
+
+    assert {:ok, event} = Adapters.twitch(data, source)
+    assert event["payload"]["text"] == "Hi <script> world"
+
+    assert [
+             %{"type" => "text", "text" => "Hi "},
+             %{"type" => "text", "text" => "<script>"},
+             %{"type" => "text", "text" => " world"}
+           ] = event["payload"]["fragments"]
+  end
+
+  test "Twitch adapter drops fragments (keeps text) when upstream sends >100" do
+    source = %{"platform" => "twitch", "channel" => "123"}
+    frags = for i <- 1..101, do: %{"type" => "text", "text" => "t#{i}"}
+
+    data = %{
+      "metadata" => %{
+        "message_id" => "event-many-frags",
+        "message_timestamp" => "2026-09-21T12:00:00Z",
+        "subscription_type" => "channel.chat.message"
+      },
+      "payload" => %{
+        "event" => %{
+          "broadcaster_user_id" => "123",
+          "message_id" => "msg-many-frags",
+          "chatter_user_id" => "456",
+          "chatter_user_name" => "Alice",
+          "message" => %{"text" => "hello", "fragments" => frags}
+        }
+      }
+    }
+
+    assert {:ok, event} = Adapters.twitch(data, source)
+    assert event["payload"]["text"] == "hello"
+    refute Map.has_key?(event["payload"], "fragments")
+  end
+
   test "YouTube deleted messages and banned authors retain session scope" do
     source = %{"platform" => "youtube", "channel" => "channel", "live_chat_id" => "session"}
 

@@ -13,3 +13,16 @@ Implementados: stores acotados, dedup/borrados/replay, supervisión y demanda, t
 [Verificación](verification.md) y [registro](workflows/f1-delivery/runs/2026-09-20.md) distinguen pruebas locales de publicación. Hallazgos de imagen: **4 abiertos** (1 High, 3 Medium; 2 CVE); gate no verde. Canal público gilraennr indicado por la usuaria; no hay aplicaciones/API registradas. No hay validación de vivo/OBS/4 h/24 h.
 
 Siguiente paso: revisión humana de PR y cierre de [#4](https://github.com/tears-mysthrala/chat-overlay/issues/4). No solicitar tokens en chat. No registrar apps ni publicar callback/túnel con la autorización de implementación local. Rollback: revertir los commits de la PR o volver al digest aprobado; no existen migraciones ni historial durable.
+
+---
+
+# Handoff #6 — fragmentos y emotes de Twitch (apilado sobre #3)
+
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/6
+- Rama: `feat/6-emotes` (base `feat/3-f1-overlay` hasta el merge de #3).
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/6-emotes`.
+- PR: https://github.com/tears-mysthrala/chat-overlay/pull/7 (OPEN, lista para revisión, nunca draft).
+
+Cambios: esquema `fragments` opcional/retrocompatible en `ChatOverlay.Event`, extracción en `Adapters.twitch` con degradado a texto (nunca se pierde el mensaje), render DOM seguro en `app.js`, CSP `img-src` con CDN oficial de Twitch, regresiones (49 tests PASS) y docs (`event-contract.md`, `platforms.md`).
+
+Probado: `mix check` 49 PASS sin advertencias; `scan_secrets.py` sin fugas; `security_static.py` 0 hallazgos; `check_traceability.py` OK #6. Pendiente (puerta #4): verificación en vivo con el canal del operador, OBS real y pruebas 4 h/24 h. YouTube/Kick quedan en texto plano. Rollback: revertir los commits de la PR #7.

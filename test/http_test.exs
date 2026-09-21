@@ -41,6 +41,10 @@ defmodule ChatOverlay.HTTPTest do
              k == "content-security-policy" and v =~ "default-src 'none'"
            end)
 
+    assert Enum.any?(headers, fn {k, v} ->
+             k == "content-security-policy" and v =~ "img-src 'self' https://static-cdn.jtvnw.net"
+           end)
+
     assert {200, _, "ready"} = request(port, "GET", "/health/ready")
     assert {200, _, html} = request(port, "GET", "/reader/test")
     assert html =~ ~s(data-demo="true")

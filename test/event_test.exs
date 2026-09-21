@@ -21,6 +21,50 @@ defmodule ChatOverlay.EventTest do
     refute Event.valid?(Map.put(message(), "platform", "other"))
   end
 
+  test "fragments: valid emote and text fragments are accepted" do
+    frags = [
+      %{"type" => "text", "text" => "Hello "},
+      %{"type" => "emote", "text" => "tearsmyGG", "id" => "emotesv2_abc123"},
+      %{"type" => "text", "text" => " world"}
+    ]
+
+    with_frags = put_in(message(), ["payload", "fragments"], frags)
+    assert Event.valid?(with_frags)
+  end
+
+  test "fragments: messages without fragments remain valid (backward compatible)" do
+    assert Event.valid?(message())
+  end
+
+  test "fragments: empty list is rejected" do
+    with_empty = put_in(message(), ["payload", "fragments"], [])
+    refute Event.valid?(with_empty)
+  end
+
+  test "fragments: extra fields in fragment maps are rejected" do
+    bad_frag = [%{"type" => "emote", "text" => "hi", "id" => "e1", "extra" => "nope"}]
+    refute Event.valid?(put_in(message(), ["payload", "fragments"], bad_frag))
+  end
+
+  test "fragments: invalid emote IDs are rejected" do
+    for bad_id <- ["", "../path", "<script>", "a b", String.duplicate("x", 257)] do
+      frag = [%{"type" => "emote", "text" => "emote", "id" => bad_id}]
+
+      refute Event.valid?(put_in(message(), ["payload", "fragments"], frag)),
+             "expected invalid for emote id: #{inspect(bad_id)}"
+    end
+  end
+
+  test "fragments: unknown fragment types are rejected" do
+    bad = [%{"type" => "image", "text" => "hi", "url" => "http://evil.test"}]
+    refute Event.valid?(put_in(message(), ["payload", "fragments"], bad))
+  end
+
+  test "fragments: more than 100 fragments are rejected" do
+    many = for i <- 1..101, do: %{"type" => "text", "text" => "t#{i}"}
+    refute Event.valid?(put_in(message(), ["payload", "fragments"], many))
+  end
+
   test "JSON rejects oversized/deep/malformed input without generating atoms" do
     assert {:ok, %{"new_external_key_493" => 1}} = JSON.decode(~s({"new_external_key_493":1}))
 
