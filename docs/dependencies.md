@@ -43,4 +43,19 @@ La primera afecta a operaciones gzwrite/gzprintf de zlib; la segunda a wget de B
 
 Fuentes primarias: [NVD BusyBox](https://nvd.nist.gov/vuln/detail/CVE-2025-60876), [registro CNA de zlib](https://www.vulncheck.com/advisories/zlib-1.3.1.2-through-1.3.2-heap-buffer-overflow-via-gz-vacate), [Alpine seguimiento](https://github.com/alpinelinux/docker-alpine/issues/480). Revisar nuevas revisiones de proveedor y repetir el escaneo antes de cerrar estos bloqueos. No se mantiene un fork de la distribución ni se atribuye explotabilidad concreta al overlay sin evidencia.
 
+## Revisión de proveedor 2026-09-21: sin ruta de actualización unilateral
+
+Verificado hoy contra registros oficiales: `alpine:3.24` actual sigue en 3.24.2 con busybox 1.37.0-r31 y zlib 1.3.2-r0 (idénticos a nuestro pin). `alpine:edge` (3.25 alpha) trae busybox 1.38.0 (corrige CVE-2025-60876 en origen) pero mantiene zlib 1.3.2-r0. Upstream zlib no ha publicado tag 1.3.3 (último: v1.3.2; solo existe un commit de corrección sin release) y Debian lo marca sin corregir. No existe rama estable 3.25. Conclusión: hoy no hay base Alpine estable con ambos componentes corregidos; compilar zlib desde un commit sin release o fijar edge introduciría una decisión de cadena de suministro que requiere aprobación (SUP-02) y no se adopta por iniciativa propia.
+
+## Análisis de aplicabilidad (SUP-06, con evidencia, no es corrección)
+
+- **CVE-2025-60876 (busybox wget, inyección de cabeceras):** el desencadenante exige ejecutar el applet `wget` de BusyBox con un request-target controlado por el atacante. Evidencia de no alcanzabilidad en este servicio: `lib/` no contiene ninguna primitiva de shell (`System.cmd`, `:os.cmd`, `Port.open`, `open_port` — búsqueda vacía); la salida HTTP usa exclusivamente Mint contra destinos de `Net.open` (allowlist + IP pública pineada + `verify_peer`); los applets `wget`/`ssl_client` no se invocan en ninguna ruta (solo `/bin/sh` ejecuta el script de arranque del release). Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
+- **CVE-2026-85091 (zlib `gz_vacate`, vía `gzprintf` tras stall):** el desencadenante exige la API de ficheros `gz*` de zlib. Evidencia: árbol de dependencias 100 % Elixir puro (bandit, hpax, mime, mint, mint_web_socket, plug, plug_crypto, telemetry, thousand_island, websock; sin ficheros `.c`/`.so` en `deps/`); sin uso de `:zlib`/gzip/deflate en `lib/` ni en el frontend; el módulo `:zlib` de BEAM no expone las funciones de fichero `gz*`. Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
+
+Esto **no corrige los componentes ni acepta el riesgo**: el gate sigue en rojo y el merge a `main` sigue bloqueado.
+
+## Propuesta de excepción pendiente de Kalista (SUP-07, sin aprobar)
+
+Si Kalista lo considera: responsable Kalista; motivo, no existe revisión corregida en Alpine estable y la ruta de explotación no se ha encontrado con evidencia; compensación, re-comprobación semanal de proveedor y re-escaneo ante cualquier revisión nueva de `alpine:3.24`, más actualización inmediata en cuanto exista corrección; caducidad propuesta, 30 días o la publicación de la corrección, lo antes posible; trazabilidad, issue #4. Sin su aprobación explícita no hay excepción: los hallazgos siguen abiertos y bloqueando.
+
 SUP-05 sigue pendiente antes de distribución: firma/procedencia verificable y revisión de todas las obligaciones de licencia de la imagen. El SHA-256 identifica bytes; no autentica al publicador.
