@@ -47,6 +47,19 @@ Fuentes primarias: [NVD BusyBox](https://nvd.nist.gov/vuln/detail/CVE-2025-60876
 
 Verificado hoy contra registros oficiales: `alpine:3.24` actual sigue en 3.24.2 con busybox 1.37.0-r31 y zlib 1.3.2-r0 (idénticos a nuestro pin). `alpine:edge` (3.25 alpha) trae busybox 1.38.0 (corrige CVE-2025-60876 en origen) pero mantiene zlib 1.3.2-r0. Upstream zlib no ha publicado tag 1.3.3 (último: v1.3.2; solo existe un commit de corrección sin release) y Debian lo marca sin corregir. No existe rama estable 3.25. Conclusión: hoy no hay base Alpine estable con ambos componentes corregidos; compilar zlib desde un commit sin release o fijar edge introduciría una decisión de cadena de suministro que requiere aprobación (SUP-02) y no se adopta por iniciativa propia.
 
+## Comparativa de distribuciones 2026-09-21 (ADR 0002, mismo escáner pineado)
+
+A petición de Kalista se midieron alternativas en lugar de asumir Alpine vulnerable:
+
+- **Rocky 9**: descartado en smoke — el ERTS compilado en bookworm (GCC 12) exige `GLIBCXX_3.4.30` y EL9 trae GCC 11; el release no arranca.
+- **UBI 10 minimal**: arranca glibc pero el NIF `crypto` no carga — RHEL recorta SM4 de OpenSSL (`EVP_sm4_cbc` ausente) y cualquier OTP precompilado fuera de RHEL falla igual. Decisivo: la base mínima puntúa **202 coincidencias** con syft/grype pineados (p. ej. util-linux High). Empeora 4 → 202.
+- **Debian/Ubuntu slim**: mantienen zlib 1.3.x dentro del rango afectado; el CVE persistiría.
+- **Chainguard**: registro con autenticación (`Forbidden` anónimo); fricción en CI y nuevo proveedor. Descartado.
+- **openSUSE Leap 15.6**: único técnicamente compatible (glibc 2.38, OpenSSL completo con SM4, zlib 1.2.13, sin busybox), pero Grype solo cubre SLES, no Leap: un cero sería ceguera del escáner, no limpieza (SUP-04). Descartado.
+- **Compilar OTP desde fuente en RHEL**: posible pero con checksums débiles y coste en cada CI; reservado como último recurso.
+
+Decisión (ADR 0002): mantener Alpine 3.24.2. Ninguna alternativa da un gate verde honesto.
+
 ## Análisis de aplicabilidad (SUP-06, con evidencia, no es corrección)
 
 - **CVE-2025-60876 (busybox wget, inyección de cabeceras):** el desencadenante exige ejecutar el applet `wget` de BusyBox con un request-target controlado por el atacante. Evidencia de no alcanzabilidad en este servicio: `lib/` no contiene ninguna primitiva de shell (`System.cmd`, `:os.cmd`, `Port.open`, `open_port` — búsqueda vacía); la salida HTTP usa exclusivamente Mint contra destinos de `Net.open` (allowlist + IP pública pineada + `verify_peer`); los applets `wget`/`ssl_client` no se invocan en ninguna ruta (solo `/bin/sh` ejecuta el script de arranque del release). Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
