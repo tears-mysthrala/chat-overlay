@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Pre-push local: replica los gates de CI antes de subir. Instalación una vez por clon:
+#   scripts/install-hooks.sh
+# Alcance: SIEMPRE formato, trazabilidad, secretos y estática. `mix check` en cambios
+# normales; build + smoke + auditoría de imagen (SBOM/Grype) solo si cambia el
+# empaquetado. La CI sigue siendo la puerta exigible; saltar el hook (--no-verify)
+# debe justificarse en la PR.
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+need() { command -v "$1" >/dev/null 2>&1 || { echo "pre-push: falta '$1' en el PATH" >&2; exit 1; }; }
+need git
+need python3
+need mix
+
+echo "pre-push: formato, trazabilidad, secretos, estática"
+mix format --check-formatted
+python3 scripts/check_traceability.py
+python3 scripts/scan_secrets.py
+python3 scripts/security_static.py
+
+changed=""
+while read -r _ _ local_rev remote_rev; do
+  [ -z "${local_rev:-}" ] && continue
+  if [ "$remote_rev" = "0000000000000000000000000000000000000000" ]; then
+    changed="$changed $(git diff --name-only "$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)" HEAD)"
+  else
+    changed="$changed $(git diff --name-only "$remote_rev" "$local_rev")"
+  fi
+done
+changed="$(echo "$changed" | tr ' ' '\n' | sort -u)"
+
+packaging="$(echo "$changed" | grep -E '^(Dockerfile|mix\.exs|mix\.lock|\.tool-versions|config/|lib/|priv/|vendor/|scripts/(audit_image|smoke_image|inventory)\.py)' || true)"
+
+if [ -n "$packaging" ]; then
+  need docker
+  echo "pre-push: cambia empaquetado -> build + smoke + auditoría de imagen"
+  docker build -t chat-overlay:prepush .
+  python3 scripts/smoke_image.py chat-overlay:prepush
+  if [ ! -x /tmp/overlay-audit/bin/python ]; then
+    python3 -m venv /tmp/overlay-audit
+    /tmp/overlay-audit/bin/python -m pip install -q jsonschema==4.26.0 referencing==0.37.0
+  fi
+  /tmp/overlay-audit/bin/python scripts/audit_image.py chat-overlay:prepush
+else
+  echo "pre-push: sin cambios de empaquetado -> mix check"
+  mix check
+fi
+
+echo "pre-push: OK"
