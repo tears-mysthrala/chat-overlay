@@ -137,16 +137,33 @@ defmodule ChatOverlay.Adapters do
     do: message(id, author, display, text, nil)
 
   defp message(id, author, display, text, fragments) when is_list(fragments),
-    do: %{"message_id" => id, "author_id" => author, "author_display" => display, "text" => text, "fragments" => fragments}
+    do: %{
+      "message_id" => id,
+      "author_id" => author,
+      "author_display" => display,
+      "text" => text,
+      "fragments" => fragments
+    }
 
-  defp parse_twitch_fragments(%{"fragments" => frags}) when is_list(frags) and length(frags) <= 100 do
+  defp parse_twitch_fragments(%{"fragments" => frags})
+       when is_list(frags) and length(frags) > 0 and length(frags) <= 100 do
     parsed =
       Enum.map(frags, fn
-        %{"type" => "emote", "text" => text, "emote" => %{"id" => id}} when is_binary(text) and is_binary(id) ->
-          %{"type" => "emote", "text" => text, "id" => id}
+        %{"type" => "emote", "text" => text, "emote" => %{"id" => id}}
+        when is_binary(text) and is_binary(id) ->
+          cond do
+            valid_emote_id?(id) and Event.text?(text, 256) ->
+              %{"type" => "emote", "text" => text, "id" => id}
+
+            Event.text?(text, 4096) ->
+              %{"type" => "text", "text" => text}
+
+            true ->
+              nil
+          end
 
         %{"text" => text} when is_binary(text) ->
-          %{"type" => "text", "text" => text}
+          if Event.text?(text, 4096), do: %{"type" => "text", "text" => text}, else: nil
 
         _ ->
           nil
@@ -156,6 +173,11 @@ defmodule ChatOverlay.Adapters do
   end
 
   defp parse_twitch_fragments(_), do: nil
+
+  # Mirrors ChatOverlay.Event emote rules so one bad emote degrades to text
+  # instead of failing validation and dropping the whole message.
+  defp valid_emote_id?(id),
+    do: byte_size(id) > 0 and byte_size(id) <= 256 and Regex.match?(~r/\A[a-zA-Z0-9_\-:]+\z/, id)
 
   defp build(_, :ignore, _, _), do: :ignore
 

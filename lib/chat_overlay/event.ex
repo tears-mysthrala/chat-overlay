@@ -86,16 +86,24 @@ defmodule ChatOverlay.Event do
 
   defp message?(_), do: false
 
+  defp fragments?([]), do: false
   defp fragments?(frags) when length(frags) > 100, do: false
 
   defp fragments?(frags) do
     Enum.all?(frags, fn
-      %{"type" => "text", "text" => t} = f -> map_size(f) == 2 and text?(t, 4096)
-      %{"type" => "emote", "text" => t, "id" => id} = f -> map_size(f) == 3 and text?(t, 256) and emote_id?(id)
-      _ -> false
+      %{"type" => "text", "text" => t} = f ->
+        map_size(f) == 2 and text?(t, 4096)
+
+      %{"type" => "emote", "text" => t, "id" => id} = f ->
+        map_size(f) == 3 and text?(t, 256) and emote_id?(id)
+
+      _ ->
+        false
     end)
   end
 
-  defp emote_id?(id) when is_binary(id), do: byte_size(id) > 0 and byte_size(id) <= 256 and Regex.match?(~r/\A[a-zA-Z0-9_\-:]+\z/, id)
+  defp emote_id?(id) when is_binary(id),
+    do: byte_size(id) > 0 and byte_size(id) <= 256 and Regex.match?(~r/\A[a-zA-Z0-9_\-:]+\z/, id)
+
   defp emote_id?(_), do: false
 end

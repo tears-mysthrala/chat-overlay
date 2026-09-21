@@ -36,10 +36,9 @@ defmodule ChatOverlay.EventTest do
     assert Event.valid?(message())
   end
 
-  test "fragments: empty list is rejected (map_size would be 5 with empty list)" do
+  test "fragments: empty list is rejected" do
     with_empty = put_in(message(), ["payload", "fragments"], [])
-    # Empty list still adds key making map_size 5, but fragments?([]) is true, so valid
-    assert Event.valid?(with_empty)
+    refute Event.valid?(with_empty)
   end
 
   test "fragments: extra fields in fragment maps are rejected" do
@@ -50,8 +49,9 @@ defmodule ChatOverlay.EventTest do
   test "fragments: invalid emote IDs are rejected" do
     for bad_id <- ["", "../path", "<script>", "a b", String.duplicate("x", 257)] do
       frag = [%{"type" => "emote", "text" => "emote", "id" => bad_id}]
+
       refute Event.valid?(put_in(message(), ["payload", "fragments"], frag)),
-        "expected invalid for emote id: #{inspect(bad_id)}"
+             "expected invalid for emote id: #{inspect(bad_id)}"
     end
   end
 

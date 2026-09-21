@@ -43,18 +43,21 @@
     return null;
   };
   const renderBody = (container, payload, platform) => {
-    if (!Array.isArray(payload.fragments) || payload.fragments.length === 0) {
+    const frags = payload.fragments;
+    if (!Array.isArray(frags) || frags.length === 0 || frags.length > 100) {
       container.textContent = payload.text;
       return;
     }
-    for (const frag of payload.fragments) {
-      if (frag.type === "emote" && frag.id) {
+    for (const frag of frags) {
+      if (!frag || typeof frag !== "object") continue;
+      const text = typeof frag.text === "string" ? frag.text : "";
+      if (frag.type === "emote" && typeof frag.id === "string") {
         const url = emoteURL(frag.id, platform);
         if (url) {
           const img = document.createElement("img");
           img.src = url;
-          img.alt = frag.text || "";
-          img.title = frag.text || "";
+          img.alt = text;
+          img.title = text;
           img.className = "emote";
           img.width = 28;
           img.height = 28;
@@ -62,10 +65,10 @@
           img.draggable = false;
           container.appendChild(img);
         } else {
-          container.appendChild(document.createTextNode(frag.text || ""));
+          container.appendChild(document.createTextNode(text));
         }
       } else {
-        container.appendChild(document.createTextNode(frag.text || ""));
+        container.appendChild(document.createTextNode(text));
       }
     }
   };

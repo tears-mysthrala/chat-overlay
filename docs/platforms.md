@@ -8,6 +8,8 @@ Registrar una aplicación propia en el portal de desarrolladores y obtener un **
 
 La suscripción es una operación de control para recibir eventos, no envío de chat. La reconexión oficial conserva la sesión y drena mensajes pendientes; un corte que exige suscripción nueva vacía el historial local antes de reanudar. Tokens caducados/revocados muestran error de configuración; el operador los renueva fuera de esta app. No hay almacenamiento o refresh token automático en F1.
 
+Los mensajes `channel.chat.message` pueden incluir `message.fragments` con emotes oficiales. El adaptador solo conserva `type`/`text`/`id` y descarta campos upstream (`emote_set_id`, `owner_id`, `format`). Recurso de terceros documentado y acotado (SEC-05): las imágenes se cargan desde `https://static-cdn.jtvnw.net` (CDN oficial de Twitch, solo `img-src`), construyendo la URL en el cliente a partir del `id` validado; sin ese `id` válido se muestra texto plano. Referencia: [EventSub channel.chat.message](https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/#channelchatmessage).
+
 ## YouTube
 
 Habilitar YouTube Data API para una aplicación propia y obtener autorización de solo lectura (`https://www.googleapis.com/auth/youtube.readonly`) mediante el flujo oficial. Configurar el ID estable del canal y el `live_chat_id` de la emisión activa; un nombre público no sustituye ese ID. El token se pasa como Authorization, nunca en la URL pública.
