@@ -5,7 +5,7 @@ Estado de implementación local: en revisión. **F1 no ha superado su puerta de 
 | Área / contrato | Evidencia reproducible | Resultado local |
 | --- | --- | --- |
 | DEV-01/04/16 | `scripts/check_traceability.py`, issue #3, rama/worktree propio | PASS; issue real y remoto verificados |
-| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 38 pruebas; sin advertencias de compilación |
+| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 39 pruebas; sin advertencias de compilación |
 | REL-01/02/03 | event/adapters/store tests | Esquema, Unicode, dedup, borrados, caducidad, filtrado y replay |
 | REL-04/06 | store/socket/http tests | Límites de historial/replay/tombstones/JSON/frames/cuerpo y rutas |
 | Recuperación | HTTP/source tests | Caída aislada, tareas sin huérfanos, demanda/gracia y espera de cuota conservada |

@@ -386,7 +386,14 @@ defmodule ChatOverlay.Connectors do
                    data,
                    &(&1["id"] == s["subscription_id"] and
                        to_string(&1["broadcaster_user_id"]) == s["channel"])
-                 ) do
+                 ),
+               true <-
+                 is_nil(s["moderation_subscription_id"]) or
+                   Enum.any?(
+                     data,
+                     &(&1["id"] == s["moderation_subscription_id"] and
+                         to_string(&1["broadcaster_user_id"]) == s["channel"])
+                   ) do
             # Subscription exists, but delivery has no heartbeat. Do not claim freshness.
             Source.status(s, "degraded")
             Process.sleep(60_000)

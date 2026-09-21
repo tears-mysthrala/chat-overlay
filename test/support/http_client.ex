@@ -45,30 +45,34 @@ defmodule ChatOverlay.TestClient do
   def handle_info(message, {conn, owner}) do
     case Mint.HTTP.stream(conn, message) do
       {:ok, conn, responses} ->
-        Enum.each(responses, fn
-          {:status, ref, status} ->
-            Process.put({:status, ref}, status)
-
-          {:headers, ref, headers} ->
-            send(owner, {:client_response, self(), ref, Process.get({:status, ref}), headers})
-
-          {:data, ref, data} ->
-            send(owner, {:client_data, self(), ref, :nofin, data})
-
-          {:done, ref} ->
-            send(owner, {:client_done, self(), ref})
-            Process.delete({:status, ref})
-        end)
-
+        dispatch(responses, owner)
         {:noreply, {conn, owner}}
 
-      {:error, conn, _, _} ->
+      {:error, conn, _reason, responses} ->
+        dispatch(responses, owner)
         send(owner, {:client_down, self(), :http, :closed, []})
         {:noreply, {conn, owner}}
 
       :unknown ->
         {:noreply, {conn, owner}}
     end
+  end
+
+  defp dispatch(responses, owner) do
+    Enum.each(responses, fn
+      {:status, ref, status} ->
+        Process.put({:status, ref}, status)
+
+      {:headers, ref, headers} ->
+        send(owner, {:client_response, self(), ref, Process.get({:status, ref}), headers})
+
+      {:data, ref, data} ->
+        send(owner, {:client_data, self(), ref, :nofin, data})
+
+      {:done, ref} ->
+        send(owner, {:client_done, self(), ref})
+        Process.delete({:status, ref})
+    end)
   end
 
   def terminate(_, {conn, _}), do: Mint.HTTP.close(conn)

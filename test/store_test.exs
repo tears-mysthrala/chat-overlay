@@ -205,6 +205,7 @@ defmodule ChatOverlay.StoreTest do
 
     events = Store.read(s, cursor).events |> ChatOverlay.Stream.filter_events(["twitch"])
     assert [%{"event" => "delete_message", "payload" => %{"message_id" => "1"}}] = events
+    refute Map.has_key?(hd(events), "local_sequence")
     assert Enum.all?(visible(s), &(&1["platform"] == "youtube"))
   end
 

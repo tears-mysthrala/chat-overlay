@@ -80,7 +80,7 @@ defmodule ChatOverlay.Stream do
         [e]
 
       e ->
-        if e["platform"] in platforms, do: [e], else: []
+        if e["platform"] in platforms, do: [Map.delete(e, "local_sequence")], else: []
     end)
   end
 

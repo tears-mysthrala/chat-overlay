@@ -11,7 +11,8 @@ defmodule ChatOverlay.Application do
     children =
       [
         {Registry, keys: :unique, name: ChatOverlay.Registry},
-        {Task.Supervisor, name: ChatOverlay.Tasks, max_children: 30}
+        # Headroom above the 30 supported sources for shutdown/relaunch churn.
+        {Task.Supervisor, name: ChatOverlay.Tasks, max_children: 60}
       ] ++
         [
           ChatOverlay.Stores,

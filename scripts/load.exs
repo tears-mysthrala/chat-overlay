@@ -169,7 +169,16 @@ end
 
 emitted = emit.(emit, 0)
 Process.sleep(100)
+monitors = Enum.map(readers, &{&1, Process.monitor(&1)})
 Enum.each(readers, &send(&1, :stop))
+
+Enum.each(monitors, fn {reader, monitor} ->
+  receive do
+    {:DOWN, ^monitor, :process, ^reader, _reason} -> :ok
+  after
+    5_000 -> raise "reader shutdown timeout"
+  end
+end)
 
 buckets =
   :ets.tab2list(metrics)

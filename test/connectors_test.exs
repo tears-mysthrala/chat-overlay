@@ -94,6 +94,23 @@ defmodule ChatOverlay.ConnectorsTest do
     assert_received {:requested, "api.kick.com", "GET", "/public/v1/events/subscriptions", _, _}
   end
 
+  test "a missing Kick moderation subscription when configured is a configuration failure" do
+    Process.put(:http_responses, [
+      {:ok, 200, [], ~s({"data":[{"id":"s1","broadcaster_user_id":"123"}]})}
+    ])
+
+    source = %{
+      "platform" => "kick",
+      "channel" => "123",
+      "subscription_id" => "s1",
+      "moderation_subscription_id" => "mod1",
+      "credential_env" => "CHAT_TEST_PROTOCOL"
+    }
+
+    assert {:stop, :configuration_error} = Connectors.run(source)
+    assert_received {:requested, "api.kick.com", "GET", "/public/v1/events/subscriptions", _, _}
+  end
+
   test "YouTube accepts a full bounded Unicode page with selected fields", %{source: source} do
     items =
       for n <- 1..200,
