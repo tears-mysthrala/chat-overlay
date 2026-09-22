@@ -54,10 +54,27 @@ for name in ("bom-1.7.schema.json", "spdx.schema.json", "jsf-0.82.schema.json", 
 Draft7Validator(main_schema, registry=registry).validate(bom)
 (out / "image.cdx.json").write_text(json.dumps(bom, indent=2))
 print(f"CycloneDX 1.7 schema valid: {len(bom['components'])} components; image {identity['Id']}", flush=True)
-run("docker", "run", "--rm", "-e", "GRYPE_CHECK_FOR_APP_UPDATE=false", "--mount", mount, GRYPE,
-    "sbom:/scan/image.cdx.json", "-o", "json", "--file", "/scan/vulnerabilities.json")
+cmd = ["docker", "run", "--rm", "-e", "GRYPE_CHECK_FOR_APP_UPDATE=false", "--mount", mount, GRYPE,
+    "sbom:/scan/image.cdx.json", "-o", "json", "--file", "/scan/vulnerabilities.json"]
+vex_src = pathlib.Path("vex.openvex.json")
+vex_n = 0
+if vex_src.is_file():
+    vex_doc = json.loads(vex_src.read_text())
+    assert vex_doc.get("@context", "").startswith("https://openvex.dev/ns/"), "VEX inválido"
+    assert isinstance(vex_doc.get("statements"), list) and vex_doc["statements"], "VEX vacío"
+    (out / "vex.openvex.json").write_text(vex_src.read_text())
+    cmd += ["--vex", "/scan/vex.openvex.json"]
+    vex_n = len(vex_doc["statements"])
+    print(f"VEX aplicado: {vex_src} ({vex_n} declaraciones, autor: {vex_doc.get('author')})", flush=True)
+run(*cmd)
 report = json.loads((out / "vulnerabilities.json").read_text())
 for match in report["matches"]:
     print(match["vulnerability"]["id"], match["vulnerability"]["severity"], match["artifact"]["name"], match["artifact"]["version"])
-print(f"Image findings: {len(report['matches'])}; no suppressions")
+ignored = report.get("ignoredMatches", [])
+for ign in ignored:
+    print("VEX-ignored:", ign["vulnerability"]["id"], ign["artifact"]["name"], ign["artifact"]["version"])
+if vex_n:
+    print(f"Image findings: {len(report['matches'])}; {len(ignored)} ignorados vía vex.openvex.json (excepciones firmadas, caducan solas al cambiar la versión)")
+else:
+    print(f"Image findings: {len(report['matches'])}; no suppressions")
 raise SystemExit(bool(report["matches"]))

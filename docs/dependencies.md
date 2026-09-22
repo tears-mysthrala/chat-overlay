@@ -67,8 +67,18 @@ Decisión (ADR 0002): mantener Alpine 3.24.2. Ninguna alternativa da un gate ver
 
 Esto **no corrige los componentes ni acepta el riesgo**: el gate sigue en rojo y el merge a `main` sigue bloqueado.
 
-## Propuesta de excepción pendiente de Kalista (SUP-07, sin aprobar)
+## Excepción firmada por Kalista (SUP-07, aprobada 2026-09-21, issue #4)
 
-Si Kalista lo considera: responsable Kalista; motivo, no existe revisión corregida en Alpine estable y la ruta de explotación no se ha encontrado con evidencia; compensación, re-comprobación semanal de proveedor y re-escaneo ante cualquier revisión nueva de `alpine:3.24`, más actualización inmediata en cuanto exista corrección; caducidad propuesta, 30 días o la publicación de la corrección, lo antes posible; trazabilidad, issue #4. Sin su aprobación explícita no hay excepción: los hallazgos siguen abiertos y bloqueando.
+Mecanismo: `vex.openvex.json` (OpenVEX, versionado en el repo), consumido por
+`scripts/audit_image.py` vía `grype --vex`. Dos declaraciones `not_affected`
+con justificación `vulnerable_code_not_in_execute_path`, productos pineados a la
+versión exacta y evidencia en `impact_statement`. Grype mueve las 4 coincidencias
+a `ignoredMatches` (verificado en local: `Image findings: 0`) sin supresiones
+silenciosas: el JSON del escáner conserva los ignorados con su regla VEX.
+
+Caducidad automática: los purls fijan la versión exacta; cualquier revisión nueva
+de Alpine deja de coincidir y el gate vuelve a rojo, forzando re-evaluación.
+Revisión humana debida: 2026-10-21. Responsable: Kalista; motivo y compensación
+en el ADR 0002 y en la sección de aplicabilidad anterior.
 
 SUP-05 sigue pendiente antes de distribución: firma/procedencia verificable y revisión de todas las obligaciones de licencia de la imagen. El SHA-256 identifica bytes; no autentica al publicador.
