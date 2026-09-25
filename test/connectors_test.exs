@@ -50,6 +50,17 @@ defmodule ChatOverlay.ConnectorsTest do
     assert URI.decode_query(URI.parse(second).query)["pageToken"] == "page+/=1"
   end
 
+  test "YouTube halts with configuration_error on 401 unauthorized", %{source: source} do
+    Process.put(:http_responses, [
+      {:ok, 401, [],
+       ~s({"error":{"code":401,"message":"Request had invalid authentication credentials."}})}
+    ])
+
+    assert {:stop, :configuration_error} = Connectors.run(source)
+    assert_received {:requested, "www.googleapis.com", "GET", _path, headers, ""}
+    assert {"authorization", "Bearer synthetic-token"} in headers
+  end
+
   test "upstream oversized/malformed responses degrade instead of spinning", %{source: source} do
     Process.put(:http_responses, [{:ok, 200, [], "{broken"}])
     assert {:retry, 60_000} = Connectors.run(source)
