@@ -1,6 +1,8 @@
 """Inspect the exact local image; preserve all findings and fail closed. No Docker socket in scanners."""
+import datetime
 import json
 import pathlib
+import re
 import subprocess
 import sys
 import urllib.request
@@ -62,6 +64,16 @@ if vex_src.is_file():
     vex_doc = json.loads(vex_src.read_text())
     assert vex_doc.get("@context", "").startswith("https://openvex.dev/ns/"), "VEX inválido"
     assert isinstance(vex_doc.get("statements"), list) and vex_doc["statements"], "VEX vacío"
+    now = datetime.datetime.now(datetime.timezone.utc).date()
+    for stmt in vex_doc["statements"]:
+        vuln_id = stmt.get("vulnerability", {}).get("@id", "unknown")
+        due_str = stmt.get("review_due") or stmt.get("expires")
+        if not due_str:
+            match = re.search(r"revisión debida\s+(\d{4}-\d{2}-\d{2})", stmt.get("impact_statement", ""))
+            assert match, f"VEX statement {vuln_id} must declare review due date ('revisión debida YYYY-MM-DD')"
+            due_str = match.group(1)
+        due_date = datetime.date.fromisoformat(due_str)
+        assert now <= due_date, f"VEX statement {vuln_id} review expired on {due_date} (today is {now})"
     (out / "vex.openvex.json").write_text(vex_src.read_text())
     cmd += ["--vex", "/scan/vex.openvex.json"]
     vex_n = len(vex_doc["statements"])
