@@ -50,19 +50,15 @@ defmodule ChatOverlay.ConnectorsTest do
     assert URI.decode_query(URI.parse(second).query)["pageToken"] == "page+/=1"
   end
 
-  test "YouTube uses x-goog-api-key header when credential starts with AIza", %{source: source} do
-    System.put_env("CHAT_TEST_PROTOCOL", "AIzaSyTestKey")
-    response = %{"items" => [], "pollingIntervalMillis" => 100, "nextPageToken" => "page-token"}
-
+  test "YouTube halts with configuration_error on 401 unauthorized", %{source: source} do
     Process.put(:http_responses, [
-      {:ok, 200, [], JSON.encode(response)},
-      {:ok, 403, [], ~s({"error":{"errors":[{"reason":"liveChatEnded"}]}})}
+      {:ok, 401, [],
+       ~s({"error":{"code":401,"message":"Request had invalid authentication credentials."}})}
     ])
 
-    assert {:stop, :offline} = Connectors.run(source)
+    assert {:stop, :configuration_error} = Connectors.run(source)
     assert_received {:requested, "www.googleapis.com", "GET", _path, headers, ""}
-    assert {"x-goog-api-key", "AIzaSyTestKey"} in headers
-    refute List.keymember?(headers, "authorization", 0)
+    assert {"authorization", "Bearer synthetic-token"} in headers
   end
 
   test "upstream oversized/malformed responses degrade instead of spinning", %{source: source} do
