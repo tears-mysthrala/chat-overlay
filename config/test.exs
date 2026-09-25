@@ -6,7 +6,10 @@ config :chat_overlay,
   profiles: [
     %{
       "handle" => "test",
-      "sources" => [%{"platform" => "twitch", "channel" => "test-channel", "mode" => "demo"}]
+      "sources" => [
+        %{"platform" => "twitch", "channel" => "test-channel", "mode" => "demo"},
+        %{"platform" => "kick", "channel" => "test-kick", "mode" => "demo"}
+      ]
     },
     %{
       "handle" => "other",

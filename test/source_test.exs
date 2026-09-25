@@ -55,11 +55,26 @@ defmodule ChatOverlay.SourceTest do
   end
 
   test "kick source tracks gap state across idle transitions" do
-    kick_source = %{"platform" => "kick", "channel" => "testkick", "mode" => "demo"}
+    kick_source = Enum.find(Config.profile("test")["sources"], &(&1["platform"] == "kick"))
     {:ok, s} = Source.init(kick_source)
     assert s.gap == true
 
     {:noreply, idle} = Source.handle_info(:idle, %{s | gap: false, demand: 0})
     assert idle.gap == true
+  end
+
+  test "kick source clears gap when demand resumes" do
+    kick_source = Enum.find(Config.profile("test")["sources"], &(&1["platform"] == "kick"))
+    {:ok, s} = Source.init(kick_source)
+    assert s.gap == true
+
+    assert :ok = Admission.acquire("test")
+
+    try do
+      {:noreply, resumed} = Source.handle_cast(:acquire, s)
+      assert resumed.gap == false
+    after
+      Admission.release()
+    end
   end
 end

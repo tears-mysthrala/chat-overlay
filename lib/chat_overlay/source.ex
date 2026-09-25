@@ -61,6 +61,23 @@ defmodule ChatOverlay.Source do
     if s.grace, do: Process.cancel_timer(s.grace)
     count = ChatOverlay.Admission.demand_count(s.source)
 
+    s =
+      if count > 0 and s.source["platform"] == "kick" and Map.get(s, :gap, true) do
+        clear =
+          Event.new(
+            s.source["platform"],
+            s.source["channel"],
+            "clear_channel",
+            "gap-#{System.unique_integer([:positive])}",
+            %{"scope" => "channel"}
+          )
+
+        publish(s.source, clear)
+        %{s | gap: false}
+      else
+        s
+      end
+
     grace =
       if count == 0,
         do:
@@ -174,8 +191,9 @@ defmodule ChatOverlay.Source do
     # After an upstream gap, old content may have been deleted while disconnected.
     # Clear it before reconnecting; never imply recovery of events upstream cannot replay.
     # For polling/websocket platforms, every launch implies reconnecting after a gap.
-    # For webhook platforms (Kick), only clear if restoring after an idle gap without demand.
-    if s.source["platform"] != "kick" or Map.get(s, :gap, true) do
+    # For webhook platforms (Kick), gap cleanup happens in handle_cast upon demand resume,
+    # before incoming webhooks are accepted, preventing wiping of newly received messages.
+    if s.source["platform"] != "kick" do
       clear =
         Event.new(
           s.source["platform"],
@@ -208,8 +226,7 @@ defmodule ChatOverlay.Source do
       s
       | worker: worker,
         next_attempt: nil,
-        started: System.monotonic_time(:millisecond),
-        gap: false
+        started: System.monotonic_time(:millisecond)
     }
   end
 
