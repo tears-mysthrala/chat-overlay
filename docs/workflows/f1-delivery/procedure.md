@@ -1,0 +1,11 @@
+# Procedimiento de entrega y revisión F1
+
+1. Leer AGENTS y contrato; verificar remoto, rama predeterminada, estado, issue real y worktree. No reutilizar una autorización de publicación para otro entorno.
+2. Confirmar dependencias aprobadas y herramientas por versión/hash. Ejecutar `mix check`, `python scripts/security_static.py`, `node --check priv/static/app.js`, `python scripts/check_traceability.py` y `python scripts/scan_secrets.py`.
+3. Construir `docker build --target validation -t chat-overlay:validation .`. Ejecutar carga sin red: `docker run --rm --network none --cpus 2 --memory 1g -e ERL_FLAGS='+S 2:2' chat-overlay:validation mix run --no-start scripts/load.exs 60`. La duración de 4 h usa 14400; 24 h usa 86400. No aplicar esta carga a plataformas.
+4. Construir runtime y ejecutar `python scripts/smoke_image.py <imagen>`. Auditar con `python scripts/audit_image.py <imagen>`; preservar JSON completos incluso si falla. El script requiere jsonschema 4.26.0 y referencing 0.37.0 solo en el entorno de herramientas. No borrar findings o bajar umbrales para pasar CI.
+5. Probar lector/overlay con Chromium y demo: texto hostil literal, móvil, transparencia y corte/reinicio real. No afirmar OBS/vivo. Revisar con el helper de autoreview, verificar hallazgos, corregir y repetir pruebas afectadas/revisión hasta no tener hallazgos accionables de código.
+6. Registrar versión/commit/digest, pruebas ejecutadas/no ejecutadas y bloqueos. Abrir PR **lista para revisión**, nunca draft. Usar Refs mientras queden criterios del issue; no merge ni despliegue.
+7. Gates externos: issue #4, registro de apps/credenciales por operador, pruebas reales, 4 h/24 h, normativa/plataformas, escaneo sin bloqueos y firma del artefacto. Mantenerlos separados de la implementación local.
+
+Aprendizajes verificados: Hex 2.4.2 no acreditó auditoría de seguridad; usar 2.5.1. Syft no detectó los paquetes Hex: añadir inventario del lock y validar el SBOM combinado. En Windows, el helper Python debe recibir `--codex-bin` con el codex.exe real, no depender del shim PowerShell. Un toggle offline del navegador no cortó SSE localhost; usar parada/reinicio del contenedor de pruebas propio. Utilizar `--timeout` para `docker stop` en Docker 29.8.

@@ -1,8 +1,8 @@
 defmodule ChatOverlayTest do
   use ExUnit.Case, async: true
 
-  test "reports the authorized bootstrap phase" do
-    assert ChatOverlay.phase() == :f0
+  test "reports the authorized product phase" do
+    assert ChatOverlay.phase() == :f1
   end
 
   test "does not expose platform or account capabilities in F0" do

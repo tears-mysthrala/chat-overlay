@@ -3,3 +3,10 @@ deps/
 .elixir_ls/
 *.ez
 .env
+output/
+config/local*
+*.pem
+*.key
+erl_crash.dump
+__pycache__/
+*.pyc

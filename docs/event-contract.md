@@ -1,52 +1,35 @@
-# Contrato de eventos F0
+# Contrato de eventos implementado — versión 1
 
-Este es el contrato de datos de referencia; F0 no implementa ingestión ni transporte.
+`Event` valida sobres cerrados: `version`, `event`, `platform`, `channel`, `emission_session` opcional, `upstream_id`, `received_at`, `occurred_at` opcional y `payload`. IDs: UTF-8 no vacío, máximo 256 bytes; autor visible: 256 bytes; mensaje: 4096 bytes; timestamps: ISO 8601 UTC. No se conservan campos crudos, credenciales o continuaciones.
 
-## Envolvente
+| Evento | Payload exacto |
+| --- | --- |
+| message | message_id, author_id, author_display, text, fragments (optional) |
+| delete_message | message_id |
+| delete_author | author_id |
+| clear_channel | scope: channel |
+| replace | message_id, message (payload completo) |
+| source_state | state, observed_at |
+| snapshot (interno) | messages, source_states, cursor, epoch |
+| reset (interno) | reason, epoch |
 
-Cada evento futuro tendrá, como mínimo:
+Plataformas: twitch, youtube, kick. Estados: connecting, available, offline, degraded, configuration_error. Las ampliaciones requieren revisión del esquema; los adaptadores ignoran eventos desconocidos, pero rechazan mensajes conocidos malformados.
 
-- `version`: versión entera del contrato.
-- `event`: `message`, `delete_message`, `delete_author`, `clear_channel`, `replace`, `source_state`, `snapshot` o `reset`.
-- `platform`: identificador cerrado de la plataforma, nunca texto ejecutable.
-- `channel`: identificador estable del canal configurado.
-- `emission_session`: sesión upstream cuando exista.
-- `upstream_id`: identificador del evento de origen cuando exista.
-- `received_at`: instante de recepción del servicio.
-- `occurred_at`: instante de origen opcional y no usado como orden global.
-- `local_sequence`: secuencia monotónica por overlay.
-- `payload`: objeto tipado según `event`, sin tokens, cookies, continuaciones, campos internos ni cuerpo crudo.
+El almacén ordena por secuencia local. La clave de deduplicación combina fuente, sesión, tipo e ID de evento. La identidad de mensaje usa fuente, sesión e ID de mensaje. Los borrados de autor usan ID estable, nunca nombre visible. Las barreras de canal/autor no retroceden al llegar eventos fuera de orden; mensajes sin fecha se rechazan conservadoramente tras un borrado. Las barreras individuales duran 30 minutos. Su capacidad máxima es 4096; la saturación vacía el perfil y cambia época. Una reconexión upstream vacía el contenido antiguo porque no se puede demostrar que no haya sido borrado durante el corte.
 
-`platform` solo puede ser `twitch`, `youtube` o `kick` en F1. El valor identifica
-el adaptador, no demuestra titularidad ni autoriza acceso a una cuenta.
+SSE emite `event: batch`, `id: <epoch>:<sequence>` y JSON con `events`. El cliente aplica el lote antes de pintar. `Last-Event-ID` recupera los últimos 512 eventos o provoca `reset` seguido de `snapshot`. Caducar mensajes o entradas de replay invalida el replay previo. Un borrado purga el replay para no conservar el texto retirado; las expulsiones por capacidad emiten una retirada incluso a visores filtrados. No existe orden global entre plataformas ni entrega exactamente una vez.
 
-## Payloads normativos
+`overlay_platforms` filtra mensajes y estados en snapshots y deltas para la vista de emisión. El lector conserva las fuentes configuradas. Ambos siguen siendo públicos.
 
-Los siguientes esquemas son la definición F0 del payload lógico. Todos los IDs
-son strings opacos no vacíos; los timestamps son ISO 8601 UTC; los campos no
-indicados son rechazados o ignorados según la política de validación futura.
+### Fragmentos de mensaje (extensión retrocompatible)
 
-| Evento | Payload requerido | Semántica del recurso afectado |
+El payload de `message` puede incluir opcionalmente `fragments`: una lista ordenada de fragmentos que compone el texto del mensaje. Cuando no está presente, el cliente renderiza `text` como texto plano. Cada fragmento es un mapa cerrado de uno de los tipos:
+
+| Tipo | Campos | Descripción |
 | --- | --- | --- |
-| `message` | `message_id`, `author_id`, `author_display`, `text` | Añade o reemplaza el mensaje identificado por `message_id`. `text` es texto Unicode, no HTML. |
-| `delete_message` | `message_id`, `reason` opcional | Retira exactamente el mensaje `message_id`; no reutiliza el ID del evento. |
-| `delete_author` | `author_id`, `reason` opcional | Retira los mensajes visibles cuyo autor estable sea `author_id` dentro de `channel`. |
-| `clear_channel` | `scope` (`channel` o `source`), `reason` opcional | Vacía el estado visible del canal o de la fuente indicada por el sobre. |
-| `replace` | `message_id`, `message` | Sustituye el mensaje `message_id` por el objeto `message` completo y tipado. |
-| `source_state` | `state`, `detail` opcional, `observed_at` | Actualiza el estado de la fuente; `state` es `connecting`, `available`, `offline`, `degraded` o `configuration_error`. |
-| `snapshot` | `messages`, `source_states`, `cursor`, `epoch` | Sustituye todo el estado visible del overlay; `messages` es una lista acotada y `cursor` puede ser nulo. |
-| `reset` | `reason`, `epoch`, `snapshot_cursor` opcional | Invalida el cursor anterior y exige que el consumidor descarte el estado antes del snapshot siguiente. |
+| text | type, text | Texto plano (hasta 4096 bytes UTF-8). |
+| emote | type, text, id | Emote oficial; `id` es alfanumérico con `_-:` (hasta 256 bytes), `text` es el nombre visible (hasta 256 bytes). |
 
-`reason`, `detail` y `scope` son datos tipados y acotados, nunca cuerpos crudos
-de upstream. Un `delete_author` no afecta a autores con el mismo nombre visible
-pero distinto `author_id`; un `clear_channel` no se interpreta como un borrado
-individual. Los nombres de campos son parte del contrato y cualquier ampliación
-requiere una nueva versión de `version` o una regla de compatibilidad explícita.
+Restricciones: máximo 100 fragmentos por mensaje; campos extra rechazan el evento; IDs con caracteres fuera del patrón `[a-zA-Z0-9_\-:]` se rechazan. El campo `text` del sobre mantiene siempre la representación completa en texto plano para accesibilidad y búsqueda.
 
-El identificador del evento no es el identificador del mensaje afectado. Un evento desconocido se ignora de forma limitada y no se registra su payload completo.
-
-## Semántica
-
-El orden es determinista dentro de un overlay. La deduplicación usa plataforma, canal, sesión e ID upstream cuando estén disponibles; nunca deduplica un borrado contra el mensaje que retira. `snapshot` sustituye el estado visible y `reset` indica que el cursor anterior ya no es recuperable. Los borrados no deben reaparecer por replay.
-
-Los tamaños, historial, colas y frecuencia serán límites configurables con máximos globales definidos por REL-04/06. F1 añadirá pruebas de Unicode, duplicados, malformación, borrados y recuperación.
+Las URLs de imagen de emotes se construyen en el cliente a partir del `id` y la plataforma. CSP permite `https://static-cdn.jtvnw.net` (Twitch) como origen de imagen documentado y acotado conforme a SEC-05.
