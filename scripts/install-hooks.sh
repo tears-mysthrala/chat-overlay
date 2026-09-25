@@ -13,6 +13,9 @@ set -euo pipefail
 root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 if [ -x "$root/scripts/pre-push" ]; then
   exec "$root/scripts/pre-push" "$@"
+else
+  echo "pre-push: scripts/pre-push no encontrado o no ejecutable en $root" >&2
+  exit 1
 fi
 EOF
 chmod +x "$hook_dir/pre-push"

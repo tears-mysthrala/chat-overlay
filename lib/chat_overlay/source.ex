@@ -41,7 +41,8 @@ defmodule ChatOverlay.Source do
        grace: nil,
        attempts: 0,
        next_attempt: nil,
-       started: nil
+       started: nil,
+       gap: true
      }}
   end
 
@@ -79,7 +80,7 @@ defmodule ChatOverlay.Source do
     if s.worker, do: Task.shutdown(s.worker, :brutal_kill)
     if s.timer, do: Process.cancel_timer(s.timer)
     status(s.source, "offline")
-    {:noreply, %{s | worker: nil, timer: nil, grace: nil}}
+    {:noreply, %{s | worker: nil, timer: nil, grace: nil, gap: true}}
   end
 
   def handle_info(:idle, s), do: {:noreply, s}
@@ -172,8 +173,9 @@ defmodule ChatOverlay.Source do
   defp launch(s) do
     # After an upstream gap, old content may have been deleted while disconnected.
     # Clear it before reconnecting; never imply recovery of events upstream cannot replay.
-    # Skip for Kick as messages arrive over inbound webhook rather than outbound connection.
-    if s.source["platform"] != "kick" do
+    # For polling/websocket platforms, every launch implies reconnecting after a gap.
+    # For webhook platforms (Kick), only clear if restoring after an idle gap without demand.
+    if s.source["platform"] != "kick" or Map.get(s, :gap, true) do
       clear =
         Event.new(
           s.source["platform"],
@@ -202,7 +204,13 @@ defmodule ChatOverlay.Source do
         end
       end)
 
-    %{s | worker: worker, next_attempt: nil, started: System.monotonic_time(:millisecond)}
+    %{
+      s
+      | worker: worker,
+        next_attempt: nil,
+        started: System.monotonic_time(:millisecond),
+        gap: false
+    }
   end
 
   def terminate(_, s) do

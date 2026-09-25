@@ -53,4 +53,13 @@ defmodule ChatOverlay.SourceTest do
       Admission.release()
     end
   end
+
+  test "kick source tracks gap state across idle transitions" do
+    kick_source = %{"platform" => "kick", "channel" => "testkick", "mode" => "demo"}
+    {:ok, s} = Source.init(kick_source)
+    assert s.gap == true
+
+    {:noreply, idle} = Source.handle_info(:idle, %{s | gap: false, demand: 0})
+    assert idle.gap == true
+  end
 end
