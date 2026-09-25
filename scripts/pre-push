@@ -20,12 +20,13 @@ python3 scripts/scan_secrets.py
 python3 scripts/security_static.py
 
 changed=""
-while read -r _ _ local_rev remote_rev; do
-  [ -z "${local_rev:-}" ] && continue
-  if [ "$remote_rev" = "0000000000000000000000000000000000000000" ]; then
-    changed="$changed $(git diff --name-only "$(git merge-base HEAD origin/main 2>/dev/null || echo HEAD)" HEAD)"
+while read -r local_ref local_oid remote_ref remote_oid; do
+  [ "$local_oid" = "0000000000000000000000000000000000000000" ] && continue
+  if [ "$remote_oid" = "0000000000000000000000000000000000000000" ]; then
+    base="$(git merge-base "$local_oid" origin/main 2>/dev/null || echo "$local_oid")"
+    changed="$changed $(git diff --name-only "$base" "$local_oid")"
   else
-    changed="$changed $(git diff --name-only "$remote_rev" "$local_rev")"
+    changed="$changed $(git diff --name-only "$remote_oid" "$local_oid")"
   fi
 done
 changed="$(echo "$changed" | tr ' ' '\n' | sort -u)"
