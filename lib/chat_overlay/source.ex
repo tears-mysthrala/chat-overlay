@@ -40,7 +40,8 @@ defmodule ChatOverlay.Source do
        timer: nil,
        grace: nil,
        attempts: 0,
-       next_attempt: nil
+       next_attempt: nil,
+       started: nil
      }}
   end
 
@@ -112,8 +113,11 @@ defmodule ChatOverlay.Source do
 
     status(s.source, state)
 
+    attempts =
+      if System.monotonic_time(:millisecond) - (s.started || 0) > 300_000, do: 0, else: s.attempts
+
     delay =
-      max(minimum, min(60_000, 1000 * Integer.pow(2, min(s.attempts, 6)))) + :rand.uniform(500)
+      max(minimum, min(60_000, 1000 * Integer.pow(2, min(attempts, 6)))) + :rand.uniform(500)
 
     due =
       max(
@@ -131,7 +135,14 @@ defmodule ChatOverlay.Source do
           )
 
     {:noreply,
-     %{s | worker: nil, timer: timer, attempts: min(s.attempts + 1, 6), next_attempt: due}}
+     %{
+       s
+       | worker: nil,
+         timer: timer,
+         attempts: min(attempts + 1, 6),
+         next_attempt: due,
+         started: nil
+     }}
   end
 
   def handle_info({:DOWN, ref, :process, _, _}, %{worker: %Task{ref: ref}} = s) do
@@ -161,16 +172,20 @@ defmodule ChatOverlay.Source do
   defp launch(s) do
     # After an upstream gap, old content may have been deleted while disconnected.
     # Clear it before reconnecting; never imply recovery of events upstream cannot replay.
-    clear =
-      Event.new(
-        s.source["platform"],
-        s.source["channel"],
-        "clear_channel",
-        "gap-#{System.unique_integer([:positive])}",
-        %{"scope" => "channel"}
-      )
+    # Skip for Kick as messages arrive over inbound webhook rather than outbound connection.
+    if s.source["platform"] != "kick" do
+      clear =
+        Event.new(
+          s.source["platform"],
+          s.source["channel"],
+          "clear_channel",
+          "gap-#{System.unique_integer([:positive])}",
+          %{"scope" => "channel"}
+        )
 
-    publish(s.source, clear)
+      publish(s.source, clear)
+    end
+
     status(s.source, "connecting")
     source = s.source
 
@@ -187,7 +202,7 @@ defmodule ChatOverlay.Source do
         end
       end)
 
-    %{s | worker: worker, next_attempt: nil}
+    %{s | worker: worker, next_attempt: nil, started: System.monotonic_time(:millisecond)}
   end
 
   def terminate(_, s) do

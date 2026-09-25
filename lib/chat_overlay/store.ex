@@ -47,6 +47,7 @@ defmodule ChatOverlay.Store do
       else
         case apply_event(s, e) do
           {:ok, next} -> {:reply, :ok, next |> remember(key) |> append(e)}
+          {:noop, next} -> {:reply, :ok, next}
           {:error, reason} -> {:reply, {:error, reason}, s}
         end
       end
@@ -142,8 +143,18 @@ defmodule ChatOverlay.Store do
     end
   end
 
-  defp apply_event(s, %{"event" => "source_state"} = e),
-    do: {:ok, %{s | states: Map.put(s.states, source(e), e)}}
+  defp apply_event(s, %{"event" => "source_state"} = e) do
+    src = source(e)
+    stored = Map.get(s.states, src)
+
+    if stored &&
+         stored["payload"]["state"] == e["payload"]["state"] &&
+         recent_state?(stored["payload"]["observed_at"], e["payload"]["observed_at"], 30) do
+      {:noop, s}
+    else
+      {:ok, %{s | states: Map.put(s.states, src, e)}}
+    end
+  end
 
   defp apply_event(s, e) do
     p = e["payload"]
@@ -219,6 +230,18 @@ defmodule ChatOverlay.Store do
     {:ok, b, _} = DateTime.from_iso8601(barrier)
     DateTime.compare(a, b) != :gt
   end
+
+  defp recent_state?(stored_at, incoming_at, max_seconds)
+       when is_binary(stored_at) and is_binary(incoming_at) do
+    with {:ok, a, _} <- DateTime.from_iso8601(stored_at),
+         {:ok, b, _} <- DateTime.from_iso8601(incoming_at) do
+      abs(DateTime.diff(b, a, :second)) < max_seconds
+    else
+      _ -> false
+    end
+  end
+
+  defp recent_state?(_, _, _), do: false
 
   defp remember(s, key) do
     seen = Map.put(s.seen, key, true)

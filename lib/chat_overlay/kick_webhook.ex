@@ -36,7 +36,7 @@ defmodule ChatOverlay.KickWebhook do
                  sources when sources != [] <- matching_sources(headers, event) do
               results =
                 Enum.map(sources, fn s ->
-                  if Source.active?(s) do
+                  if ChatOverlay.Admission.demand_count(s) > 0 do
                     case Adapters.kick(
                            headers["kick-event-type"],
                            headers["kick-event-message-id"],

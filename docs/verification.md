@@ -5,7 +5,7 @@ Estado de implementación local: en revisión. **F1 no ha superado su puerta de 
 | Área / contrato | Evidencia reproducible | Resultado local |
 | --- | --- | --- |
 | DEV-01/04/16 | `scripts/check_traceability.py`, issue #3, rama/worktree propio | PASS; issue real y remoto verificados |
-| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 39 pruebas; sin advertencias de compilación |
+| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 50 pruebas (incluye regresiones #6 de fragmentos y emotes, y limitación de source_state); sin advertencias de compilación |
 | REL-01/02/03 | event/adapters/store tests | Esquema, Unicode, dedup, borrados, caducidad, filtrado y replay |
 | REL-04/06 | store/socket/http tests | Límites de historial/replay/tombstones/JSON/frames/cuerpo y rutas |
 | Recuperación | HTTP/source tests | Caída aislada, tareas sin huérfanos, demanda/gracia y espera de cuota conservada |
@@ -16,7 +16,7 @@ Estado de implementación local: en revisión. **F1 no ha superado su puerta de 
 | SEC-10 | `scripts/scan_secrets.py` | 0 hallazgos en instantánea de fuente; no certifica historia completa |
 | SUP-02/06 | Hex 2.5.1 y `scripts/inventory.exs` | 0 avisos/retirados Hex; 10 paquetes con licencias/textos/hashes |
 | SUP-04 | `scripts/audit_image.py` | CycloneDX 1.7 válido, aplicación + runtime + imagen; 292 componentes en artefacto inspeccionado |
-| SUP-07 | Grype, sin supresión | FAIL: 4 coincidencias (1 High, 3 Medium; 2 CVE), ver dependencies.md |
+| SUP-07 | `scripts/audit_image.py` con VEX aprobado | PASS: 0 activos, 4 ignorados en ignoredMatches mediante vex.openvex.json (revisión debida 2026-10-21; zlib/busybox sin parche upstream) |
 | REL-08 | `scripts/load.exs 60`, Docker 2 CPU/1 GiB | 4.500 eventos emitidos, 45.000/45.000 entregas, 0 errores, p95 51 ms; RAM BEAM 343.278.104 → 373.720.184 bytes |
 | DEV-13/REL-08 | Vivo, OBS y 4 h/24 h | Pendientes; bloquean candidata/publicación según contrato |
 | COMP-01/10/SUP-05 | Matriz normativa, condiciones de plataforma, firma/procedencia | Pendientes de revisión humana antes de publicar |
@@ -31,4 +31,4 @@ Chromium: comprobado lector a 390 px, overlay transparente y HTML literal, recar
 
 Revisión estructurada con la skill autoreview (Codex, modo local, herramientas de solo lectura). Se verificaron y corrigieron los hallazgos sobre retención del replay, expulsión en vistas filtradas, borrados retrasados, cooldown tras cerrar lectores, handshake acotado, páginas YouTube y Retry-After en 5xx. Resultado final del helper: 0 hallazgos accionables, salida 0. No acredita publicación. CI: ver [registro](workflows/f1-delivery/runs/2026-09-20.md), que se actualiza con el cierre.
 
-El repositorio no tenía protección efectiva de main al inspeccionarlo. No se cambiaron permisos: se mantiene como control operativo no hacer merge sin revisión humana y checks; el gate de imagen está verde mediante `vex.openvex.json` firmado por Kalista (issue #4, revisión debida 2026-10-21; caduca solo ante cambios de versión). La aprobación humana de la dispensa consta en el VEX y en `docs/dependencies.md`, no es una autoaprobación del agente.
+El repositorio no tenía protección efectiva de main al inspeccionarlo. No se cambiaron permisos: se mantiene como control operativo no hacer merge sin revisión humana y checks; el gate de imagen está verde mediante `vex.openvex.json` aprobado por Kalista (issue #4, revisión debida 2026-10-21; caduca por fecha de revisión o ante cambios de versión). La aprobación humana de la dispensa consta en el VEX y en `docs/dependencies.md`, no es una autoaprobación del agente.

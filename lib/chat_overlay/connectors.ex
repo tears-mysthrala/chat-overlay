@@ -374,7 +374,7 @@ defmodule ChatOverlay.Connectors do
     end)
   end
 
-  defp kick_health(s) do
+  defp kick_health(s, initial \\ true) do
     with {:ok, token} <- Net.token(s) do
       case request("api.kick.com", "GET", "/public/v1/events/subscriptions", [
              {"authorization", "Bearer " <> token}
@@ -395,9 +395,9 @@ defmodule ChatOverlay.Connectors do
                          to_string(&1["broadcaster_user_id"]) == s["channel"])
                    ) do
             # Subscription exists, but delivery has no heartbeat. Do not claim freshness.
-            Source.status(s, "degraded")
+            if initial, do: Source.status(s, "degraded")
             Process.sleep(60_000)
-            kick_health(s)
+            kick_health(s, false)
           else
             _ -> {:stop, :configuration_error}
           end

@@ -39,7 +39,7 @@ Gitleaks 8.30.1 escanea la instantánea de fuente que Git considera versionada/v
 | busybox-binsh 1.37.0-r31 | CVE-2025-60876 | Medium | Misma implementación BusyBox |
 | ssl_client 1.37.0-r31 | CVE-2025-60876 | Medium | Mismo paquete fuente BusyBox |
 
-La primera afecta a operaciones gzwrite/gzprintf de zlib; la segunda a wget de BusyBox. El servidor usa Mint y no invoca wget o shell para chat, pero eso **no es una corrección del componente ni una aceptación humana del riesgo**. Los resultados se mantienen íntegros, sin supresión/VEX que los oculte. El gate de imagen falla con cualquier hallazgo, incluidos Unknown/Negligible. No se declara CI global verde ni autorización de publicación.
+La primera afecta a operaciones gzwrite/gzprintf de zlib; la segunda a wget de BusyBox. El servidor usa Mint y no invoca wget o shell para chat, pero eso **no es una corrección del componente**. Los resultados se mantienen íntegros en el reporte de auditoría bajo `ignoredMatches`. El gate de imagen pasa únicamente por la dispensa fechada aprobada por Kalista (`vex.openvex.json`, SUP-07), con revisión obligatoria antes del 2026-10-21 y caducidad automática ante cambios de revisión.
 
 Fuentes primarias: [NVD BusyBox](https://nvd.nist.gov/vuln/detail/CVE-2025-60876), [registro CNA de zlib](https://www.vulncheck.com/advisories/zlib-1.3.1.2-through-1.3.2-heap-buffer-overflow-via-gz-vacate), [Alpine seguimiento](https://github.com/alpinelinux/docker-alpine/issues/480). Revisar nuevas revisiones de proveedor y repetir el escaneo antes de cerrar estos bloqueos. No se mantiene un fork de la distribución ni se atribuye explotabilidad concreta al overlay sin evidencia.
 
@@ -65,9 +65,9 @@ Decisión (ADR 0002): mantener Alpine 3.24.2. Ninguna alternativa da un gate ver
 - **CVE-2025-60876 (busybox wget, inyección de cabeceras):** el desencadenante exige ejecutar el applet `wget` de BusyBox con un request-target controlado por el atacante. Evidencia de no alcanzabilidad en este servicio: `lib/` no contiene ninguna primitiva de shell (`System.cmd`, `:os.cmd`, `Port.open`, `open_port` — búsqueda vacía); la salida HTTP usa exclusivamente Mint contra destinos de `Net.open` (allowlist + IP pública pineada + `verify_peer`); los applets `wget`/`ssl_client` no se invocan en ninguna ruta (solo `/bin/sh` ejecuta el script de arranque del release). Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 - **CVE-2026-85091 (zlib `gz_vacate`, vía `gzprintf` tras stall):** el desencadenante exige la API de ficheros `gz*` de zlib. Evidencia: árbol de dependencias 100 % Elixir puro (bandit, hpax, mime, mint, mint_web_socket, plug, plug_crypto, telemetry, thousand_island, websock; sin ficheros `.c`/`.so` en `deps/`); sin uso de `:zlib`/gzip/deflate en `lib/` ni en el frontend; el módulo `:zlib` de BEAM no expone las funciones de fichero `gz*`. Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 
-Esto **no corrige los componentes ni acepta el riesgo**: el gate sigue en rojo y el merge a `main` sigue bloqueado.
+Esto **no corrige los componentes**: el gate pasa solo mediante la excepción SUP-07 fechada (sección siguiente) y el merge a `main` sigue requiriendo revisión humana.
 
-## Excepción firmada por Kalista (SUP-07, aprobada 2026-09-21, issue #4)
+## Excepción aprobada por Kalista (SUP-07, 2026-09-21, issue #4)
 
 Mecanismo: `vex.openvex.json` (OpenVEX, versionado en el repo), consumido por
 `scripts/audit_image.py` vía `grype --vex`. Dos declaraciones `not_affected`

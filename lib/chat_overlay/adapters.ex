@@ -169,7 +169,12 @@ defmodule ChatOverlay.Adapters do
           nil
       end)
 
-    if Enum.any?(parsed, &is_nil/1), do: nil, else: parsed
+    total_bytes =
+      Enum.reduce(parsed, 0, fn f, acc ->
+        acc + if is_map(f), do: byte_size(f["text"] || ""), else: 0
+      end)
+
+    if Enum.any?(parsed, &is_nil/1) or total_bytes > 4096, do: nil, else: parsed
   end
 
   defp parse_twitch_fragments(_), do: nil

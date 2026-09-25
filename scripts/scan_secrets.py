@@ -6,6 +6,8 @@ import subprocess
 root = pathlib.Path.cwd()
 output = root / "output/secrets"
 source = output / "source"
+if source.exists():
+    shutil.rmtree(source)
 source.mkdir(parents=True, exist_ok=True)
 files = subprocess.check_output(["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"]).decode().split("\0")
 for name in files:

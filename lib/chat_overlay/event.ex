@@ -90,16 +90,22 @@ defmodule ChatOverlay.Event do
   defp fragments?(frags) when length(frags) > 100, do: false
 
   defp fragments?(frags) do
-    Enum.all?(frags, fn
-      %{"type" => "text", "text" => t} = f ->
-        map_size(f) == 2 and text?(t, 4096)
+    total_bytes =
+      Enum.reduce_while(frags, 0, fn
+        %{"type" => "text", "text" => t} = f, acc when map_size(f) == 2 and is_binary(t) ->
+          if text?(t, 4096), do: {:cont, acc + byte_size(t)}, else: {:halt, :invalid}
 
-      %{"type" => "emote", "text" => t, "id" => id} = f ->
-        map_size(f) == 3 and text?(t, 256) and emote_id?(id)
+        %{"type" => "emote", "text" => t, "id" => id} = f, acc
+        when map_size(f) == 3 and is_binary(t) ->
+          if text?(t, 256) and emote_id?(id),
+            do: {:cont, acc + byte_size(t)},
+            else: {:halt, :invalid}
 
-      _ ->
-        false
-    end)
+        _, _ ->
+          {:halt, :invalid}
+      end)
+
+    is_integer(total_bytes) and total_bytes <= 4096
   end
 
   defp emote_id?(id) when is_binary(id),

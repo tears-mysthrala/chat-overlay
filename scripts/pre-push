@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # Pre-push local: replica los gates de CI antes de subir. Instalación una vez por clon:
 #   scripts/install-hooks.sh
-# Alcance: SIEMPRE formato, trazabilidad, secretos y estática. `mix check` en cambios
-# normales; build + smoke + auditoría de imagen (SBOM/Grype) solo si cambia el
-# empaquetado. La CI sigue siendo la puerta exigible; saltar el hook (--no-verify)
-# debe justificarse en la PR.
+# Alcance: SIEMPRE formato, trazabilidad, secretos, estática y mix check; build + smoke +
+# auditoría de imagen (SBOM/Grype) además cuando cambia el empaquetado. La CI sigue siendo
+# la puerta exigible; saltar el hook (--no-verify) debe justificarse en la PR.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
@@ -13,14 +12,20 @@ need git
 need python3
 need mix
 
+refs="$(cat)"
+
 echo "pre-push: formato, trazabilidad, secretos, estática"
 mix format --check-formatted
 python3 scripts/check_traceability.py
 python3 scripts/scan_secrets.py
 python3 scripts/security_static.py
 
+echo "pre-push: mix check"
+mix check
+
 changed=""
 while read -r local_ref local_oid remote_ref remote_oid; do
+  [ -z "${local_oid:-}" ] && continue
   [ "$local_oid" = "0000000000000000000000000000000000000000" ] && continue
   if [ "$remote_oid" = "0000000000000000000000000000000000000000" ]; then
     base="$(git merge-base "$local_oid" origin/main 2>/dev/null || echo "$local_oid")"
@@ -28,24 +33,22 @@ while read -r local_ref local_oid remote_ref remote_oid; do
   else
     changed="$changed $(git diff --name-only "$remote_oid" "$local_oid")"
   fi
-done
+done <<< "$refs"
 changed="$(echo "$changed" | tr ' ' '\n' | sort -u)"
 
-packaging="$(echo "$changed" | grep -E '^(Dockerfile|mix\.exs|mix\.lock|\.tool-versions|config/|lib/|priv/|vendor/|scripts/(audit_image|smoke_image|inventory)\.py)' || true)"
+packaging="$(echo "$changed" | grep -E '^(Dockerfile|\.dockerignore|mix\.exs|mix\.lock|\.tool-versions|vex\.openvex\.json|config/|lib/|priv/|vendor/|scripts/(audit_image\.py|smoke_image\.py|inventory\.exs))' || true)"
 
 if [ -n "$packaging" ]; then
   need docker
   echo "pre-push: cambia empaquetado -> build + smoke + auditoría de imagen"
   docker build -t chat-overlay:prepush .
   python3 scripts/smoke_image.py chat-overlay:prepush
-  if [ ! -x /tmp/overlay-audit/bin/python ]; then
-    python3 -m venv /tmp/overlay-audit
-    /tmp/overlay-audit/bin/python -m pip install -q jsonschema==4.26.0 referencing==0.37.0
+  audit_venv="${XDG_CACHE_HOME:-$HOME/.cache}/chat-overlay-audit"
+  if [ ! -x "$audit_venv/bin/python" ]; then
+    python3 -m venv "$audit_venv"
+    "$audit_venv/bin/python" -m pip install -q jsonschema==4.26.0 referencing==0.37.0
   fi
-  /tmp/overlay-audit/bin/python scripts/audit_image.py chat-overlay:prepush
-else
-  echo "pre-push: sin cambios de empaquetado -> mix check"
-  mix check
+  "$audit_venv/bin/python" scripts/audit_image.py chat-overlay:prepush
 fi
 
 echo "pre-push: OK"

@@ -228,4 +228,31 @@ defmodule ChatOverlay.StoreTest do
       assert [%{"payload" => %{"message_id" => "2"}}] = visible(s)
     end
   end
+
+  test "throttles redundant source_state events within 30s", %{store: s} do
+    make_state = fn state, at ->
+      Event.new(
+        "twitch",
+        "one",
+        "source_state",
+        Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false),
+        %{"state" => state, "observed_at" => at}
+      )
+    end
+
+    e1 = make_state.("available", "2026-09-20T12:00:00Z")
+    assert :ok = Store.ingest(s, e1)
+
+    # Identical state within 30s is a no-op
+    e2 = make_state.("available", "2026-09-20T12:00:10Z")
+    assert :ok = Store.ingest(s, e2)
+
+    # Different state is accepted
+    e3 = make_state.("degraded", "2026-09-20T12:00:15Z")
+    assert :ok = Store.ingest(s, e3)
+
+    # Identical state after 30s is accepted
+    e4 = make_state.("degraded", "2026-09-20T12:01:00Z")
+    assert :ok = Store.ingest(s, e4)
+  end
 end
