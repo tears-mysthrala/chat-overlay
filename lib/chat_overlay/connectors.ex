@@ -86,11 +86,18 @@ defmodule ChatOverlay.Connectors do
 
       query = if page, do: Map.put(query, "pageToken", page), else: query
 
+      auth_header =
+        if String.starts_with?(token, "AIza") do
+          {"x-goog-api-key", token}
+        else
+          {"authorization", "Bearer " <> token}
+        end
+
       case request(
              "www.googleapis.com",
              "GET",
              "/youtube/v3/liveChat/messages?" <> URI.encode_query(query),
-             [{"authorization", "Bearer " <> token}]
+             [auth_header]
            ) do
         {:ok, 200, _, raw} ->
           with {:ok,
