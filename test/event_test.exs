@@ -172,4 +172,32 @@ defmodule ChatOverlay.EventTest do
     assert {:error, :invalid_configuration} = ChatOverlay.Config.validate(profiles)
     assert {:ok, _} = ChatOverlay.Config.validate(Enum.take(profiles, 3))
   end
+
+  test "YouTube supports concurrent streams on the same channel across separate profiles" do
+    s_horiz = %{
+      "platform" => "youtube",
+      "channel" => "UC1234567890123456789012",
+      "live_chat_id" => "chat_id_horizontal",
+      "credential_env" => "CHAT_YOUTUBE_TOKEN"
+    }
+
+    s_vert = %{
+      "platform" => "youtube",
+      "channel" => "UC1234567890123456789012",
+      "live_chat_id" => "chat_id_vertical",
+      "credential_env" => "CHAT_YOUTUBE_TOKEN"
+    }
+
+    profiles = [
+      %{
+        "handle" => "stream-horizontal",
+        "overlay_platforms" => ["youtube"],
+        "sources" => [s_horiz]
+      },
+      %{"handle" => "stream-vertical", "overlay_platforms" => ["youtube"], "sources" => [s_vert]}
+    ]
+
+    assert {:ok, _} = ChatOverlay.Config.validate(profiles)
+    assert ChatOverlay.Config.key(s_horiz) != ChatOverlay.Config.key(s_vert)
+  end
 end

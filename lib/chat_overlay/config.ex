@@ -26,6 +26,10 @@ defmodule ChatOverlay.Config do
   def validate(_), do: {:error, :invalid_configuration}
   def profiles, do: Application.get_env(:chat_overlay, :profiles, [])
   def profile(handle), do: Enum.find(profiles(), &(&1["handle"] == handle))
+
+  def key(%{"platform" => "youtube"} = s),
+    do: {s["platform"], s["channel"], s["live_chat_id"], s["credential_env"]}
+
   def key(s), do: {s["platform"], s["channel"], s["credential_env"]}
   def sources, do: profiles() |> Enum.flat_map(& &1["sources"]) |> Enum.uniq_by(&key/1)
 
