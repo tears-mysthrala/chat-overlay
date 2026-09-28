@@ -6,8 +6,27 @@ defmodule ChatOverlay.WebAPITest do
 
   setup do
     original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    original_path = Application.get_env(:chat_overlay, :profiles_path)
+
+    tmp_path =
+      Path.join(System.tmp_dir!(), "profiles-api-test-#{System.unique_integer([:positive])}.json")
+
+    Application.put_env(:chat_overlay, :profiles_path, tmp_path)
 
     on_exit(fn ->
+      File.rm(tmp_path)
+
+      case original_path do
+        nil -> Application.delete_env(:chat_overlay, :profiles_path)
+        path -> Application.put_env(:chat_overlay, :profiles_path, path)
+      end
+
+      current_handles = Enum.map(ChatOverlay.Config.profiles(), & &1["handle"])
+
+      for h <- current_handles do
+        _ = ChatOverlay.Profiles.delete(h)
+      end
+
       Application.put_env(:chat_overlay, :profiles, original_profiles)
     end)
 
