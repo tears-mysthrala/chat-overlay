@@ -17,7 +17,7 @@ Evidencias operativas validadas en esta entrega:
   - Proceso BEAM activo de forma ininterrumpida durante más de 67 horas (2 días y 19 horas) manteniendo estado `available`, reconexiones WebSocket, keepalives y heartbeats periódicos de Twitch.
   - Métricas de recursos: RSS estable de ~9.7 MB, 0.0% CPU, 0 fugas de memoria o descriptores observados. Las pruebas formales de carga sostenida de 4 h (candidata F1) y 24 h (primer lanzamiento) bajo REL-08 con métricas activas de latencia y volumen permanecen como puertas requeridas.
 - **53 tests PASS en `mix check`**, 0 fallos, 0 advertencias.
-- **Auditoría de empaquetado**: Docker, CycloneDX 1.7 SBOM, OpenVEX y escáner Grype (0 hallazgos activos, 4 ignorados mediante excepciones firmadas en `vex.openvex.json` sujetas a revisión periódica).
+- **Auditoría de empaquetado**: Docker, CycloneDX 1.7 SBOM, OpenVEX y escáner Grype (0 hallazgos activos, 4 ignorados mediante excepciones aprobadas en `vex.openvex.json` sujetas a revisión periódica).
 
 Pendientes (bloquean cierre de #4 y despliegue):
 - Obtención de token OAuth 2.0 Bearer de YouTube con scope `https://www.googleapis.com/auth/youtube.readonly` e ID de chat activo (`live_chat_id`) correspondiente a una emisión en directo o programada en el canal de `gilraennr` (`UCFUOHZSB9UdNRkjSBx3fpOQ`).
