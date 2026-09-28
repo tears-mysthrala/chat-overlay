@@ -147,4 +147,18 @@ defmodule ChatOverlay.WebAPITest do
     assert resp["ok"] == false
     assert resp["error"] == "Perfil no encontrado"
   end
+
+  test "POST /api/profiles/:handle/sync-youtube rejects foreign origin and handles errors" do
+    bad_conn =
+      conn(:post, "/api/profiles/test/sync-youtube")
+      |> put_req_header("origin", "https://malicious.example")
+      |> Web.call([])
+
+    assert bad_conn.status == 403
+
+    conn = conn(:post, "/api/profiles/nonexistent/sync-youtube") |> Web.call([])
+    assert conn.status == 422
+    assert {:ok, resp} = JSON.decode(conn.resp_body)
+    assert resp["ok"] == false
+  end
 end

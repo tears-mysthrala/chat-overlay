@@ -29,3 +29,6 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 .feedback-msg { padding:12px 16px; border-radius:8px; margin-top:14px; font-size:14px }
 .feedback-msg.error { background:rgba(255,80,80,.15); border:1px solid #c34040; color:#ff9d99 }
 .feedback-msg.success { background:rgba(100,220,140,.15); border:1px solid #3ca364; color:#b6df92 }
+.linked-yt-hint { font-size:12px; color:var(--muted); background:rgba(255,157,153,.1); border:1px solid rgba(255,157,153,.3); border-radius:4px; padding:2px 8px }
+.btn-sync-yt { background:rgba(255,157,153,.15); color:var(--youtube); border-color:rgba(255,157,153,.4); font-weight:600 }
+.btn-sync-yt:hover { background:rgba(255,157,153,.25); border-color:var(--youtube) }

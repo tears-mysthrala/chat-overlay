@@ -174,4 +174,34 @@ defmodule ChatOverlay.ProfilesTest do
       assert Config.profile("concurrent-#{i}") != nil
     end
   end
+
+  test "create_or_update preserves linked_youtube and list/0 exposes it" do
+    demo_source = %{"platform" => "twitch", "channel" => "111", "mode" => "demo"}
+
+    params = %{
+      "handle" => "streamer-linked",
+      "sources" => [demo_source],
+      "linked_youtube" => "https://www.youtube.com/@CanalPrueba"
+    }
+
+    assert {:ok, profile} = Profiles.create_or_update(params)
+    assert profile["linked_youtube"] == "https://www.youtube.com/@CanalPrueba"
+
+    [summary] = Profiles.list()
+    assert summary["linked_youtube"] == "https://www.youtube.com/@CanalPrueba"
+
+    assert :ok = Profiles.delete("streamer-linked")
+  end
+
+  test "sync_youtube handles errors gracefully" do
+    assert {:error, :not_found} = Profiles.sync_youtube("unknown-streamer")
+
+    demo_source = %{"platform" => "twitch", "channel" => "222", "mode" => "demo"}
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{"handle" => "no-yt", "sources" => [demo_source]})
+
+    assert {:error, :no_linked_youtube} = Profiles.sync_youtube("no-yt")
+    assert :ok = Profiles.delete("no-yt")
+  end
 end

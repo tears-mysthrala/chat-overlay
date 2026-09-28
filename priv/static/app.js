@@ -97,6 +97,13 @@
         }
         info.appendChild(badges);
 
+        if (profile.linked_youtube && !(profile.platforms || []).includes("youtube")) {
+          const ytHint = document.createElement("span");
+          ytHint.className = "linked-yt-hint";
+          ytHint.textContent = `YouTube vinculado: ${profile.linked_youtube}`;
+          info.appendChild(ytHint);
+        }
+
         const actions = document.createElement("div");
         actions.className = "profile-actions";
 
@@ -142,6 +149,36 @@
           }
         });
 
+        if (profile.linked_youtube && !(profile.platforms || []).includes("youtube")) {
+          const syncYtBtn = document.createElement("button");
+          syncYtBtn.type = "button";
+          syncYtBtn.className = "btn-action btn-sync-yt";
+          syncYtBtn.textContent = "▶ Sincronizar YouTube";
+          syncYtBtn.addEventListener("click", async () => {
+            try {
+              syncYtBtn.disabled = true;
+              syncYtBtn.textContent = "Buscando directo…";
+              const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}/sync-youtube`, {
+                method: "POST",
+                headers: { "content-type": "application/json" }
+              });
+              const data = await res.json();
+              if (res.ok && data.ok) {
+                showFeedback(`¡Directo de YouTube sincronizado con éxito para "${profile.handle}"!`, "success");
+                await loadProfiles();
+              } else {
+                alert(data.error || "No se pudo sincronizar el directo de YouTube.");
+              }
+            } catch {
+              alert("Error de red al sincronizar el directo de YouTube.");
+            } finally {
+              syncYtBtn.disabled = false;
+              syncYtBtn.textContent = "▶ Sincronizar YouTube";
+            }
+          });
+          actions.appendChild(syncYtBtn);
+        }
+
         actions.append(readerLink, copyBtn, deleteBtn);
         card.append(info, actions);
         profilesList.appendChild(card);
@@ -178,7 +215,13 @@
           const data = await res.json();
 
           if (res.ok && data.ok) {
-            showFeedback(`¡Canal añadido con éxito como "${data.profile.handle}"!`, "success");
+            let msg = `¡Canal añadido con éxito como "${data.profile.handle}"!`;
+            if (data.profile.sources && data.profile.sources.length > 1) {
+              msg += " Feed unificada con Twitch y YouTube.";
+            } else if (data.profile.linked_youtube) {
+              msg += ` Se detectó canal de YouTube vinculado (${data.profile.linked_youtube}) sin directo activo; podrás sincronizarlo con un clic cuando inicie emisión.`;
+            }
+            showFeedback(msg, "success");
             targetInput.value = "";
             customHandleInput.value = "";
             if (platformSelect) platformSelect.value = "auto";

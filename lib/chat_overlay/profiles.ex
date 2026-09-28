@@ -40,6 +40,7 @@ defmodule ChatOverlay.Profiles do
         "platforms" => Enum.map(p["sources"], & &1["platform"]),
         "sources" => Enum.map(p["sources"], &format_source_summary/1),
         "overlay_platforms" => p["overlay_platforms"],
+        "linked_youtube" => p["linked_youtube"],
         "reader_url" => "/reader/#{p["handle"]}",
         "overlay_url" => "/overlay/#{p["handle"]}"
       }
@@ -55,67 +56,89 @@ defmodule ChatOverlay.Profiles do
 
   @doc "Resolves a user-provided target into a source configuration."
   def resolve_target(target, opts \\ []) when is_binary(target) do
+    with {:ok, sources, suggested, meta} <- resolve_target_with_meta(target, opts) do
+      if opts[:with_meta] do
+        {:ok, sources, suggested, meta}
+      else
+        {:ok, hd(sources), suggested}
+      end
+    end
+  end
+
+  @doc "Resolves a user-provided target returning all discovered sources and metadata."
+  def resolve_target_with_meta(target, opts \\ []) when is_binary(target) do
     platform = opts[:platform] || detect_platform(target)
 
     case platform do
       "twitch" ->
-        with {:ok, info} <- Resolver.resolve_twitch(target, opts) do
-          source = %{
-            "platform" => "twitch",
-            "channel" => info["channel"],
-            "user_id" => info["user_id"],
-            "client_id" => info["client_id"],
-            "credential_env" => @platform_credentials["twitch"]
-          }
-
-          {:ok, source, info["login"]}
-        end
+        resolve_twitch_target(target, opts)
 
       "youtube" ->
-        with {:ok, info} <- Resolver.resolve_youtube(target, opts) do
-          source = %{
-            "platform" => "youtube",
-            "channel" => info["channel"],
-            "live_chat_id" => info["live_chat_id"],
-            "credential_env" => @platform_credentials["youtube"]
-          }
-
-          suggested_handle = slugify(info["handle"] || info["channel"] || info["title"] || "")
-          {:ok, source, suggested_handle}
-        end
+        resolve_youtube_target(target, opts)
 
       _ ->
-        case Resolver.resolve_twitch(target, opts) do
-          {:ok, info} ->
-            source = %{
-              "platform" => "twitch",
-              "channel" => info["channel"],
-              "user_id" => info["user_id"],
-              "client_id" => info["client_id"],
-              "credential_env" => @platform_credentials["twitch"]
-            }
-
-            {:ok, source, info["login"]}
-
-          _ ->
-            case Resolver.resolve_youtube(target, opts) do
-              {:ok, info} ->
-                source = %{
-                  "platform" => "youtube",
-                  "channel" => info["channel"],
-                  "live_chat_id" => info["live_chat_id"],
-                  "credential_env" => @platform_credentials["youtube"]
-                }
-
-                suggested_handle =
-                  slugify(info["handle"] || info["channel"] || info["title"] || "")
-
-                {:ok, source, suggested_handle}
-
-              error ->
-                error
-            end
+        case resolve_twitch_target(target, opts) do
+          {:ok, _, _, _} = res -> res
+          _ -> resolve_youtube_target(target, opts)
         end
+    end
+  end
+
+  defp resolve_twitch_target(target, opts) do
+    with {:ok, info} <- Resolver.resolve_twitch(target, opts) do
+      twitch_source = %{
+        "platform" => "twitch",
+        "channel" => info["channel"],
+        "user_id" => info["user_id"],
+        "client_id" => info["client_id"],
+        "credential_env" => @platform_credentials["twitch"]
+      }
+
+      handle = info["login"]
+      auto_discover? = Keyword.get(opts, :auto_discover_youtube, true)
+
+      {sources, meta} =
+        if auto_discover? do
+          case Resolver.discover_twitch_youtube(info["login"], description: info["description"]) do
+            {:ok, yt_url} ->
+              case Resolver.resolve_youtube(yt_url, opts) do
+                {:ok, yt_info} ->
+                  yt_source = %{
+                    "platform" => "youtube",
+                    "channel" => yt_info["channel"],
+                    "live_chat_id" => yt_info["live_chat_id"],
+                    "credential_env" => @platform_credentials["youtube"]
+                  }
+
+                  {[twitch_source, yt_source],
+                   %{"linked_youtube" => yt_url, "youtube_live" => true}}
+
+                _ ->
+                  {[twitch_source], %{"linked_youtube" => yt_url, "youtube_live" => false}}
+              end
+
+            _ ->
+              {[twitch_source], %{}}
+          end
+        else
+          {[twitch_source], %{}}
+        end
+
+      {:ok, sources, handle, meta}
+    end
+  end
+
+  defp resolve_youtube_target(target, opts) do
+    with {:ok, info} <- Resolver.resolve_youtube(target, opts) do
+      source = %{
+        "platform" => "youtube",
+        "channel" => info["channel"],
+        "live_chat_id" => info["live_chat_id"],
+        "credential_env" => @platform_credentials["youtube"]
+      }
+
+      suggested_handle = slugify(info["handle"] || info["channel"] || info["title"] || "")
+      {:ok, [source], suggested_handle, %{}}
     end
   end
 
@@ -125,12 +148,16 @@ defmodule ChatOverlay.Profiles do
     target = params["target"] || params[:target] || params["input"] || params[:input]
     raw_sources = params["sources"] || params[:sources]
 
-    with {:ok, sources, suggested_handle} <- resolve_sources(target, raw_sources, opts),
+    with {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
          {:ok, clean_handle} <- determine_handle(handle, suggested_handle, sources) do
-      candidate_profile = %{
-        "handle" => clean_handle,
-        "sources" => sources
-      }
+      candidate_profile =
+        %{
+          "handle" => clean_handle,
+          "sources" => sources
+        }
+        |> maybe_put_linked_youtube(
+          params["linked_youtube"] || params[:linked_youtube] || meta["linked_youtube"]
+        )
 
       candidate_profile =
         case params["overlay_platforms"] || params[:overlay_platforms] do
@@ -144,6 +171,76 @@ defmodule ChatOverlay.Profiles do
       call_serialized({:save_profile, candidate_profile, opts})
     end
   end
+
+  @doc "Synchronizes the linked YouTube live stream for an existing profile."
+  def sync_youtube(handle, opts \\ []) when is_binary(handle) do
+    clean_handle = slugify(handle)
+
+    case Config.profile(clean_handle) do
+      nil ->
+        {:error, :not_found}
+
+      profile ->
+        target =
+          profile["linked_youtube"] ||
+            find_youtube_target_from_sources(profile["sources"], clean_handle)
+
+        case target do
+          nil ->
+            {:error, :no_linked_youtube}
+
+          yt_target ->
+            case Resolver.resolve_youtube(yt_target, opts) do
+              {:ok, yt_info} ->
+                yt_source = %{
+                  "platform" => "youtube",
+                  "channel" => yt_info["channel"],
+                  "live_chat_id" => yt_info["live_chat_id"],
+                  "credential_env" => @platform_credentials["youtube"]
+                }
+
+                existing_non_yt =
+                  Enum.reject(profile["sources"], &(&1["platform"] == "youtube"))
+
+                updated_sources = existing_non_yt ++ [yt_source]
+
+                updated_profile =
+                  profile
+                  |> Map.put("sources", updated_sources)
+                  |> Map.put("linked_youtube", yt_target)
+
+                create_or_update(updated_profile, Keyword.put(opts, :replace, true))
+
+              {:error, :no_active_stream} ->
+                {:error, :no_active_stream}
+
+              error ->
+                error
+            end
+        end
+    end
+  end
+
+  defp find_youtube_target_from_sources(sources, fallback_handle) do
+    twitch = Enum.find(sources, &(&1["platform"] == "twitch"))
+
+    target_name =
+      cond do
+        twitch && twitch["login"] -> twitch["login"]
+        true -> fallback_handle
+      end
+
+    case Resolver.discover_twitch_youtube(target_name) do
+      {:ok, url} -> url
+      _ -> nil
+    end
+  end
+
+  defp maybe_put_linked_youtube(profile, url) when is_binary(url) and byte_size(url) > 0 do
+    Map.put(profile, "linked_youtube", url)
+  end
+
+  defp maybe_put_linked_youtube(profile, _), do: profile
 
   @doc "Deletes a profile in runtime, stopping supervisors and removing unused sources."
   def delete(handle) when is_binary(handle) do
@@ -298,9 +395,14 @@ defmodule ChatOverlay.Profiles do
   defp resolve_sources(target, raw_sources, opts) do
     cond do
       is_binary(target) and byte_size(String.trim(target)) > 0 ->
-        case resolve_target(target, opts) do
-          {:ok, source, suggested} ->
-            {:ok, [source], suggested}
+        target_opts = Keyword.put(opts, :with_meta, true)
+
+        case resolve_target(target, target_opts) do
+          {:ok, sources, suggested, meta} ->
+            {:ok, List.wrap(sources), suggested, meta}
+
+          {:ok, sources, suggested} ->
+            {:ok, List.wrap(sources), suggested, %{}}
 
           error ->
             error
@@ -341,7 +443,7 @@ defmodule ChatOverlay.Profiles do
           end)
 
         case results do
-          {:ok, sources} -> {:ok, Enum.reverse(sources), nil}
+          {:ok, sources} -> {:ok, Enum.reverse(sources), nil, %{}}
           error -> error
         end
 

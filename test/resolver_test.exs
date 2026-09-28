@@ -65,4 +65,23 @@ defmodule ChatOverlay.ResolverTest do
     assert {:error, :invalid_youtube_target} =
              Resolver.clean_youtube_target("https://evil.test/bad")
   end
+
+  test "discover_twitch_youtube extracts YouTube URLs from description fallback" do
+    desc = "¡Hola a todos! Sígueme también en https://www.youtube.com/@mi_canal y en twitter."
+
+    assert {:ok, "https://www.youtube.com/@mi_canal"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: desc)
+
+    short_desc = "VODs en https://youtu.be/abc123xyz89"
+
+    assert {:ok, "https://youtu.be/abc123xyz89"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: short_desc)
+
+    no_yt = "Solo juego videojuegos aquí. Sin redes."
+
+    assert {:error, :no_youtube_link} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: no_yt)
+
+    assert {:error, :invalid_login} = Resolver.discover_twitch_youtube(12345)
+  end
 end

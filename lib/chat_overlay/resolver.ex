@@ -61,6 +61,7 @@ defmodule ChatOverlay.Resolver do
                "channel" => user["id"],
                "login" => user["login"],
                "display_name" => user["display_name"],
+               "description" => user["description"] || "",
                "client_id" => client_id,
                "user_id" => user_id
              }}
@@ -79,6 +80,86 @@ defmodule ChatOverlay.Resolver do
       error -> error
     end
   end
+
+  @doc "Discovers a linked YouTube channel URL from Twitch channel social links or description."
+  def discover_twitch_youtube(login, opts \\ [])
+
+  def discover_twitch_youtube(login, opts) when is_binary(login) do
+    clean_login = String.downcase(String.trim(login))
+
+    case discover_from_gql(clean_login) do
+      {:ok, yt_url} ->
+        {:ok, yt_url}
+
+      _ ->
+        discover_from_description(opts[:description] || "")
+    end
+  end
+
+  def discover_twitch_youtube(_, _), do: {:error, :invalid_login}
+
+  defp discover_from_gql(login) do
+    query = %{
+      "query" =>
+        "query { user(login: \"#{login}\") { description channel { socialMedias { name title url } } } }"
+    }
+
+    case Net.request(
+           "gql.twitch.tv",
+           "POST",
+           "/gql",
+           [
+             {"client-id", "kimne78kx3ncx6brgo4mv6wki5h1ko"},
+             {"content-type", "application/json"}
+           ],
+           JSON.encode(query)
+         ) do
+      {:ok, 200, _, raw} ->
+        with {:ok, data} <- JSON.decode(raw),
+             user when is_map(user) <- get_in(data, ["data", "user"]) do
+          medias = get_in(user, ["channel", "socialMedias"]) || []
+
+          yt_link =
+            Enum.find_value(medias, fn item ->
+              name = String.downcase(item["name"] || "")
+              url = item["url"] || ""
+              lower_url = String.downcase(url)
+
+              if name == "youtube" or String.contains?(lower_url, ["youtube.com", "youtu.be"]) do
+                url
+              end
+            end)
+
+          cond do
+            is_binary(yt_link) and byte_size(yt_link) > 0 ->
+              {:ok, yt_link}
+
+            is_binary(user["description"]) and byte_size(user["description"]) > 0 ->
+              discover_from_description(user["description"])
+
+            true ->
+              {:error, :no_youtube_link}
+          end
+        else
+          _ -> {:error, :no_youtube_link}
+        end
+
+      _ ->
+        {:error, :no_youtube_link}
+    end
+  end
+
+  defp discover_from_description(description) when is_binary(description) do
+    case Regex.run(
+           ~r/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:@|channel\/|c\/)?|youtu\.be\/)[a-zA-Z0-9_\-\.\/]+/,
+           description
+         ) do
+      [url | _] -> {:ok, url}
+      _ -> {:error, :no_youtube_link}
+    end
+  end
+
+  defp discover_from_description(_), do: {:error, :no_youtube_link}
 
   defp introspect_twitch_creds(token, client_id, user_id) do
     if is_nil(client_id) or is_nil(user_id) or client_id == "" or user_id == "" do
