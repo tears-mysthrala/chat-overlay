@@ -14,7 +14,7 @@ Los mensajes `channel.chat.message` pueden incluir `message.fragments` con emote
 
 Habilitar YouTube Data API para una aplicación propia. Se admiten dos mecanismos de autenticación mediante la variable de entorno configurada en `credential_env`:
 1. **OAuth 2.0 Bearer token**: obtenido con scope `https://www.googleapis.com/auth/youtube.readonly` mediante el flujo oficial. Se envía mediante la cabecera `Authorization: Bearer <token>`.
-2. **Google Cloud API Key**: clave de API restringida a `youtube.googleapis.com` (prefijo estándar `AIza`). Se detecta automáticamente y se envía mediante la cabecera HTTP `X-Goog-Api-Key: <key>`, permitiendo lectura de chats públicos sin flujos de consentimiento de usuario bloqueados y sin exponer credenciales en parámetros de consulta URL (SEC-06).
+2. **Google Cloud API Key**: clave de API con restricción de API limitada estrictamente a `youtube.googleapis.com` (prefijo estándar `AIza`) y restricción de aplicación compatible con el entorno de despliegue (p. ej. restricción por direcciones IP de salida del host donde corre el servicio; si el entorno no admite IP estática por tratarse de un despliegue con IP dinámica o local, el control alternativo es restringir la cuota diaria del proyecto y limitar estrictamente el acceso a solo YouTube Data API v3). Se detecta automáticamente y se envía mediante la cabecera HTTP `X-Goog-Api-Key: <key>`, permitiendo lectura de chats públicos sin flujos de consentimiento de usuario bloqueados y sin exponer credenciales en parámetros de consulta URL (SEC-06).
 
 Configurar el ID estable del canal (`UC...`) y el `live_chat_id` de la emisión activa; un nombre público no sustituye ese ID. Las credenciales se envían siempre en cabeceras HTTP, nunca en la URL pública.
 
