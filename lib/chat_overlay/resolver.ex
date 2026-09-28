@@ -35,20 +35,11 @@ defmodule ChatOverlay.Resolver do
     user_id = opts[:user_id] || System.get_env("CHAT_TWITCH_USER_ID")
 
     with {:ok, slug} <- clean_twitch_slug(input),
-         true <- byte_size(token) > 0 do
-      {client_id, user_id} =
-        if is_nil(client_id) or is_nil(user_id) or client_id == "" or user_id == "" do
-          case validate_twitch_token(token) do
-            {:ok, auth} ->
-              {client_id || auth["client_id"], user_id || auth["user_id"]}
-
-            _ ->
-              {client_id || default_twitch_client_id(), user_id}
-          end
-        else
-          {client_id, user_id}
-        end
-
+         true <- byte_size(token) > 0,
+         {:ok, {client_id, user_id}} <- introspect_twitch_creds(token, client_id, user_id),
+         true <-
+           is_binary(client_id) and byte_size(client_id) > 0 and
+             is_binary(user_id) and byte_size(user_id) > 0 do
       query =
         if Regex.match?(~r/\A[0-9]+\z/, slug),
           do: "/helix/users?id=" <> URI.encode(slug),
@@ -89,6 +80,20 @@ defmodule ChatOverlay.Resolver do
     end
   end
 
+  defp introspect_twitch_creds(token, client_id, user_id) do
+    if is_nil(client_id) or is_nil(user_id) or client_id == "" or user_id == "" do
+      case validate_twitch_token(token) do
+        {:ok, auth} ->
+          {:ok, {client_id || auth["client_id"], user_id || auth["user_id"]}}
+
+        error ->
+          error
+      end
+    else
+      {:ok, {client_id, user_id}}
+    end
+  end
+
   def resolve_youtube(input, opts \\ []) do
     token = opts[:token] || System.get_env("CHAT_YOUTUBE_TOKEN") || ""
 
@@ -102,11 +107,11 @@ defmodule ChatOverlay.Resolver do
 
         {:handle, handle} ->
           with {:ok, channel_id} <- resolve_youtube_handle(handle, headers) do
-            resolve_youtube_live_stream(channel_id, headers)
+            resolve_youtube_live_stream(channel_id, headers, handle)
           end
 
         {:channel, channel_id} ->
-          resolve_youtube_live_stream(channel_id, headers)
+          resolve_youtube_live_stream(channel_id, headers, nil)
       end
     else
       false -> {:error, :missing_youtube_credentials}
@@ -114,7 +119,7 @@ defmodule ChatOverlay.Resolver do
     end
   end
 
-  defp resolve_youtube_video(video_id, headers) do
+  defp resolve_youtube_video(video_id, headers, handle \\ nil) do
     path =
       "/youtube/v3/videos?" <>
         URI.encode_query(%{
@@ -132,7 +137,8 @@ defmodule ChatOverlay.Resolver do
            %{
              "channel" => item["snippet"]["channelId"],
              "live_chat_id" => chat_id,
-             "title" => item["snippet"]["title"]
+             "title" => item["snippet"]["title"],
+             "handle" => handle
            }}
         else
           _ -> {:error, :no_active_live_chat}
@@ -172,7 +178,7 @@ defmodule ChatOverlay.Resolver do
     end
   end
 
-  defp resolve_youtube_live_stream(channel_id, headers) do
+  defp resolve_youtube_live_stream(channel_id, headers, handle) do
     path =
       "/youtube/v3/search?" <>
         URI.encode_query(%{
@@ -187,7 +193,7 @@ defmodule ChatOverlay.Resolver do
         with {:ok, %{"items" => [item | _]}} <-
                JSON.decode(raw, Net.body_limit("www.googleapis.com")),
              video_id when is_binary(video_id) <- item["id"]["videoId"] do
-          resolve_youtube_video(video_id, headers)
+          resolve_youtube_video(video_id, headers, handle)
         else
           _ -> {:error, :no_active_stream}
         end
@@ -206,11 +212,20 @@ defmodule ChatOverlay.Resolver do
     slug =
       cond do
         String.starts_with?(trimmed, ["http://", "https://"]) ->
-          trimmed
-          |> URI.parse()
-          |> Map.get(:path, "")
-          |> String.split("/", trim: true)
-          |> List.last() || ""
+          uri = URI.parse(trimmed)
+          host = String.downcase(uri.host || "")
+
+          if host in ["twitch.tv", "www.twitch.tv", "m.twitch.tv"] do
+            parts = String.split(uri.path || "", "/", trim: true)
+
+            case parts do
+              ["popout", channel, "chat" | _] -> channel
+              [channel | _] -> channel
+              _ -> ""
+            end
+          else
+            ""
+          end
 
         String.starts_with?(trimmed, "@") ->
           String.trim_leading(trimmed, "@")
@@ -240,6 +255,10 @@ defmodule ChatOverlay.Resolver do
         cond do
           query["v"] && Regex.match?(~r/\A[a-zA-Z0-9_\-]{11}\z/, query["v"]) ->
             {:ok, {:video, query["v"]}}
+
+          Regex.match?(~r/\A\/live\/([a-zA-Z0-9_\-]{11})\/?\z/, uri.path || "") ->
+            [_, video_id] = Regex.run(~r/\A\/live\/([a-zA-Z0-9_\-]{11})\/?\z/, uri.path)
+            {:ok, {:video, video_id}}
 
           String.contains?(uri.host || "", "youtu.be") and
               Regex.match?(~r/\A\/[a-zA-Z0-9_\-]{11}\z/, uri.path || "") ->
@@ -304,9 +323,5 @@ defmodule ChatOverlay.Resolver do
     if String.starts_with?(token, "AIza"),
       do: {"x-goog-api-key", token},
       else: {"authorization", "Bearer " <> token}
-  end
-
-  defp default_twitch_client_id do
-    System.get_env("CHAT_TWITCH_CLIENT_ID") || "gp762nuuoqcoxypju8c569th9wz7q5"
   end
 end

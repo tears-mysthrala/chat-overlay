@@ -16,13 +16,66 @@ defmodule ChatOverlay.Web do
         api_list_profiles(conn)
 
       {"POST", ["api", "profiles"]} ->
-        api_create_profile(conn)
+        with true <- allowed_origin?(conn),
+             true <- json_content_type?(conn) do
+          api_create_profile(conn)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          :bad_content_type ->
+            reply(
+              conn,
+              415,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Content-Type debe ser application/json"
+              })
+            )
+        end
 
       {"POST", ["api", "resolve"]} ->
-        api_resolve(conn)
+        with true <- allowed_origin?(conn),
+             true <- json_content_type?(conn) do
+          api_resolve(conn)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          :bad_content_type ->
+            reply(
+              conn,
+              415,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Content-Type debe ser application/json"
+              })
+            )
+        end
 
       {"DELETE", ["api", "profiles", handle]} ->
-        api_delete_profile(conn, handle)
+        if allowed_origin?(conn) == true do
+          api_delete_profile(conn, handle)
+        else
+          reply(
+            conn,
+            403,
+            "application/json",
+            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+          )
+        end
 
       {method, _} when method not in ["GET", "HEAD"] ->
         reply(conn, 405, "text/plain", "Method not allowed")
@@ -204,6 +257,36 @@ defmodule ChatOverlay.Web do
           "application/json",
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
         )
+    end
+  end
+
+  defp json_content_type?(conn) do
+    case Plug.Conn.get_req_header(conn, "content-type") do
+      [ct | _] ->
+        if String.starts_with?(String.downcase(ct), "application/json"),
+          do: true,
+          else: :bad_content_type
+
+      _ ->
+        :bad_content_type
+    end
+  end
+
+  defp allowed_origin?(conn) do
+    case Plug.Conn.get_req_header(conn, "origin") do
+      [] ->
+        true
+
+      [origin] ->
+        uri = URI.parse(origin)
+        host = uri.host || ""
+
+        if host in ["localhost", "127.0.0.1", conn.host],
+          do: true,
+          else: :bad_origin
+
+      _ ->
+        :bad_origin
     end
   end
 

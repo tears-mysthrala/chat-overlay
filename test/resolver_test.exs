@@ -6,6 +6,10 @@ defmodule ChatOverlay.ResolverTest do
     assert {:ok, "revenant"} = Resolver.clean_twitch_slug("revenant")
     assert {:ok, "revenant"} = Resolver.clean_twitch_slug("@revenant")
     assert {:ok, "revenant"} = Resolver.clean_twitch_slug("https://www.twitch.tv/revenant")
+
+    assert {:ok, "revenant"} =
+             Resolver.clean_twitch_slug("https://twitch.tv/popout/revenant/chat")
+
     assert {:ok, "revenant"} = Resolver.clean_twitch_slug("twitch.tv/revenant")
     assert {:ok, "revenant"} = Resolver.clean_twitch_slug("www.twitch.tv/revenant/")
     assert {:ok, "ibai"} = Resolver.clean_twitch_slug("IBAI")
@@ -17,11 +21,20 @@ defmodule ChatOverlay.ResolverTest do
              Resolver.clean_twitch_slug("invalid name with spaces")
 
     assert {:error, :invalid_twitch_channel} = Resolver.clean_twitch_slug("<script>")
+
+    assert {:error, :invalid_twitch_channel} =
+             Resolver.clean_twitch_slug("https://evil.test/revenant")
   end
 
   test "clean_youtube_target classifies video URLs, handles, and channel IDs" do
     assert {:ok, {:video, "wG3nr37RwCs"}} =
              Resolver.clean_youtube_target("https://www.youtube.com/watch?v=wG3nr37RwCs")
+
+    assert {:ok, {:video, "wG3nr37RwCs"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/live/wG3nr37RwCs")
+
+    assert {:ok, {:video, "wG3nr37RwCs"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/live/wG3nr37RwCs/")
 
     assert {:ok, {:video, "wG3nr37RwCs"}} =
              Resolver.clean_youtube_target("youtube.com/watch?v=wG3nr37RwCs")

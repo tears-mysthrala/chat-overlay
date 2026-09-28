@@ -68,6 +68,40 @@ defmodule ChatOverlay.WebAPITest do
     assert Registry.lookup(ChatOverlay.Registry, {:store, "dynamic-streamer"}) == []
   end
 
+  test "POST /api/profiles rejects invalid content-type with 415" do
+    conn =
+      conn(:post, "/api/profiles", "target=revenant")
+      |> put_req_header("content-type", "application/x-www-form-urlencoded")
+      |> Web.call([])
+
+    assert conn.status == 415
+    assert {:ok, resp} = JSON.decode(conn.resp_body)
+    assert resp["ok"] == false
+    assert resp["error"] =~ "application/json"
+  end
+
+  test "POST and DELETE reject unauthorized foreign origins with 403" do
+    payload = %{"target" => "revenant"}
+
+    conn =
+      conn(:post, "/api/profiles", JSON.encode(payload))
+      |> put_req_header("content-type", "application/json")
+      |> put_req_header("origin", "https://malicious-site.example")
+      |> Web.call([])
+
+    assert conn.status == 403
+    assert {:ok, resp} = JSON.decode(conn.resp_body)
+    assert resp["ok"] == false
+    assert resp["error"] == "Origen no permitido"
+
+    del_conn =
+      conn(:delete, "/api/profiles/revenant")
+      |> put_req_header("origin", "https://malicious-site.example")
+      |> Web.call([])
+
+    assert del_conn.status == 403
+  end
+
   test "POST /api/profiles handles validation errors gracefully" do
     payload = %{
       "handle" => "INVALID HANDLE SPACES!",

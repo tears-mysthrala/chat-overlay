@@ -3,6 +3,11 @@ defmodule ChatOverlay.Profiles do
   use GenServer
   alias ChatOverlay.{Config, Resolver, Source, Store}
 
+  @platform_credentials %{
+    "twitch" => "CHAT_TWITCH_TOKEN",
+    "youtube" => "CHAT_YOUTUBE_TOKEN"
+  }
+
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: opts[:name] || __MODULE__)
   end
@@ -60,7 +65,7 @@ defmodule ChatOverlay.Profiles do
             "channel" => info["channel"],
             "user_id" => info["user_id"],
             "client_id" => info["client_id"],
-            "credential_env" => "CHAT_TWITCH_TOKEN"
+            "credential_env" => @platform_credentials["twitch"]
           }
 
           {:ok, source, info["login"]}
@@ -72,10 +77,10 @@ defmodule ChatOverlay.Profiles do
             "platform" => "youtube",
             "channel" => info["channel"],
             "live_chat_id" => info["live_chat_id"],
-            "credential_env" => "CHAT_YOUTUBE_TOKEN"
+            "credential_env" => @platform_credentials["youtube"]
           }
 
-          suggested_handle = slugify(info["title"] || "")
+          suggested_handle = slugify(info["handle"] || info["channel"] || info["title"] || "")
           {:ok, source, suggested_handle}
         end
 
@@ -87,7 +92,7 @@ defmodule ChatOverlay.Profiles do
               "channel" => info["channel"],
               "user_id" => info["user_id"],
               "client_id" => info["client_id"],
-              "credential_env" => "CHAT_TWITCH_TOKEN"
+              "credential_env" => @platform_credentials["twitch"]
             }
 
             {:ok, source, info["login"]}
@@ -99,10 +104,12 @@ defmodule ChatOverlay.Profiles do
                   "platform" => "youtube",
                   "channel" => info["channel"],
                   "live_chat_id" => info["live_chat_id"],
-                  "credential_env" => "CHAT_YOUTUBE_TOKEN"
+                  "credential_env" => @platform_credentials["youtube"]
                 }
 
-                suggested_handle = slugify(info["title"] || "")
+                suggested_handle =
+                  slugify(info["handle"] || info["channel"] || info["title"] || "")
+
                 {:ok, source, suggested_handle}
 
               error ->
@@ -162,6 +169,13 @@ defmodule ChatOverlay.Profiles do
             profile["sources"]
       end
 
+    removed_sources =
+      if existing do
+        (existing["sources"] || []) -- final_sources
+      else
+        []
+      end
+
     final_profile =
       profile
       |> Map.put("sources", final_sources)
@@ -203,7 +217,7 @@ defmodule ChatOverlay.Profiles do
           end
         end
 
-        # Synchronize Sources supervisor
+        # Synchronize Sources supervisor: start new sources
         if Process.whereis(ChatOverlay.Sources) do
           Enum.each(final_profile["sources"], fn src ->
             source_spec = Source.child_spec(src)
@@ -224,6 +238,9 @@ defmodule ChatOverlay.Profiles do
             end
           end)
         end
+
+        # Clean up any orphaned source workers that were removed from this profile
+        cleanup_removed_sources(removed_sources, valid_profiles)
 
         persist_profiles(valid_profiles)
         {:ok, final_profile}
@@ -251,26 +268,30 @@ defmodule ChatOverlay.Profiles do
             _ = Supervisor.delete_child(ChatOverlay.Stores, {:store, handle})
           end
 
-          remaining_source_keys =
-            valid_profiles
-            |> Enum.flat_map(& &1["sources"])
-            |> Enum.map(&Config.key/1)
-            |> MapSet.new()
-
-          if Process.whereis(ChatOverlay.Sources) do
-            Enum.each(profile_to_delete["sources"], fn src ->
-              key = Config.key(src)
-
-              unless MapSet.member?(remaining_source_keys, key) do
-                _ = Supervisor.terminate_child(ChatOverlay.Sources, {:source, key})
-                _ = Supervisor.delete_child(ChatOverlay.Sources, {:source, key})
-              end
-            end)
-          end
+          cleanup_removed_sources(profile_to_delete["sources"] || [], valid_profiles)
 
           persist_profiles(valid_profiles)
           :ok
         end
+    end
+  end
+
+  defp cleanup_removed_sources(removed_sources, valid_profiles) do
+    if is_pid(Process.whereis(ChatOverlay.Sources)) and removed_sources != [] do
+      remaining_keys =
+        valid_profiles
+        |> Enum.flat_map(& &1["sources"])
+        |> Enum.map(&Config.key/1)
+        |> MapSet.new()
+
+      Enum.each(removed_sources, fn src ->
+        key = Config.key(src)
+
+        unless MapSet.member?(remaining_keys, key) do
+          _ = Supervisor.terminate_child(ChatOverlay.Sources, {:source, key})
+          _ = Supervisor.delete_child(ChatOverlay.Sources, {:source, key})
+        end
+      end)
     end
   end
 
@@ -288,8 +309,24 @@ defmodule ChatOverlay.Profiles do
       is_list(raw_sources) and raw_sources != [] ->
         results =
           Enum.reduce_while(raw_sources, {:ok, []}, fn
-            %{"platform" => _, "channel" => _} = src, {:ok, acc} ->
-              {:cont, {:ok, [src | acc]}}
+            %{"platform" => plat, "channel" => _} = src, {:ok, acc} ->
+              cleaned_src =
+                if src["mode"] == "demo" do
+                  Map.delete(src, "credential_env")
+                else
+                  case Map.fetch(@platform_credentials, plat) do
+                    {:ok, env_name} ->
+                      Map.put(src, "credential_env", env_name)
+
+                    :error ->
+                      :unsupported
+                  end
+                end
+
+              case cleaned_src do
+                :unsupported -> {:halt, {:error, :invalid_source_spec}}
+                valid_src -> {:cont, {:ok, [valid_src | acc]}}
+              end
 
             %{"target" => tgt} = item, {:ok, acc} ->
               item_opts = Keyword.merge(opts, platform: item["platform"])
@@ -388,7 +425,11 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp persist_profiles(profiles) do
-    path = System.get_env("CHAT_CONFIG") || "config/local-profiles.json"
+    path =
+      Application.get_env(:chat_overlay, :profiles_path) ||
+        System.get_env("CHAT_CONFIG") ||
+        "config/local-profiles.json"
+
     doc = %{"profiles" => profiles}
 
     try do
