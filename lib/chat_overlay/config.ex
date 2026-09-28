@@ -82,7 +82,7 @@ defmodule ChatOverlay.Config do
   defp source?(s) when is_map(s) do
     Enum.all?(
       Map.keys(s),
-      &(&1 in ~w(platform channel credential_env client_id user_id live_chat_id subscription_id moderation_subscription_id mode))
+      &(&1 in ~w(platform channel credential_env client_id user_id live_chat_id subscription_id moderation_subscription_id mode login))
     ) and
       s["platform"] in ~w(twitch youtube kick) and Event.id?(s["channel"]) and
       s["mode"] in [nil, "demo"] and
@@ -92,7 +92,9 @@ defmodule ChatOverlay.Config do
   defp source?(_), do: false
 
   defp details?(%{"platform" => "twitch"} = s),
-    do: numeric?(s["channel"]) and numeric?(s["user_id"]) and Event.id?(s["client_id"])
+    do:
+      numeric?(s["channel"]) and numeric?(s["user_id"]) and Event.id?(s["client_id"]) and
+        (is_nil(s["login"]) or (is_binary(s["login"]) and Event.id?(s["login"])))
 
   defp details?(%{"platform" => "youtube"} = s), do: Event.id?(s["live_chat_id"])
 

@@ -98,10 +98,12 @@ defmodule ChatOverlay.Resolver do
 
   def discover_twitch_youtube(_, _), do: {:error, :invalid_login}
 
-  defp discover_from_gql(login) do
+  defp discover_from_gql(slug) do
+    field = if Regex.match?(~r/\A[0-9]+\z/, slug), do: "id", else: "login"
+
     query = %{
       "query" =>
-        "query { user(login: \"#{login}\") { description channel { socialMedias { name title url } } } }"
+        "query { user(#{field}: \"#{slug}\") { description channel { socialMedias { name title url } } } }"
     }
 
     case Net.request(
@@ -151,7 +153,7 @@ defmodule ChatOverlay.Resolver do
 
   defp discover_from_description(description) when is_binary(description) do
     case Regex.run(
-           ~r/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:@|channel\/|c\/)?|youtu\.be\/)[a-zA-Z0-9_\-\.\/]+/,
+           ~r/https?:\/\/(?:www\.)?(?:youtube\.com\/(?:@[a-zA-Z0-9_\-\.]+|channel\/[a-zA-Z0-9_\-]+|c\/[a-zA-Z0-9_\-\.]+|user\/[a-zA-Z0-9_\-\.]+|watch\?[^\s"'>]+|live\/[a-zA-Z0-9_\-]+)|youtu\.be\/[a-zA-Z0-9_\-]+)/,
            description
          ) do
       [url | _] -> {:ok, url}
@@ -347,6 +349,15 @@ defmodule ChatOverlay.Resolver do
 
           String.starts_with?(uri.path || "", "/@") ->
             handle = uri.path |> String.split("/", trim: true) |> hd() |> String.trim_leading("@")
+            validate_youtube_handle(handle)
+
+          String.starts_with?(uri.path || "", ["/c/", "/user/"]) ->
+            handle =
+              uri.path
+              |> String.split("/", trim: true)
+              |> List.last()
+              |> String.trim_leading("@")
+
             validate_youtube_handle(handle)
 
           String.starts_with?(uri.path || "", "/channel/") ->

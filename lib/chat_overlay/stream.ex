@@ -14,7 +14,8 @@ defmodule ChatOverlay.Stream do
 
           {:ok, conn} = Plug.Conn.chunk(conn, "retry: 2000\n\n")
           cursor = List.first(Plug.Conn.get_req_header(conn, "last-event-id"))
-          poll(conn, handle, cursor, platforms(conn, handle), System.monotonic_time(:millisecond))
+          is_overlay = conn.query_string == "view=overlay"
+          poll(conn, handle, cursor, is_overlay, System.monotonic_time(:millisecond))
         after
           Admission.release()
         end
@@ -27,9 +28,10 @@ defmodule ChatOverlay.Stream do
     end
   end
 
-  defp poll(conn, handle, cursor, platforms, last) do
+  defp poll(conn, handle, cursor, is_overlay, last) do
     result = Store.read(Store.name(handle), cursor)
     now = System.monotonic_time(:millisecond)
+    current_platforms = platforms_for(handle, is_overlay)
 
     data =
       cond do
@@ -38,7 +40,9 @@ defmodule ChatOverlay.Stream do
             "id: ",
             result.cursor,
             "\nevent: batch\ndata: ",
-            ChatOverlay.JSON.encode(%{"events" => filter_events(result.events, platforms)}),
+            ChatOverlay.JSON.encode(%{
+              "events" => filter_events(result.events, current_platforms)
+            }),
             "\n\n"
           ]
 
@@ -57,7 +61,7 @@ defmodule ChatOverlay.Stream do
           {:tcp_closed, _} -> conn
           {:tcp_error, _, _} -> conn
         after
-          50 -> poll(conn, handle, result.cursor, platforms, if(data, do: now, else: last))
+          50 -> poll(conn, handle, result.cursor, is_overlay, if(data, do: now, else: last))
         end
 
       {:error, _} ->
@@ -84,9 +88,14 @@ defmodule ChatOverlay.Stream do
     end)
   end
 
-  defp platforms(conn, handle) do
-    p = Config.profile(handle)
-    all = Enum.map(p["sources"], & &1["platform"])
-    if conn.query_string == "view=overlay", do: p["overlay_platforms"] || all, else: all
+  defp platforms_for(handle, is_overlay) do
+    case Config.profile(handle) do
+      nil ->
+        []
+
+      p ->
+        all = Enum.map(p["sources"] || [], & &1["platform"])
+        if is_overlay, do: p["overlay_platforms"] || all, else: all
+    end
   end
 end

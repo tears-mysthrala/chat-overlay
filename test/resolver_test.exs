@@ -62,6 +62,12 @@ defmodule ChatOverlay.ResolverTest do
     assert {:ok, {:channel, "UCynX4LJTQ_H7_KPy7QiIS2A"}} =
              Resolver.clean_youtube_target("UCynX4LJTQ_H7_KPy7QiIS2A")
 
+    assert {:ok, {:handle, "mi_canal"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/c/mi_canal")
+
+    assert {:ok, {:handle, "mi_canal"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/user/mi_canal")
+
     assert {:error, :invalid_youtube_target} =
              Resolver.clean_youtube_target("https://evil.test/bad")
   end
@@ -76,6 +82,16 @@ defmodule ChatOverlay.ResolverTest do
 
     assert {:ok, "https://youtu.be/abc123xyz89"} =
              Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: short_desc)
+
+    watch_desc = "Nuevo vídeo en https://www.youtube.com/watch?v=dQw4w9WgXcQ ¡míralo!"
+
+    assert {:ok, "https://www.youtube.com/watch?v=dQw4w9WgXcQ"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: watch_desc)
+
+    c_desc = "Canal en https://www.youtube.com/c/mi_canal para más vídeos"
+
+    assert {:ok, "https://www.youtube.com/c/mi_canal"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: c_desc)
 
     no_yt = "Solo juego videojuegos aquí. Sin redes."
 

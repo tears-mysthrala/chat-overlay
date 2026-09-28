@@ -13,21 +13,25 @@ Evidencias operativas y técnicas en esta entrega:
   - Comprobado en vivo contra perfiles reales:
     - `gilraennr` -> resuelto enlace de YouTube `https://www.youtube.com/channel/UCFUOHZSB9UdNRkjSBx3fpOQ`.
     - `revenant` -> resuelto enlace de YouTube `https://www.youtube.com/@REVENANT_Gameplays`.
-- **Integración y supervisión en perfiles unificados (`ChatOverlay.Profiles` y `ChatOverlay.Config`)**:
+- **Integración y supervisión en perfiles unificados (`ChatOverlay.Profiles`, `ChatOverlay.Config`, `ChatOverlay.Store`)**:
   - Esquema ampliado de perfiles con campo opcional y validado `"linked_youtube"` (`<= 2048` caracteres).
-  - Al añadir un canal de Twitch (`resolve_target_with_meta/2`): si el canal de YouTube detectado está emitiendo en directo, se fusiona automáticamente la fuente de YouTube generando una feed multistream unificada de inmediato. Si no está en directo, se guarda la referencia en `linked_youtube` sin bloquear ni dar error.
-  - Sincronización en caliente (`sync_youtube/2`): busca emisiones en directo activas en el canal de YouTube asociado e incorpora la fuente de YouTube en tiempo de ejecución, actualizando el store y supervisión de workers sin interrumpir la conexión de Twitch.
+  - Al añadir un canal de Twitch (`resolve_target_with_meta/2`): si el canal de YouTube detectado está emitiendo en directo, se fusiona automáticamente la fuente de YouTube generando una feed multistream unificada de inmediato. Los enlaces transitorios a vídeos (`watch?v=`, `youtu.be`) se normalizan automáticamente a la URL canónica y estable del canal (`/channel/UC...`).
+  - Si no está en directo, se guarda la referencia en `linked_youtube` sin bloquear ni dar error.
+  - Sincronización atómica en caliente (`sync_youtube/2`): busca emisiones activas del canal de YouTube asociado e incorpora la fuente en caliente mediante serialización en el GenServer `Profiles`, evitando condiciones de carrera concurrentes y preservando `linked_youtube` en cualquier mutación de perfil.
+  - **Continuidad del Store y entrega en caliente**: se incorpora `Store.update_sources/2` para actualizar las fuentes permitidas dinámicamente sin reiniciar el proceso del Store ni perder el historial de chat acumulado ni las barreras de deduplicación.
+  - **Suscripción SSE dinámica (`ChatOverlay.Stream`)**: resolución en caliente de plataformas activas en el stream SSE, permitiendo que los visores ya conectados reciban de inmediato los eventos de la nueva plataforma sin necesidad de reconectar.
 - **Endpoints de API REST (`ChatOverlay.Web`)**:
   - `POST /api/profiles/:handle/sync-youtube`: permite al frontend solicitar la sincronización en vivo del canal de YouTube asociado. Protegido con validación de cabecera Origin y Content-Type JSON.
-  - `POST /api/resolve`: enriquecido para devolver metadatos con el estado de YouTube (`discovered_youtube_url`, `youtube_live`).
+  - `POST /api/resolve`: enriquecido para devolver metadatos con el estado de YouTube (`discovered_youtube_url`, `youtube_live`, `youtube_error`).
 - **Panel de control UI (`priv/static/app.js`, `priv/static/app.css`)**:
-  - Indicador visual (badge) para canales de Twitch que tienen un canal de YouTube vinculado pero sin emisión activa.
-  - Botón "▶ Sincronizar directo YouTube" para comprobar y conectar el chat de YouTube con un solo clic en cuanto el creador empiece directo.
+  - Indicador visual (badge) para canales de Twitch que tienen un canal de YouTube vinculado.
+  - Botón accesible para sincronizar o resincronizar transmisiones futuras cuando concluya una emisión anterior.
   - Notificaciones en español sobre el estado de la vinculación y sincronización.
 - **Suite de pruebas**:
-  - 76 tests PASS (4 nuevos tests cubriendo detección de enlaces, preservación de `linked_youtube`, endpoint de sincronización y mitigación CSRF/Origin).
+  - 77 tests PASS (5 nuevos tests cubriendo detección de enlaces /c/, /user/, watch?v=, preservación de `linked_youtube`, continuidad del Store, endpoint de sincronización y mitigación CSRF/Origin).
   - 0 advertencias de compilación (`mix compile --warnings-as-errors`).
   - Formato verificado con `mix format --check-formatted`.
+
 
 Pendientes (bloquean cierre de #4 y despliegue):
 - Validación en OBS Studio real con fuente navegador (transparencia, CSS y ciclo de vida de conexión al ocultar/mostrar fuente); no sustituir por Chromium para el cierre formal de la puerta.

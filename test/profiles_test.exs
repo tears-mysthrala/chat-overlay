@@ -204,4 +204,66 @@ defmodule ChatOverlay.ProfilesTest do
     assert {:error, :no_linked_youtube} = Profiles.sync_youtube("no-yt")
     assert :ok = Profiles.delete("no-yt")
   end
+
+  test "updating a profile preserves existing linked_youtube and does not restart store" do
+    demo_source = %{"platform" => "twitch", "channel" => "111", "mode" => "demo"}
+
+    params = %{
+      "handle" => "streamer-linked-preservation",
+      "sources" => [demo_source],
+      "linked_youtube" => "https://www.youtube.com/@CanalPrueba"
+    }
+
+    assert {:ok, profile} = Profiles.create_or_update(params)
+    assert profile["linked_youtube"] == "https://www.youtube.com/@CanalPrueba"
+
+    # Ingest a message into the store
+    store_name = ChatOverlay.Store.name("streamer-linked-preservation")
+    [{pid, _}] = Registry.lookup(ChatOverlay.Registry, {:store, "streamer-linked-preservation"})
+
+    event =
+      ChatOverlay.Event.new("twitch", "111", "message", "msg-1", %{
+        "message_id" => "m1",
+        "author_display" => "user1",
+        "author_id" => "u1",
+        "text" => "hello twitch"
+      })
+
+    assert :ok = ChatOverlay.Store.ingest(store_name, event)
+    read_before = ChatOverlay.Store.read(store_name)
+    assert length(read_before.events) > 0
+
+    # Now update profile by adding another source without linked_youtube in params
+    demo_source2 = %{"platform" => "youtube", "channel" => "222", "mode" => "demo"}
+
+    update_params = %{
+      "handle" => "streamer-linked-preservation",
+      "sources" => [demo_source, demo_source2]
+    }
+
+    assert {:ok, updated} = Profiles.create_or_update(update_params)
+    # linked_youtube must be preserved!
+    assert updated["linked_youtube"] == "https://www.youtube.com/@CanalPrueba"
+
+    # Store process must NOT be terminated/restarted
+    assert [{^pid, _}] =
+             Registry.lookup(ChatOverlay.Registry, {:store, "streamer-linked-preservation"})
+
+    # Previous messages must remain in store
+    read_after = ChatOverlay.Store.read(store_name)
+    assert length(read_after.events) > 0
+
+    # Ingest from the new youtube source must now succeed
+    yt_event =
+      ChatOverlay.Event.new("youtube", "222", "message", "yt-1", %{
+        "message_id" => "m2",
+        "author_display" => "user2",
+        "author_id" => "u2",
+        "text" => "hello youtube"
+      })
+
+    assert :ok = ChatOverlay.Store.ingest(store_name, yt_event)
+
+    assert :ok = Profiles.delete("streamer-linked-preservation")
+  end
 end

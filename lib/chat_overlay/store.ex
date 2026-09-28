@@ -18,6 +18,7 @@ defmodule ChatOverlay.Store do
 
   def ingest(server, event), do: GenServer.call(server, {:ingest, event})
   def read(server, cursor \\ nil), do: GenServer.call(server, {:read, cursor})
+  def update_sources(server, sources), do: GenServer.call(server, {:update_sources, sources})
 
   def init(opts) do
     Process.send_after(self(), :expire, 1000)
@@ -54,6 +55,11 @@ defmodule ChatOverlay.Store do
     else
       {:reply, {:error, :invalid_event}, s}
     end
+  end
+
+  def handle_call({:update_sources, new_sources}, _, s) do
+    allowed = MapSet.new(Enum.map(new_sources || [], &{&1["platform"], &1["channel"]}))
+    {:reply, :ok, %{s | sources: allowed}}
   end
 
   def handle_call({:read, cursor}, _, s) do

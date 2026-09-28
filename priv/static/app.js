@@ -97,10 +97,13 @@
         }
         info.appendChild(badges);
 
-        if (profile.linked_youtube && !(profile.platforms || []).includes("youtube")) {
+        if (profile.linked_youtube) {
           const ytHint = document.createElement("span");
           ytHint.className = "linked-yt-hint";
-          ytHint.textContent = `YouTube vinculado: ${profile.linked_youtube}`;
+          const hasYt = (profile.platforms || []).includes("youtube");
+          ytHint.textContent = hasYt
+            ? `YouTube unificado: ${profile.linked_youtube}`
+            : `YouTube vinculado: ${profile.linked_youtube}`;
           info.appendChild(ytHint);
         }
 
@@ -149,11 +152,13 @@
           }
         });
 
-        if (profile.linked_youtube && !(profile.platforms || []).includes("youtube")) {
+        if (profile.linked_youtube) {
+          const isYtConnected = (profile.platforms || []).includes("youtube");
           const syncYtBtn = document.createElement("button");
           syncYtBtn.type = "button";
           syncYtBtn.className = "btn-action btn-sync-yt";
-          syncYtBtn.textContent = "▶ Sincronizar YouTube";
+          const btnLabel = isYtConnected ? "↻ Resincronizar YouTube" : "▶ Sincronizar YouTube";
+          syncYtBtn.textContent = btnLabel;
           syncYtBtn.addEventListener("click", async () => {
             try {
               syncYtBtn.disabled = true;
@@ -164,7 +169,12 @@
               });
               const data = await res.json();
               if (res.ok && data.ok) {
-                showFeedback(`¡Directo de YouTube sincronizado con éxito para "${profile.handle}"!`, "success");
+                showFeedback(
+                  isYtConnected
+                    ? `¡Directo de YouTube actualizado con éxito para "${profile.handle}"!`
+                    : `¡Directo de YouTube sincronizado con éxito para "${profile.handle}"!`,
+                  "success"
+                );
                 await loadProfiles();
               } else {
                 alert(data.error || "No se pudo sincronizar el directo de YouTube.");
@@ -173,7 +183,7 @@
               alert("Error de red al sincronizar el directo de YouTube.");
             } finally {
               syncYtBtn.disabled = false;
-              syncYtBtn.textContent = "▶ Sincronizar YouTube";
+              syncYtBtn.textContent = btnLabel;
             }
           });
           actions.appendChild(syncYtBtn);
