@@ -32,8 +32,11 @@ Evidencias operativas y técnicas en esta entrega:
   - Adición dinámica de Twitch (`https://twitch.tv/revenant`): resuelto broadcaster `38446500`, iniciado store y worker EventSub en caliente, recepción de mensajes de chat en directo verificada vía SSE `/events/revenant`.
   - Adición dinámica de YouTube (`https://www.youtube.com/@HAKODATELIVECAMERA`): resuelto channel ID `UCynX4LJTQ_H7_KPy7QiIS2A` y `live_chat_id`, verificado estado `available` en vivo.
   - Eliminación dinámica de perfiles verificada con parada de procesos en el Registry y actualización de la lista.
-- **Suite de pruebas**:
-  - 69 tests PASS (13 nuevos tests que cubren `Resolver`, `Profiles`, supervisión en caliente y endpoints de API Web).
+- **Suite de pruebas y robustez**:
+  - 72 tests PASS (16 tests dedicados que cubren `Resolver`, `Profiles`, supervisión en caliente, serialización GenServer concurrente, endpoints de API Web y mitigación CSRF/Origin).
+  - Serialización de mutaciones de perfiles a través del GenServer `ChatOverlay.Profiles` para eliminar condiciones de carrera concurrentes.
+  - Validación de cabecera Origin y Content-Type `application/json` en endpoints mutantes de API.
+  - Limpieza acotada de workers de fuentes (`ChatOverlay.Sources`) al eliminar o reemplazar perfiles.
   - 0 fallos, 0 advertencias de compilación (`mix compile --warnings-as-errors`).
   - Formato de código verificado con `mix format --check-formatted`.
 
