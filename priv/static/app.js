@@ -1,14 +1,205 @@
 "use strict";
 (() => {
+  const dashboard = document.getElementById("dashboard");
+  if (dashboard) {
+    initDashboard();
+    return;
+  }
+
   const form = document.getElementById("open-profile");
   if (form) {
     form.addEventListener("submit", (event) => {
       event.preventDefault();
-      const handle = document.getElementById("handle").value;
+      const handle = document.getElementById("handle").value.trim().toLowerCase();
       if (/^[a-z0-9][a-z0-9_-]{0,39}$/.test(handle)) location.assign(`/reader/${encodeURIComponent(handle)}`);
     });
     return;
   }
+
+  function initDashboard() {
+    const profilesList = document.getElementById("profiles-list");
+    const emptyProfiles = document.getElementById("empty-profiles");
+    const loadingProfiles = document.getElementById("loading-profiles");
+    const addForm = document.getElementById("add-channel-form");
+    const targetInput = document.getElementById("target-input");
+    const platformSelect = document.getElementById("platform-select");
+    const customHandleInput = document.getElementById("custom-handle-input");
+    const submitBtn = document.getElementById("submit-btn");
+    const feedbackArea = document.getElementById("feedback-area");
+    const openForm = document.getElementById("open-profile");
+
+    if (openForm) {
+      openForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const handle = document.getElementById("handle").value.trim().toLowerCase();
+        if (/^[a-z0-9][a-z0-9_-]{0,39}$/.test(handle)) {
+          location.assign(`/reader/${encodeURIComponent(handle)}`);
+        }
+      });
+    }
+
+    function showFeedback(message, type) {
+      if (!feedbackArea) return;
+      feedbackArea.hidden = false;
+      feedbackArea.className = `feedback-msg ${type}`;
+      feedbackArea.textContent = message;
+    }
+
+    function hideFeedback() {
+      if (!feedbackArea) return;
+      feedbackArea.hidden = true;
+      feedbackArea.className = "feedback-msg";
+      feedbackArea.textContent = "";
+    }
+
+    async function loadProfiles() {
+      try {
+        const res = await fetch("/api/profiles");
+        if (!res.ok) throw new Error("Error cargando perfiles");
+        const data = await res.json();
+        renderProfiles(data.profiles || []);
+      } catch {
+        if (loadingProfiles) loadingProfiles.textContent = "Error al conectar con la API.";
+      }
+    }
+
+    function renderProfiles(profiles) {
+      if (loadingProfiles) loadingProfiles.hidden = true;
+      if (!profilesList) return;
+      profilesList.replaceChildren();
+
+      if (profiles.length === 0) {
+        if (emptyProfiles) emptyProfiles.hidden = false;
+        return;
+      }
+
+      if (emptyProfiles) emptyProfiles.hidden = true;
+
+      for (const profile of profiles) {
+        const card = document.createElement("div");
+        card.className = "profile-card";
+
+        const info = document.createElement("div");
+        info.className = "profile-info";
+
+        const handleSpan = document.createElement("span");
+        handleSpan.className = "profile-handle";
+        handleSpan.textContent = profile.handle;
+        info.appendChild(handleSpan);
+
+        const badges = document.createElement("div");
+        badges.className = "platform-badges";
+        for (const plat of (profile.platforms || [])) {
+          const badge = document.createElement("span");
+          badge.className = `platform-badge badge-${plat}`;
+          badge.textContent = plat;
+          badges.appendChild(badge);
+        }
+        info.appendChild(badges);
+
+        const actions = document.createElement("div");
+        actions.className = "profile-actions";
+
+        const readerLink = document.createElement("a");
+        readerLink.href = profile.reader_url;
+        readerLink.className = "btn-action btn-primary";
+        readerLink.textContent = "Abrir Lector";
+
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "btn-action";
+        copyBtn.textContent = "Copiar Overlay OBS";
+        copyBtn.addEventListener("click", async () => {
+          const fullUrl = `${location.origin}${profile.overlay_url}`;
+          try {
+            await navigator.clipboard.writeText(fullUrl);
+            copyBtn.textContent = "¡Copiado!";
+            setTimeout(() => { copyBtn.textContent = "Copiar Overlay OBS"; }, 2000);
+          } catch {
+            prompt("Copia la URL del overlay:", fullUrl);
+          }
+        });
+
+        const deleteBtn = document.createElement("button");
+        deleteBtn.type = "button";
+        deleteBtn.className = "btn-action btn-danger";
+        deleteBtn.textContent = "Eliminar";
+        deleteBtn.addEventListener("click", async () => {
+          if (!confirm(`¿Eliminar el perfil "${profile.handle}"?`)) return;
+          try {
+            deleteBtn.disabled = true;
+            const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "DELETE" });
+            const data = await res.json();
+            if (data.ok) {
+              await loadProfiles();
+            } else {
+              alert(data.error || "No se pudo eliminar el perfil");
+            }
+          } catch {
+            alert("Error de red al eliminar el perfil");
+          } finally {
+            deleteBtn.disabled = false;
+          }
+        });
+
+        actions.append(readerLink, copyBtn, deleteBtn);
+        card.append(info, actions);
+        profilesList.appendChild(card);
+      }
+    }
+
+    if (addForm) {
+      addForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        hideFeedback();
+
+        const target = targetInput.value.trim();
+        const handle = customHandleInput.value.trim();
+        const platform = platformSelect ? platformSelect.value : "auto";
+
+        if (!target) return;
+
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = "Resolviendo canal en directo…";
+        }
+
+        try {
+          const payload = { target };
+          if (handle) payload.handle = handle;
+          if (platform !== "auto") payload.platform = platform;
+
+          const res = await fetch("/api/profiles", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await res.json();
+
+          if (res.ok && data.ok) {
+            showFeedback(`¡Canal añadido con éxito como "${data.profile.handle}"!`, "success");
+            targetInput.value = "";
+            customHandleInput.value = "";
+            if (platformSelect) platformSelect.value = "auto";
+            await loadProfiles();
+          } else {
+            showFeedback(data.error || "Error al añadir el canal", "error");
+          }
+        } catch {
+          showFeedback("Error de comunicación con el servidor.", "error");
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Añadir Canal en Caliente";
+          }
+        }
+      });
+    }
+
+    loadProfiles();
+  }
+
   const [, view, handle] = location.pathname.split("/");
   const overlay = view === "overlay";
   if (overlay) document.body.classList.add("overlay");
