@@ -1,3 +1,74 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chat Overlay</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
-<body class="home"><main class="welcome"><div class="wordmark"><span class="mark" aria-hidden="true">≋</span> Chat Overlay</div><h1>La conversación,<br>en un solo lugar.</h1><p class="intro">Twitch, YouTube y Kick. Un chat para leer en directo y una vista limpia para tu escena de OBS.</p><form id="open-profile"><label for="handle">Tu perfil</label><div class="input-row"><input id="handle" name="handle" required pattern="[a-z0-9][a-z0-9_\-]{0,39}" maxlength="40" autocomplete="off" placeholder="nombre-del-perfil"><button type="submit">Abrir chat</button></div><p class="hint">Usa el perfil habilitado por quien administra este servicio.</p></form><div class="platform-key"><span>Twitch</span><span>YouTube</span><span>Kick</span></div><p class="privacy-note">Solo lectura. Sin cuentas de usuario ni historial en disco.</p></main></body></html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Chat Overlay · Panel de Creador</title>
+  <link rel="stylesheet" href="/assets/app.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body class="home">
+  <main class="welcome">
+    <div class="wordmark"><span class="mark" aria-hidden="true">≋</span> Chat Overlay</div>
+    <h1>La conversación,<br>en un solo lugar.</h1>
+    <p class="intro">Twitch, YouTube y Kick. Detección automática en caliente, sin editar JSON ni reiniciar el servidor.</p>
+
+    <div id="dashboard">
+      <section class="dashboard-section">
+        <h2 class="section-title">Canales y Perfiles Activos</h2>
+        <div id="profiles-container">
+          <p id="loading-profiles" class="hint">Cargando canales...</p>
+          <div id="empty-profiles" class="empty-state" hidden>
+            No hay canales configurados en este momento. Añade uno a continuación para empezar.
+          </div>
+          <div id="profiles-list" class="profile-grid"></div>
+        </div>
+      </section>
+
+      <section class="dashboard-section add-section">
+        <h2 class="section-title">Añadir Canal en Caliente</h2>
+        <p class="hint">Detecta automáticamente el streamer en Twitch o YouTube, resuelve sus IDs y levanta el servicio al instante.</p>
+
+        <form id="add-channel-form">
+          <div class="form-group">
+            <label for="target-input">Canal, usuario o URL</label>
+            <div class="input-row">
+              <input id="target-input" name="target" required autocomplete="off" placeholder="Ej: revenant, https://twitch.tv/revenant o @HAKODATELIVECAMERA">
+              <select id="platform-select" aria-label="Plataforma">
+                <option value="auto">Auto-detectar</option>
+                <option value="twitch">Twitch</option>
+                <option value="youtube">YouTube</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="custom-handle-input">Nombre del perfil / handle (opcional)</label>
+            <input id="custom-handle-input" name="handle" pattern="[a-z0-9][a-z0-9_\-]{0,39}" maxlength="40" autocomplete="off" placeholder="Dejar vacío para auto-asignar (ej: revenant)">
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" id="submit-btn" class="btn-primary">Añadir Canal en Caliente</button>
+          </div>
+
+          <div id="feedback-area" role="alert" hidden></div>
+        </form>
+      </section>
+
+      <section class="dashboard-section direct-jump">
+        <h2 class="section-title">Abrir Perfil Directo</h2>
+        <form id="open-profile">
+          <label for="handle">Nombre del perfil</label>
+          <div class="input-row">
+            <input id="handle" name="handle" required pattern="[a-z0-9][a-z0-9_\-]{0,39}" maxlength="40" autocomplete="off" placeholder="nombre-del-perfil">
+            <button type="submit">Abrir chat</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="platform-key"><span>Twitch</span><span>YouTube</span><span>Kick</span></div>
+    <p class="privacy-note">Solo lectura. Sin cuentas de usuario ni almacenamiento de historial en disco.</p>
+  </main>
+</body>
+</html>

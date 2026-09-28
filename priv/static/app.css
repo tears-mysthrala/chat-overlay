@@ -6,3 +6,26 @@
 body.overlay { background:transparent; color:#fff } .overlay .workspace { display:block; margin:0; padding:12px; max-width:none; height:100dvh } .overlay .reader-chrome,.overlay .conversation-header,.overlay .empty { display:none!important } .overlay .conversation { height:100%; background:transparent; border:0; border-radius:0; justify-content:flex-end } .overlay #messages { flex:0 1 auto; padding:0; scrollbar-width:none; overflow:hidden } .overlay .message { background:rgba(18,33,45,.92); padding:12px 16px; margin:8px 0; border:0; border-left:3px solid var(--twitch); border-radius:4px 10px 10px 4px } .overlay .message[data-platform=youtube] { border-left-color:var(--youtube) } .overlay .message[data-platform=kick] { border-left-color:var(--kick) } .overlay .message p { font-size:20px; line-height:1.4 } .overlay .emote { width:36px; height:36px } .overlay time { display:none } .overlay #overlay-state:not(:empty) { align-self:flex-end; background:rgba(18,33,45,.9); padding:5px 10px; border-radius:5px; color:white }
 @media(max-width:760px) { .workspace { display:flex; flex-direction:column; height:auto; min-height:100dvh; padding:18px; gap:20px } aside { overflow:visible } aside h1 { margin-top:18px } #source-status { display:flex; flex-wrap:wrap; gap:20px } .tools { grid-template-columns:1fr 1fr; align-items:center; margin-top:16px } .retention,.help { display:none } .conversation { height:70dvh; min-height:420px } .welcome { padding:40px 22px } .input-row { flex-direction:column } .chat-footer>span { display:none } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important } }
+.dashboard-section { margin-top:36px; padding:24px; background:var(--panel); border:1px solid var(--line); border-radius:12px }
+.section-title { font-size:20px; font-weight:650; margin:0 0 16px; color:var(--ink) }
+.profile-grid { display:grid; gap:12px; margin-top:14px }
+.profile-card { display:flex; align-items:center; justify-content:space-between; padding:14px 18px; background:#12212d; border:1px solid var(--line); border-radius:8px; gap:14px; flex-wrap:wrap }
+.profile-info { display:flex; align-items:center; gap:14px; flex-wrap:wrap }
+.profile-handle { font-weight:700; font-size:17px; color:var(--ink) }
+.platform-badges { display:flex; gap:6px }
+.platform-badge { font-size:11px; font-weight:700; border-radius:4px; padding:2px 7px; color:#172635; text-transform:uppercase }
+.badge-twitch { background:var(--twitch) }
+.badge-youtube { background:var(--youtube) }
+.badge-kick { background:var(--kick) }
+.profile-actions { display:flex; gap:8px; align-items:center }
+.btn-action { font-size:13px; padding:7px 12px; border-radius:6px; text-decoration:none; display:inline-flex; align-items:center }
+.btn-primary { background:var(--accent); color:#12212d; border-color:var(--accent); font-weight:650 }
+.btn-danger { background:transparent; color:#ff8b8b; border-color:#6a3535 }
+.btn-danger:hover { border-color:#ff8b8b; background:rgba(255,100,100,.12) }
+.empty-state { padding:24px; text-align:center; color:var(--muted); font-size:15px; border:1px dashed var(--line); border-radius:8px }
+.form-group { display:flex; flex-direction:column; gap:6px; margin-bottom:14px }
+.form-actions { margin-top:16px }
+select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #637887; border-radius:8px; padding:12px 14px }
+.feedback-msg { padding:12px 16px; border-radius:8px; margin-top:14px; font-size:14px }
+.feedback-msg.error { background:rgba(255,80,80,.15); border:1px solid #c34040; color:#ff9d99 }
+.feedback-msg.success { background:rgba(100,220,140,.15); border:1px solid #3ca364; color:#b6df92 }

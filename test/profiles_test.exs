@@ -1,0 +1,137 @@
+defmodule ChatOverlay.ProfilesTest do
+  use ExUnit.Case, async: false
+  alias ChatOverlay.{Config, Profiles}
+
+  setup do
+    original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+
+    on_exit(fn ->
+      Application.put_env(:chat_overlay, :profiles, original_profiles)
+    end)
+
+    Application.put_env(:chat_overlay, :profiles, [])
+    :ok
+  end
+
+  test "slugify normalizes handles and removes illegal characters" do
+    assert Profiles.slugify("Revenant") == "revenant"
+    assert Profiles.slugify("@HAKODATELIVECAMERA") == "hakodatelivecamera"
+    assert Profiles.slugify("Canal de Prueba (Multi-Stream)") == "canal-de-prueba-multi-stream"
+    assert Profiles.slugify("---test---") == "test"
+    assert Profiles.slugify("123-abc") == "123-abc"
+  end
+
+  test "list formats active profiles without exposing secrets" do
+    sample = [
+      %{
+        "handle" => "streamer1",
+        "sources" => [
+          %{
+            "platform" => "twitch",
+            "channel" => "12345",
+            "client_id" => "secret-client",
+            "user_id" => "secret-user",
+            "credential_env" => "CHAT_TWITCH_TOKEN"
+          }
+        ]
+      }
+    ]
+
+    Application.put_env(:chat_overlay, :profiles, sample)
+    [item] = Profiles.list()
+
+    assert item["handle"] == "streamer1"
+    assert item["platforms"] == ["twitch"]
+    assert item["reader_url"] == "/reader/streamer1"
+    assert item["overlay_url"] == "/overlay/streamer1"
+
+    [source_summary] = item["sources"]
+    assert source_summary["platform"] == "twitch"
+    assert source_summary["channel"] == "12345"
+    refute Map.has_key?(source_summary, "client_id")
+    refute Map.has_key?(source_summary, "credential_env")
+  end
+
+  test "create_or_update adds a profile and delete removes it" do
+    demo_source = %{
+      "platform" => "twitch",
+      "channel" => "111",
+      "mode" => "demo"
+    }
+
+    params = %{
+      "handle" => "demo-streamer",
+      "sources" => [demo_source]
+    }
+
+    assert {:ok, profile} = Profiles.create_or_update(params)
+    assert profile["handle"] == "demo-streamer"
+    assert Config.profile("demo-streamer") != nil
+    assert Profiles.get("demo-streamer") != nil
+
+    assert :ok = Profiles.delete("demo-streamer")
+    assert Config.profile("demo-streamer") == nil
+    assert Profiles.get("demo-streamer") == nil
+  end
+
+  test "create_or_update merges sources from multiple platforms for the same streamer" do
+    twitch_src = %{
+      "platform" => "twitch",
+      "channel" => "111",
+      "mode" => "demo"
+    }
+
+    youtube_src = %{
+      "platform" => "youtube",
+      "channel" => "222",
+      "mode" => "demo"
+    }
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{"handle" => "multistream", "sources" => [twitch_src]})
+
+    p1 = Config.profile("multistream")
+    assert length(p1["sources"]) == 1
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{"handle" => "multistream", "sources" => [youtube_src]})
+
+    p2 = Config.profile("multistream")
+    assert length(p2["sources"]) == 2
+    assert Enum.map(p2["sources"], & &1["platform"]) |> Enum.sort() == ["twitch", "youtube"]
+  end
+
+  test "hot child supervision dynamically starts Store and Source processes" do
+    demo_source = %{
+      "platform" => "twitch",
+      "channel" => "999",
+      "mode" => "demo"
+    }
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{"handle" => "live-streamer", "sources" => [demo_source]})
+
+    assert [{store_pid, _}] = Registry.lookup(ChatOverlay.Registry, {:store, "live-streamer"})
+    assert Process.alive?(store_pid)
+
+    key = Config.key(demo_source)
+    assert [{source_pid, _}] = Registry.lookup(ChatOverlay.Registry, {:source, key})
+    assert Process.alive?(source_pid)
+
+    assert :ok = Profiles.delete("live-streamer")
+    assert Registry.lookup(ChatOverlay.Registry, {:store, "live-streamer"}) == []
+    assert Registry.lookup(ChatOverlay.Registry, {:source, key}) == []
+  end
+
+  test "create_or_update fails on invalid handles" do
+    assert {:error, :invalid_handle} =
+             Profiles.create_or_update(%{
+               "handle" => "INVALID HANDLE WITH SPACES!",
+               "sources" => [%{"platform" => "twitch", "channel" => "1", "mode" => "demo"}]
+             })
+  end
+
+  test "delete returns :not_found for unknown handles" do
+    assert {:error, :not_found} = Profiles.delete("nonexistent-handle")
+  end
+end
