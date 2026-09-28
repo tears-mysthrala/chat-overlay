@@ -134,4 +134,25 @@ defmodule ChatOverlay.ProfilesTest do
   test "delete returns :not_found for unknown handles" do
     assert {:error, :not_found} = Profiles.delete("nonexistent-handle")
   end
+
+  test "concurrent profile mutations serialize cleanly without losing updates" do
+    tasks =
+      for i <- 1..5 do
+        Task.async(fn ->
+          handle = "concurrent-#{i}"
+          source = %{"platform" => "twitch", "channel" => "#{100 + i}", "mode" => "demo"}
+          Profiles.create_or_update(%{"handle" => handle, "sources" => [source]})
+        end)
+      end
+
+    results = Task.await_many(tasks)
+    assert Enum.all?(results, &match?({:ok, _}, &1))
+
+    profiles = Config.profiles()
+    assert length(profiles) == 5
+
+    for i <- 1..5 do
+      assert Config.profile("concurrent-#{i}") != nil
+    end
+  end
 end

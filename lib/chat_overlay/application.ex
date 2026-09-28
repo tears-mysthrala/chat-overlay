@@ -15,6 +15,7 @@ defmodule ChatOverlay.Application do
         {Task.Supervisor, name: ChatOverlay.Tasks, max_children: 60}
       ] ++
         [
+          ChatOverlay.Profiles,
           ChatOverlay.Stores,
           ChatOverlay.Admission,
           ChatOverlay.WebhookGate

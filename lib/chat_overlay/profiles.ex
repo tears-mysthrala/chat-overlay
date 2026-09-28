@@ -1,6 +1,31 @@
 defmodule ChatOverlay.Profiles do
   @moduledoc "Dynamic profile and source lifecycle management."
+  use GenServer
   alias ChatOverlay.{Config, Resolver, Source, Store}
+
+  def start_link(opts \\ []) do
+    GenServer.start_link(__MODULE__, opts, name: opts[:name] || __MODULE__)
+  end
+
+  def init(_opts), do: {:ok, %{}}
+
+  def handle_call(action, _from, state) do
+    result = execute_action(action)
+    {:reply, result, state}
+  end
+
+  defp call_serialized(action) do
+    case GenServer.whereis(__MODULE__) do
+      nil ->
+        execute_action(action)
+
+      pid ->
+        GenServer.call(pid, action, 30_000)
+    end
+  end
+
+  defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
+  defp execute_action({:delete, handle}), do: do_delete(handle)
 
   @doc "Lists all currently active profiles."
   def list do
@@ -109,55 +134,18 @@ defmodule ChatOverlay.Profiles do
             candidate_profile
         end
 
-      save_profile(candidate_profile, opts)
+      call_serialized({:save_profile, candidate_profile, opts})
     end
   end
 
   @doc "Deletes a profile in runtime, stopping supervisors and removing unused sources."
   def delete(handle) when is_binary(handle) do
-    current_profiles = Config.profiles()
-
-    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
-      nil ->
-        {:error, :not_found}
-
-      profile_to_delete ->
-        remaining_profiles = Enum.reject(current_profiles, &(&1["handle"] == handle))
-
-        with {:ok, valid_profiles} <- Config.validate(remaining_profiles) do
-          Application.put_env(:chat_overlay, :profiles, valid_profiles)
-
-          if Process.whereis(ChatOverlay.Stores) do
-            _ = Supervisor.terminate_child(ChatOverlay.Stores, {:store, handle})
-            _ = Supervisor.delete_child(ChatOverlay.Stores, {:store, handle})
-          end
-
-          remaining_source_keys =
-            valid_profiles
-            |> Enum.flat_map(& &1["sources"])
-            |> Enum.map(&Config.key/1)
-            |> MapSet.new()
-
-          if Process.whereis(ChatOverlay.Sources) do
-            Enum.each(profile_to_delete["sources"], fn src ->
-              key = Config.key(src)
-
-              unless MapSet.member?(remaining_source_keys, key) do
-                _ = Supervisor.terminate_child(ChatOverlay.Sources, {:source, key})
-                _ = Supervisor.delete_child(ChatOverlay.Sources, {:source, key})
-              end
-            end)
-          end
-
-          persist_profiles(valid_profiles)
-          :ok
-        end
-    end
+    call_serialized({:delete, handle})
   end
 
   def delete(_), do: {:error, :invalid_handle}
 
-  defp save_profile(profile, opts) do
+  defp do_save_profile(profile, opts) do
     clean_handle = profile["handle"]
     current_profiles = Config.profiles()
     existing = Enum.find(current_profiles, &(&1["handle"] == clean_handle))
@@ -242,6 +230,47 @@ defmodule ChatOverlay.Profiles do
 
       error ->
         error
+    end
+  end
+
+  defp do_delete(handle) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      profile_to_delete ->
+        remaining_profiles = Enum.reject(current_profiles, &(&1["handle"] == handle))
+
+        with {:ok, valid_profiles} <- Config.validate(remaining_profiles) do
+          Application.put_env(:chat_overlay, :profiles, valid_profiles)
+
+          if Process.whereis(ChatOverlay.Stores) do
+            _ = Supervisor.terminate_child(ChatOverlay.Stores, {:store, handle})
+            _ = Supervisor.delete_child(ChatOverlay.Stores, {:store, handle})
+          end
+
+          remaining_source_keys =
+            valid_profiles
+            |> Enum.flat_map(& &1["sources"])
+            |> Enum.map(&Config.key/1)
+            |> MapSet.new()
+
+          if Process.whereis(ChatOverlay.Sources) do
+            Enum.each(profile_to_delete["sources"], fn src ->
+              key = Config.key(src)
+
+              unless MapSet.member?(remaining_source_keys, key) do
+                _ = Supervisor.terminate_child(ChatOverlay.Sources, {:source, key})
+                _ = Supervisor.delete_child(ChatOverlay.Sources, {:source, key})
+              end
+            end)
+          end
+
+          persist_profiles(valid_profiles)
+          :ok
+        end
     end
   end
 
