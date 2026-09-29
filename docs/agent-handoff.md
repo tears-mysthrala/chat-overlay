@@ -36,8 +36,11 @@ Evidencias operativas y técnicas en esta entrega:
   - `mix hex.audit` verificado 100% limpio (0 avisos de seguridad).
 
 
+- **Evaluación de interfaces no documentadas (ARCH-07)**:
+  - Registro de viabilidad, términos, límites acotados (256 KiB), tratamiento de datos (variables GraphQL en lugar de interpolación) y mecanismo de desactivación (`CHAT_DISABLE_TWITCH_GQL`) en `docs/platforms.md`.
 - **Validación en OBS Studio 32.2.2 real (`obs-browser` CEF 152.0.7977.83)**:
   - Verificación formal de integración con OBS Studio real (versión 32.2.2 en Linux/Hyprland) mediante OBS WebSocket v5 (`ws://127.0.0.1:4455`).
+  - Script no destructivo `scripts/test_obs_validation.py` con restauración automática de escena/fuente previa (`try...finally`).
   - Fuente de tipo `browser_source` configurada a 1920x1080 @ 60 fps apuntando a la vista `/overlay/demo-stream` y `/overlay/gilraennr`.
   - **Transparencia y CSS**: Verificado canal alfa RGBA exacto (valor 0 fuera del área de mensajes, fondo transparente sin bloqueo sólido) y renderizado nítido de tipografía, avatares y badges (`obs_chat_live.png`).
   - **Multistream unificado**: Renderizado de mensajes combinados de Twitch (morado) y YouTube (rojo) en la misma feed con soporte UTF-8 completo y mitigación XSS estricta.
@@ -49,5 +52,5 @@ Pendientes (bloquean despliegue a producción):
 - Kick diferido con prioridad -1 según directriz del operador.
 - Aprobación formal de Kalista para publicación/despliegue en producción.
 
-Rollback: volver al commit aprobado en main (`ae6ffb2`); si existen perfiles locales persistidos con `"linked_youtube"`, la versión anterior ignora campos desconocidos o puede retirarse la clave antes de reiniciar. No hay migraciones de base de datos ni datos de estado incompatibles.
+Rollback: volver al commit aprobado en main (`ae6ffb2`). Si se han persistido perfiles locales en disco mediante `CHAT_CONFIG` durante la ejecución de esta versión, es obligatorio limpiar o eliminar los campos `"linked_youtube"` en la raíz de cada perfil y `"login"` dentro de las fuentes de Twitch antes de reiniciar el proceso, ya que el esquema de validación estricto de `ae6ffb2` rechaza claves no reconocidas durante el arranque y detendría el servicio. No hay migraciones de base de datos ni datos de estado incompatibles.
 

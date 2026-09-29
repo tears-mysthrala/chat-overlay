@@ -35,6 +35,9 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:sync_youtube, handle, yt_source, yt_target, opts}),
     do: do_sync_youtube(handle, yt_source, yt_target, opts)
 
+  defp execute_action({:update_linked_youtube, handle, yt_target}),
+    do: do_update_linked_youtube(handle, yt_target)
+
   @doc "Lists all currently active profiles."
   def list do
     Enum.map(Config.profiles(), fn p ->
@@ -128,6 +131,10 @@ defmodule ChatOverlay.Profiles do
                 {:error, :no_active_stream} ->
                   {[twitch_source], %{"linked_youtube" => yt_url, "youtube_live" => false}}
 
+                {:error, {:no_active_stream, stable_channel_url}} ->
+                  {[twitch_source],
+                   %{"linked_youtube" => stable_channel_url, "youtube_live" => false}}
+
                 {:error, reason} ->
                   {[twitch_source],
                    %{
@@ -212,6 +219,11 @@ defmodule ChatOverlay.Profiles do
           yt_target ->
             case Resolver.resolve_youtube(yt_target, opts) do
               {:ok, yt_info} ->
+                stable_target =
+                  if yt_info["handle"],
+                    do: "https://www.youtube.com/@" <> yt_info["handle"],
+                    else: "https://www.youtube.com/channel/" <> yt_info["channel"]
+
                 yt_source = %{
                   "platform" => "youtube",
                   "channel" => yt_info["channel"],
@@ -219,9 +231,13 @@ defmodule ChatOverlay.Profiles do
                   "credential_env" => @platform_credentials["youtube"]
                 }
 
-                call_serialized({:sync_youtube, clean_handle, yt_source, yt_target, opts})
+                call_serialized({:sync_youtube, clean_handle, yt_source, stable_target, opts})
 
               {:error, :no_active_stream} ->
+                {:error, :no_active_stream}
+
+              {:error, {:no_active_stream, stable_target}} ->
+                call_serialized({:update_linked_youtube, clean_handle, stable_target})
                 {:error, :no_active_stream}
 
               error ->
@@ -248,6 +264,23 @@ defmodule ChatOverlay.Profiles do
           |> Map.put("linked_youtube", yt_target)
 
         do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+    end
+  end
+
+  defp do_update_linked_youtube(handle, yt_target) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        if existing["linked_youtube"] != yt_target do
+          updated = Map.put(existing, "linked_youtube", yt_target)
+          do_save_profile(updated, replace: true)
+        else
+          :ok
+        end
     end
   end
 

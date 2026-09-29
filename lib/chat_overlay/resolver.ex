@@ -99,55 +99,66 @@ defmodule ChatOverlay.Resolver do
   def discover_twitch_youtube(_, _), do: {:error, :invalid_login}
 
   defp discover_from_gql(slug) do
-    field = if Regex.match?(~r/\A[0-9]+\z/, slug), do: "id", else: "login"
-
-    query = %{
-      "query" =>
-        "query { user(#{field}: \"#{slug}\") { description channel { socialMedias { name title url } } } }"
-    }
-
-    case Net.request(
-           "gql.twitch.tv",
-           "POST",
-           "/gql",
-           [
-             {"client-id", "kimne78kx3ncx6brgo4mv6wki5h1ko"},
-             {"content-type", "application/json"}
-           ],
-           JSON.encode(query)
-         ) do
-      {:ok, 200, _, raw} ->
-        with {:ok, data} <- JSON.decode(raw),
-             user when is_map(user) <- get_in(data, ["data", "user"]) do
-          medias = get_in(user, ["channel", "socialMedias"]) || []
-
-          yt_link =
-            Enum.find_value(medias, fn item ->
-              name = String.downcase(item["name"] || "")
-              url = item["url"] || ""
-              lower_url = String.downcase(url)
-
-              if name == "youtube" or String.contains?(lower_url, ["youtube.com", "youtu.be"]) do
-                url
-              end
-            end)
-
-          cond do
-            is_binary(yt_link) and byte_size(yt_link) > 0 ->
-              {:ok, yt_link}
-
-            is_binary(user["description"]) and byte_size(user["description"]) > 0 ->
-              discover_from_description(user["description"])
-
-            true ->
-              {:error, :no_youtube_link}
-          end
+    if System.get_env("CHAT_DISABLE_TWITCH_GQL") in ["1", "true"] do
+      {:error, :disabled}
+    else
+      {query_str, variables} =
+        if Regex.match?(~r/\A[0-9]+\z/, slug) do
+          {"query($id: ID) { user(id: $id) { description channel { socialMedias { name title url } } } }",
+           %{"id" => slug}}
         else
-          _ -> {:error, :no_youtube_link}
+          {"query($login: String) { user(login: $login) { description channel { socialMedias { name title url } } } }",
+           %{"login" => slug}}
         end
 
-      _ ->
-        {:error, :no_youtube_link}
+      query = %{
+        "query" => query_str,
+        "variables" => variables
+      }
+
+      case Net.request(
+             "gql.twitch.tv",
+             "POST",
+             "/gql",
+             [
+               {"client-id", "kimne78kx3ncx6brgo4mv6wki5h1ko"},
+               {"content-type", "application/json"}
+             ],
+             JSON.encode(query)
+           ) do
+        {:ok, 200, _, raw} ->
+          with {:ok, data} <- JSON.decode(raw),
+               user when is_map(user) <- get_in(data, ["data", "user"]) do
+            medias = get_in(user, ["channel", "socialMedias"]) || []
+
+            yt_link =
+              Enum.find_value(medias, fn item ->
+                name = String.downcase(item["name"] || "")
+                url = item["url"] || ""
+                lower_url = String.downcase(url)
+
+                if name == "youtube" or String.contains?(lower_url, ["youtube.com", "youtu.be"]) do
+                  url
+                end
+              end)
+
+            cond do
+              is_binary(yt_link) and byte_size(yt_link) > 0 ->
+                {:ok, yt_link}
+
+              is_binary(user["description"]) and byte_size(user["description"]) > 0 ->
+                discover_from_description(user["description"])
+
+              true ->
+                {:error, :no_youtube_link}
+            end
+          else
+            _ -> {:error, :no_youtube_link}
+          end
+
+        _ ->
+          {:error, :no_youtube_link}
+      end
     end
   end
 
@@ -186,7 +197,25 @@ defmodule ChatOverlay.Resolver do
 
       case target do
         {:video, video_id} ->
-          resolve_youtube_video(video_id, headers)
+          case resolve_youtube_video(video_id, headers) do
+            {:ok, info} ->
+              {:ok, info}
+
+            {:error, {:no_active_live_chat, channel_id}} ->
+              case resolve_youtube_live_stream(channel_id, headers, nil) do
+                {:ok, live_info} ->
+                  {:ok, live_info}
+
+                _ ->
+                  {:error, {:no_active_stream, "https://www.youtube.com/channel/" <> channel_id}}
+              end
+
+            {:error, :no_active_live_chat} ->
+              {:error, :no_active_stream}
+
+            error ->
+              error
+          end
 
         {:handle, handle} ->
           with {:ok, channel_id} <- resolve_youtube_handle(handle, headers) do
@@ -213,16 +242,26 @@ defmodule ChatOverlay.Resolver do
     case Net.request("www.googleapis.com", "GET", path, headers) do
       {:ok, 200, _, raw} ->
         with {:ok, %{"items" => [item | _]}} <-
-               JSON.decode(raw, Net.body_limit("www.googleapis.com")),
-             chat_id when is_binary(chat_id) <-
-               get_in(item, ["liveStreamingDetails", "activeLiveChatId"]) do
-          {:ok,
-           %{
-             "channel" => item["snippet"]["channelId"],
-             "live_chat_id" => chat_id,
-             "title" => item["snippet"]["title"],
-             "handle" => handle
-           }}
+               JSON.decode(raw, Net.body_limit("www.googleapis.com")) do
+          chat_id = get_in(item, ["liveStreamingDetails", "activeLiveChatId"])
+
+          if is_binary(chat_id) and byte_size(chat_id) > 0 do
+            {:ok,
+             %{
+               "channel" => item["snippet"]["channelId"],
+               "live_chat_id" => chat_id,
+               "title" => item["snippet"]["title"],
+               "handle" => handle
+             }}
+          else
+            channel_id = get_in(item, ["snippet", "channelId"])
+
+            if is_binary(channel_id) and byte_size(channel_id) > 0 do
+              {:error, {:no_active_live_chat, channel_id}}
+            else
+              {:error, :no_active_live_chat}
+            end
+          end
         else
           _ -> {:error, :no_active_live_chat}
         end

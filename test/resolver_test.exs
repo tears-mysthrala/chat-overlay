@@ -100,4 +100,19 @@ defmodule ChatOverlay.ResolverTest do
 
     assert {:error, :invalid_login} = Resolver.discover_twitch_youtube(12345)
   end
+
+  test "discover_twitch_youtube honors CHAT_DISABLE_TWITCH_GQL disablement mechanism" do
+    System.put_env("CHAT_DISABLE_TWITCH_GQL", "true")
+    desc = "Canal en https://www.youtube.com/@mi_canal"
+
+    try do
+      assert {:ok, "https://www.youtube.com/@mi_canal"} =
+               Resolver.discover_twitch_youtube("test_channel", description: desc)
+
+      assert {:error, :no_youtube_link} =
+               Resolver.discover_twitch_youtube("test_channel", description: "sin enlaces")
+    after
+      System.delete_env("CHAT_DISABLE_TWITCH_GQL")
+    end
+  end
 end
