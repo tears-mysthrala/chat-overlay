@@ -60,5 +60,9 @@
    - Smoke tests de release: `python3 scripts/smoke_image.py` PASS.
    - Auditoría SBOM y vulnerabilidades: `python3 scripts/audit_image.py` PASS (0 vulnerabilidades accionables en Grype).
 
-7. **Próximo paso**:
-   - Commit y apertura de Pull Request asociada al issue #17.
+7. **Estado de Pull Request y CI**:
+   - Pull Request abierta: https://github.com/tears-mysthrala/chat-overlay/pull/18
+   - Commit: `e754203` (`feat(f2): panel de creador, capability tokens y multimedia R2 (Closes #17)`).
+   - CI en GitHub Actions: **100% PASS** (`CI/source-and-tests` exitoso en 1m39s, `CI/image-security` exitoso en 2m0s).
+   - Listo para revisión y merge por parte del operador humano (Kalista).
+
