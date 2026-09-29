@@ -52,12 +52,440 @@
       feedbackArea.textContent = "";
     }
 
+    let currentProfiles = [];
+
+    // OBS Management elements
+    const obsProfileSelect = document.getElementById("obs-profile-select");
+    const obsOverlayUrl = document.getElementById("obs-overlay-url");
+    const copyObsLinkBtn = document.getElementById("copy-obs-link-btn");
+    const obsCopyStatus = document.getElementById("obs-copy-status");
+    const regenerateObsTokenBtn = document.getElementById("regenerate-obs-token-btn");
+    const regenerateStatus = document.getElementById("regenerate-status");
+
+    // Alerts & Multimedia elements
+    const audioTypeExternal = document.getElementById("audio-type-external");
+    const audioTypeUpload = document.getElementById("audio-type-upload");
+    const audioExternalGroup = document.getElementById("audio-external-group");
+    const audioUploadGroup = document.getElementById("audio-upload-group");
+    const audioUrlInput = document.getElementById("audio-url-input");
+    const audioFileInput = document.getElementById("audio-file-input");
+    const audioFileInfo = document.getElementById("audio-file-info");
+    const testAudioBtn = document.getElementById("test-audio-btn");
+    const testAudioFeedback = document.getElementById("test-audio-feedback");
+
+    const imageTypeExternal = document.getElementById("image-type-external");
+    const imageTypeUpload = document.getElementById("image-type-upload");
+    const imageExternalGroup = document.getElementById("image-external-group");
+    const imageUploadGroup = document.getElementById("image-upload-group");
+    const imageUrlInput = document.getElementById("image-url-input");
+    const imageFileInput = document.getElementById("image-file-input");
+    const imageFileInfo = document.getElementById("image-file-info");
+    const imagePreviewImg = document.getElementById("image-preview-img");
+    const previewNoneText = document.getElementById("preview-none-text");
+
+    const saveAlertsBtn = document.getElementById("save-alerts-btn");
+    const saveAlertsFeedback = document.getElementById("save-alerts-feedback");
+
+    function getSelectedProfile() {
+      if (!obsProfileSelect || !obsProfileSelect.value) return null;
+      return currentProfiles.find(p => p.handle === obsProfileSelect.value) || null;
+    }
+
+    function syncProfileSelection() {
+      const p = getSelectedProfile();
+      if (!p) {
+        if (obsOverlayUrl) obsOverlayUrl.value = "";
+        return;
+      }
+
+      const cachedToken = sessionStorage.getItem(`obs_token_${p.handle}`);
+      if (cachedToken) {
+        obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=${encodeURIComponent(cachedToken)}`;
+      } else if (p.has_capability_token) {
+        obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=••••••••••••••••••••••••••••••••`;
+      } else {
+        obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}`;
+      }
+
+      // Populate media
+      const media = p.media || {};
+      const sound = media.alert_sound;
+      const img = media.alert_image;
+
+      if (sound && sound.url) {
+        audioUrlInput.value = sound.url;
+        if (sound.source === "r2") {
+          audioTypeUpload.checked = true;
+          audioExternalGroup.hidden = true;
+          audioUploadGroup.hidden = false;
+        } else {
+          audioTypeExternal.checked = true;
+          audioExternalGroup.hidden = false;
+          audioUploadGroup.hidden = true;
+        }
+      } else {
+        audioUrlInput.value = "";
+        audioTypeExternal.checked = true;
+        audioExternalGroup.hidden = false;
+        audioUploadGroup.hidden = true;
+      }
+
+      if (img && img.url) {
+        imageUrlInput.value = img.url;
+        imagePreviewImg.src = img.url;
+        imagePreviewImg.hidden = false;
+        previewNoneText.hidden = true;
+        if (img.source === "r2") {
+          imageTypeUpload.checked = true;
+          imageExternalGroup.hidden = true;
+          imageUploadGroup.hidden = false;
+        } else {
+          imageTypeExternal.checked = true;
+          imageExternalGroup.hidden = false;
+          imageUploadGroup.hidden = true;
+        }
+      } else {
+        imageUrlInput.value = "";
+        imagePreviewImg.hidden = true;
+        previewNoneText.hidden = false;
+        imageTypeExternal.checked = true;
+        imageExternalGroup.hidden = false;
+        imageUploadGroup.hidden = true;
+      }
+    }
+
+    function updateObsSelect(profiles) {
+      if (!obsProfileSelect) return;
+      const currentSelected = obsProfileSelect.value;
+      obsProfileSelect.replaceChildren();
+
+      if (profiles.length === 0) {
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "Ningún perfil configurado";
+        obsProfileSelect.appendChild(opt);
+        syncProfileSelection();
+        return;
+      }
+
+      for (const p of profiles) {
+        const opt = document.createElement("option");
+        opt.value = p.handle;
+        opt.textContent = p.handle;
+        obsProfileSelect.appendChild(opt);
+      }
+
+      if (currentSelected && profiles.some(p => p.handle === currentSelected)) {
+        obsProfileSelect.value = currentSelected;
+      } else {
+        obsProfileSelect.value = profiles[0].handle;
+      }
+      syncProfileSelection();
+    }
+
+    if (obsProfileSelect) {
+      obsProfileSelect.addEventListener("change", syncProfileSelection);
+    }
+
+    if (audioTypeExternal && audioTypeUpload) {
+      audioTypeExternal.addEventListener("change", () => {
+        audioExternalGroup.hidden = false;
+        audioUploadGroup.hidden = true;
+      });
+      audioTypeUpload.addEventListener("change", () => {
+        audioExternalGroup.hidden = true;
+        audioUploadGroup.hidden = false;
+      });
+    }
+
+    if (imageTypeExternal && imageTypeUpload) {
+      imageTypeExternal.addEventListener("change", () => {
+        imageExternalGroup.hidden = false;
+        imageUploadGroup.hidden = true;
+      });
+      imageTypeUpload.addEventListener("change", () => {
+        imageExternalGroup.hidden = true;
+        imageUploadGroup.hidden = false;
+      });
+    }
+
+    if (imageUrlInput) {
+      imageUrlInput.addEventListener("input", () => {
+        const url = imageUrlInput.value.trim();
+        if (url) {
+          imagePreviewImg.src = url;
+          imagePreviewImg.hidden = false;
+          previewNoneText.hidden = true;
+        } else {
+          imagePreviewImg.hidden = true;
+          previewNoneText.hidden = false;
+        }
+      });
+    }
+
+    if (imageFileInput) {
+      imageFileInput.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.name.toLowerCase().endsWith(".svg") || (file.type && file.type.includes("svg"))) {
+          alert("Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF de OBS).");
+          imageFileInput.value = "";
+          return;
+        }
+        if (file.size > 524288) {
+          alert("La imagen excede el límite máximo de 512 KB.");
+          imageFileInput.value = "";
+          return;
+        }
+        if (imageFileInfo) {
+          imageFileInfo.hidden = false;
+          imageFileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+        }
+        const objUrl = URL.createObjectURL(file);
+        imagePreviewImg.src = objUrl;
+        imagePreviewImg.hidden = false;
+        previewNoneText.hidden = true;
+      });
+    }
+
+    if (audioFileInput) {
+      audioFileInput.addEventListener("change", (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        if (file.size > 2097152) {
+          alert("El archivo de audio excede el límite máximo de 2 MB.");
+          audioFileInput.value = "";
+          return;
+        }
+        if (audioFileInfo) {
+          audioFileInfo.hidden = false;
+          audioFileInfo.textContent = `${file.name} (${Math.round(file.size / 1024)} KB)`;
+        }
+      });
+    }
+
+    if (testAudioBtn) {
+      testAudioBtn.addEventListener("click", () => {
+        let playUrl = null;
+        if (audioTypeUpload && audioTypeUpload.checked && audioFileInput && audioFileInput.files && audioFileInput.files[0]) {
+          playUrl = URL.createObjectURL(audioFileInput.files[0]);
+        } else if (audioUrlInput) {
+          playUrl = audioUrlInput.value.trim();
+        }
+        if (!playUrl) {
+          if (testAudioFeedback) testAudioFeedback.textContent = "Introduce o selecciona un audio primero.";
+          return;
+        }
+        if (testAudioFeedback) testAudioFeedback.textContent = "Reproduciendo sonido…";
+        const audio = new Audio(playUrl);
+        audio.play().then(() => {
+          if (testAudioFeedback) {
+            testAudioFeedback.textContent = "✓ Audio reproducido.";
+            setTimeout(() => { testAudioFeedback.textContent = ""; }, 3000);
+          }
+        }).catch(() => {
+          if (testAudioFeedback) testAudioFeedback.textContent = "⚠ Error al reproducir audio.";
+        });
+      });
+    }
+
+    if (copyObsLinkBtn) {
+      copyObsLinkBtn.addEventListener("click", async () => {
+        const url = obsOverlayUrl ? obsOverlayUrl.value : "";
+        if (!url || url.includes("••••")) {
+          if (url.includes("••••")) {
+            alert("El token está oculto por seguridad. Haz clic en 'Regenerar enlace de OBS' para obtener uno nuevo visible y copiarlo.");
+            return;
+          }
+          return;
+        }
+        try {
+          await navigator.clipboard.writeText(url);
+          if (obsCopyStatus) {
+            obsCopyStatus.hidden = false;
+            obsCopyStatus.textContent = "¡Enlace copiado al portapapeles!";
+            setTimeout(() => { obsCopyStatus.hidden = true; }, 3000);
+          }
+        } catch {
+          prompt("Copia el enlace de OBS:", url);
+        }
+      });
+    }
+
+    if (regenerateObsTokenBtn) {
+      regenerateObsTokenBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+        if (!confirm(`¿Regenerar el enlace de OBS para "${p.handle}"?\n\nLa fuente de navegador actual en OBS dejará de funcionar hasta que pegues el nuevo enlace.`)) {
+          return;
+        }
+        try {
+          regenerateObsTokenBtn.disabled = true;
+          if (regenerateStatus) {
+            regenerateStatus.hidden = false;
+            regenerateStatus.className = "feedback-msg";
+            regenerateStatus.textContent = "Regenerando capability token…";
+          }
+
+          const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/token/regenerate`, {
+            method: "POST",
+            headers: { "content-type": "application/json" }
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            sessionStorage.setItem(`obs_token_${p.handle}`, data.token);
+            const fullUrl = `${location.origin}${data.overlay_url}`;
+            if (obsOverlayUrl) obsOverlayUrl.value = fullUrl;
+            if (regenerateStatus) {
+              regenerateStatus.className = "feedback-msg success";
+              regenerateStatus.textContent = "¡Nuevo enlace generado con éxito! Cópialo y pégalo en OBS.";
+            }
+            await loadProfiles();
+          } else {
+            if (regenerateStatus) {
+              regenerateStatus.className = "feedback-msg error";
+              regenerateStatus.textContent = data.error || "No se pudo regenerar el enlace.";
+            }
+          }
+        } catch {
+          if (regenerateStatus) {
+            regenerateStatus.className = "feedback-msg error";
+            regenerateStatus.textContent = "Error de red al regenerar el enlace.";
+          }
+        } finally {
+          regenerateObsTokenBtn.disabled = false;
+        }
+      });
+    }
+
+    if (saveAlertsBtn) {
+      saveAlertsBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+
+        if (saveAlertsFeedback) {
+          saveAlertsFeedback.hidden = false;
+          saveAlertsFeedback.className = "feedback-msg";
+          saveAlertsFeedback.textContent = "Guardando alertas multimedia…";
+        }
+        saveAlertsBtn.disabled = true;
+
+        try {
+          let soundResult = null;
+          let imageResult = null;
+
+          // 1. Process Sound
+          if (audioTypeUpload && audioTypeUpload.checked && audioFileInput && audioFileInput.files && audioFileInput.files[0]) {
+            const file = audioFileInput.files[0];
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para audio…";
+            const presignRes = await fetch("/api/media/presign", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                handle: p.handle,
+                filename: file.name,
+                content_type: file.type || "audio/mpeg",
+                size: file.size
+              })
+            });
+            const presignData = await presignRes.json();
+            if (!presignRes.ok || !presignData.ok) {
+              throw new Error(presignData.error || "Error al solicitar subida de audio a R2");
+            }
+
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo audio directamente a Cloudflare R2…";
+            const uploadRes = await fetch(presignData.upload_url, {
+              method: "PUT",
+              body: file,
+              headers: { "Content-Type": file.type || "audio/mpeg" }
+            });
+            if (!uploadRes.ok) {
+              throw new Error("Fallo al subir el archivo de audio a R2");
+            }
+            soundResult = { url: presignData.public_url, source: "r2" };
+          } else if (audioUrlInput && audioUrlInput.value.trim()) {
+            soundResult = { url: audioUrlInput.value.trim(), source: "external" };
+          } else {
+            soundResult = { url: "", source: "external" };
+          }
+
+          // 2. Process Image
+          if (imageTypeUpload && imageTypeUpload.checked && imageFileInput && imageFileInput.files && imageFileInput.files[0]) {
+            const file = imageFileInput.files[0];
+            if (file.name.toLowerCase().endsWith(".svg") || (file.type && file.type.includes("svg"))) {
+              throw new Error("Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF)");
+            }
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para imagen…";
+            const presignRes = await fetch("/api/media/presign", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                handle: p.handle,
+                filename: file.name,
+                content_type: file.type || "image/png",
+                size: file.size
+              })
+            });
+            const presignData = await presignRes.json();
+            if (!presignRes.ok || !presignData.ok) {
+              throw new Error(presignData.error || "Error al solicitar subida de imagen a R2");
+            }
+
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo imagen directamente a Cloudflare R2…";
+            const uploadRes = await fetch(presignData.upload_url, {
+              method: "PUT",
+              body: file,
+              headers: { "Content-Type": file.type || "image/png" }
+            });
+            if (!uploadRes.ok) {
+              throw new Error("Fallo al subir el archivo de imagen a R2");
+            }
+            imageResult = { url: presignData.public_url, source: "r2" };
+          } else if (imageUrlInput && imageUrlInput.value.trim()) {
+            imageResult = { url: imageUrlInput.value.trim(), source: "external" };
+          } else {
+            imageResult = { url: "", source: "external" };
+          }
+
+          // 3. Save to profile
+          const mediaPayload = {};
+          if (soundResult) mediaPayload.alert_sound = soundResult;
+          if (imageResult) mediaPayload.alert_image = imageResult;
+
+          const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/media`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(mediaPayload)
+          });
+          const data = await res.json();
+          if (res.ok && data.ok) {
+            if (saveAlertsFeedback) {
+              saveAlertsFeedback.className = "feedback-msg success";
+              saveAlertsFeedback.textContent = "¡Alertas multimedia guardadas con éxito!";
+            }
+            await loadProfiles();
+          } else {
+            throw new Error(data.error || "Error al guardar alertas en el perfil");
+          }
+        } catch (err) {
+          if (saveAlertsFeedback) {
+            saveAlertsFeedback.className = "feedback-msg error";
+            saveAlertsFeedback.textContent = err.message || "Error al guardar alertas.";
+          }
+        } finally {
+          saveAlertsBtn.disabled = false;
+        }
+      });
+    }
+
     async function loadProfiles() {
       try {
         const res = await fetch("/api/profiles");
         if (!res.ok) throw new Error("Error cargando perfiles");
         const data = await res.json();
-        renderProfiles(data.profiles || []);
+        currentProfiles = data.profiles || [];
+        renderProfiles(currentProfiles);
+        updateObsSelect(currentProfiles);
       } catch {
         if (loadingProfiles) loadingProfiles.textContent = "Error al conectar con la API.";
       }
@@ -120,7 +548,10 @@
         copyBtn.className = "btn-action";
         copyBtn.textContent = "Copiar Overlay OBS";
         copyBtn.addEventListener("click", async () => {
-          const fullUrl = `${location.origin}${profile.overlay_url}`;
+          const cachedToken = sessionStorage.getItem(`obs_token_${profile.handle}`);
+          const fullUrl = cachedToken
+            ? `${location.origin}${profile.overlay_url}?token=${encodeURIComponent(cachedToken)}`
+            : `${location.origin}${profile.overlay_url}`;
           try {
             await navigator.clipboard.writeText(fullUrl);
             copyBtn.textContent = "¡Copiado!";
@@ -263,7 +694,9 @@
   document.getElementById("demo-notice").hidden = !demo;
   document.getElementById("profile-name").textContent = handle;
   document.title = `${handle} · Chat Overlay`;
-  const overlayURL = `${location.origin}/overlay/${encodeURIComponent(handle)}`;
+  const urlParams = new URLSearchParams(location.search);
+  const token = urlParams.get("token");
+  const overlayURL = `${location.origin}/overlay/${encodeURIComponent(handle)}${token ? `?token=${encodeURIComponent(token)}` : ""}`;
   document.getElementById("open-overlay").href = overlayURL;
   document.getElementById("copy-overlay").addEventListener("click", async () => {
     const status = document.getElementById("copy-status");
@@ -376,7 +809,9 @@
     document.getElementById("message-count").textContent = `${messages.length} mensajes`;
     renderStatus();
   }
-  const stream = new EventSource(`/events/${encodeURIComponent(handle)}?view=${overlay ? "overlay" : "reader"}`);
+  const streamQuery = new URLSearchParams({ view: overlay ? "overlay" : "reader" });
+  if (token) streamQuery.set("token", token);
+  const stream = new EventSource(`/events/${encodeURIComponent(handle)}?${streamQuery.toString()}`);
   stream.onopen = () => { connected = true; renderStatus(); };
   stream.onerror = () => { connected = false; renderStatus(); };
   stream.addEventListener("batch", event => {

@@ -1,0 +1,262 @@
+defmodule ChatOverlay.Media do
+  @moduledoc """
+  Media management for alerts (audio and emoji/sticker images).
+  Provides strict MIME/extension validation, size & quota enforcement,
+  external URL sanitization, and S3/Cloudflare R2 Presigned PUT URL generation
+  using AWS SigV4.
+
+  Fulfills SEC-05, SEC-17 and ADR 0003.
+  """
+
+  @max_audio_bytes 2_097_152
+  @max_image_bytes 524_288
+  @default_user_quota 10_485_760
+
+  @audio_types %{
+    ".mp3" => "audio/mpeg",
+    ".ogg" => "audio/ogg",
+    ".wav" => "audio/wav",
+    ".webm" => "audio/webm"
+  }
+
+  @image_types %{
+    ".webp" => "image/webp",
+    ".png" => "image/png",
+    ".gif" => "image/gif"
+  }
+
+  @doc """
+  Returns the max allowed bytes for a given category (:audio or :image).
+  """
+  @spec max_bytes(atom()) :: non_neg_integer()
+  def max_bytes(:audio), do: @max_audio_bytes
+  def max_bytes(:image), do: @max_image_bytes
+
+  @doc """
+  Default quota in bytes per creator (10 MB).
+  """
+  @spec default_quota() :: non_neg_integer()
+  def default_quota, do: @default_user_quota
+
+  @doc """
+  Validates a requested media upload.
+  Rejects unlisted extensions, mismatched MIME types, and explicitly prohibits `.svg`.
+  Enforces category-specific size limits and user remaining storage quota.
+  """
+  @spec validate_upload_request(map(), non_neg_integer(), non_neg_integer()) ::
+          {:ok, %{category: atom(), ext: String.t(), mime: String.t(), key: String.t()}}
+          | {:error, term()}
+  def validate_upload_request(params, current_usage_bytes, max_quota_bytes \\ @default_user_quota)
+      when is_map(params) and is_integer(current_usage_bytes) and is_integer(max_quota_bytes) do
+    filename = params["filename"] || params[:filename] || ""
+    content_type = params["content_type"] || params[:content_type] || ""
+    size = params["size"] || params[:size] || 0
+
+    with true <- is_binary(filename) and String.length(filename) > 0,
+         true <- is_binary(content_type) and String.length(content_type) > 0,
+         true <- is_integer(size) and size > 0,
+         {:ok, category, ext} <- classify_extension(filename),
+         {:ok, mime} <- match_mime(ext, content_type),
+         true <- size <= max_bytes(category) || {:error, :file_too_large},
+         true <- current_usage_bytes + size <= max_quota_bytes || {:error, :quota_exceeded} do
+      uuid = :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+      sanitized_filename = sanitize_name(filename)
+      key = "#{to_string(category)}/#{uuid}_#{sanitized_filename}"
+
+      {:ok,
+       %{
+         category: category,
+         ext: ext,
+         mime: mime,
+         key: key,
+         size: size
+       }}
+    else
+      false -> {:error, :invalid_parameters}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Validates an external URL for media (Discord CDN, Dropbox, web).
+  Ensures HTTPS, permitted audio/image extension, and non-private network destination.
+  """
+  @spec validate_external_url(String.t(), atom()) :: {:ok, String.t()} | {:error, term()}
+  def validate_external_url(url, expected_category)
+      when is_binary(url) and expected_category in [:audio, :image] do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host, path: path} when is_binary(host) and is_binary(path) ->
+        with {:ok, category, _ext} <- classify_extension(path),
+             true <- category == expected_category || {:error, :category_mismatch},
+             true <- public_host?(host) || {:error, :destination_rejected} do
+          {:ok, url}
+        else
+          {:error, reason} -> {:error, reason}
+        end
+
+      _ ->
+        {:error, :invalid_url}
+    end
+  end
+
+  @doc """
+  Generates an S3 / Cloudflare R2 Presigned PUT URL using AWS Signature Version 4 (SigV4).
+  Does not require third-party AWS SDKs; implemented with native Erlang/OTP `:crypto`.
+  """
+  @spec generate_presigned_put(map()) :: {:ok, map()} | {:error, term()}
+  def generate_presigned_put(config) when is_map(config) do
+    endpoint = config[:endpoint] || config["endpoint"]
+    bucket = config[:bucket] || config["bucket"]
+    key = config[:key] || config["key"]
+    content_type = config[:content_type] || config["content_type"]
+    access_key_id = config[:access_key_id] || config["access_key_id"]
+    secret_access_key = config[:secret_access_key] || config["secret_access_key"]
+    region = config[:region] || config["region"] || "auto"
+    expires_in = config[:expires_in] || config["expires_in"] || 300
+    public_cdn_base = config[:public_cdn_base] || config["public_cdn_base"]
+
+    with true <- is_binary(endpoint) and is_binary(bucket) and is_binary(key),
+         true <- is_binary(access_key_id) and is_binary(secret_access_key) do
+      now = DateTime.utc_now()
+      date_stamp = Calendar.strftime(now, "%Y%m%d")
+      amz_date = Calendar.strftime(now, "%Y%m%dT%H%M%SZ")
+
+      uri = URI.parse(endpoint)
+      host = uri.host
+      service = "s3"
+      credential_scope = "#{date_stamp}/#{region}/#{service}/aws4_request"
+
+      canonical_uri = "/" <> bucket <> "/" <> URI.encode(key)
+
+      query_params = [
+        {"X-Amz-Algorithm", "AWS4-HMAC-SHA256"},
+        {"X-Amz-Credential", "#{access_key_id}/#{credential_scope}"},
+        {"X-Amz-Date", amz_date},
+        {"X-Amz-Expires", to_string(expires_in)},
+        {"X-Amz-SignedHeaders", "host"}
+      ]
+
+      canonical_query =
+        Enum.map_join(query_params, "&", fn {k, v} ->
+          "#{URI.encode(k, &URI.char_unreserved?/1)}=#{URI.encode(v, &URI.char_unreserved?/1)}"
+        end)
+
+      canonical_headers = "host:#{host}\n"
+      signed_headers = "host"
+      payload_hash = "UNSIGNED-PAYLOAD"
+
+      canonical_request =
+        Enum.join(
+          [
+            "PUT",
+            canonical_uri,
+            canonical_query,
+            canonical_headers,
+            signed_headers,
+            payload_hash
+          ],
+          "\n"
+        )
+
+      string_to_sign =
+        Enum.join(
+          [
+            "AWS4-HMAC-SHA256",
+            amz_date,
+            credential_scope,
+            :crypto.hash(:sha256, canonical_request) |> Base.encode16(case: :lower)
+          ],
+          "\n"
+        )
+
+      signing_key = derive_signing_key(secret_access_key, date_stamp, region, service)
+
+      signature =
+        :crypto.mac(:hmac, :sha256, signing_key, string_to_sign)
+        |> Base.encode16(case: :lower)
+
+      upload_url =
+        "#{endpoint}#{canonical_uri}?#{canonical_query}&X-Amz-Signature=#{signature}"
+
+      public_url =
+        if public_cdn_base && public_cdn_base != "" do
+          String.trim_trailing(public_cdn_base, "/") <> "/" <> URI.encode(key)
+        else
+          "#{endpoint}#{canonical_uri}"
+        end
+
+      {:ok,
+       %{
+         upload_url: upload_url,
+         public_url: public_url,
+         key: key,
+         content_type: content_type,
+         expires_in: expires_in
+       }}
+    else
+      _ -> {:error, :invalid_s3_configuration}
+    end
+  end
+
+  # Helpers
+
+  defp classify_extension(filename) when is_binary(filename) do
+    ext = Path.extname(filename) |> String.downcase()
+
+    cond do
+      ext == ".svg" ->
+        {:error, :svg_prohibited_for_security}
+
+      Map.has_key?(@audio_types, ext) ->
+        {:ok, :audio, ext}
+
+      Map.has_key?(@image_types, ext) ->
+        {:ok, :image, ext}
+
+      true ->
+        {:error, :unsupported_media_type}
+    end
+  end
+
+  defp match_mime(ext, content_type) do
+    expected_mime = Map.get(@audio_types, ext) || Map.get(@image_types, ext)
+    normalized = String.downcase(String.trim(content_type))
+
+    # Accept standard and common MIME aliases
+    if normalized == expected_mime or
+         (ext == ".wav" and normalized == "audio/x-wav") or
+         (ext == ".ogg" and normalized == "application/ogg") do
+      {:ok, expected_mime}
+    else
+      {:error, :mismatched_content_type}
+    end
+  end
+
+  defp sanitize_name(filename) do
+    filename
+    |> Path.basename()
+    |> String.replace(~r/[^a-zA-Z0-9_\-\.]/, "_")
+    |> String.slice(0, 64)
+  end
+
+  defp derive_signing_key(secret, date, region, service) do
+    k_date = :crypto.mac(:hmac, :sha256, "AWS4" <> secret, date)
+    k_region = :crypto.mac(:hmac, :sha256, k_date, region)
+    k_service = :crypto.mac(:hmac, :sha256, k_region, service)
+    :crypto.mac(:hmac, :sha256, k_service, "aws4_request")
+  end
+
+  defp public_host?(host) when is_binary(host) do
+    if Application.get_env(:chat_overlay, :skip_dns_validation, false) do
+      true
+    else
+      case :inet.getaddrs(String.to_charlist(host), :inet) do
+        {:ok, addresses} when addresses != [] ->
+          Enum.all?(addresses, &ChatOverlay.Net.public_ip?/1)
+
+        _ ->
+          false
+      end
+    end
+  end
+end

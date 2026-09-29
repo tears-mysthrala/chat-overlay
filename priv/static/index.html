@@ -25,6 +25,117 @@
         </div>
       </section>
 
+      <section class="dashboard-section profile-management" id="obs-management-section">
+        <h2 class="section-title">Enlace para OBS Studio</h2>
+        <p class="hint">Fuente de navegador protegida con capability token único (SEC-14). Mantén este enlace seguro.</p>
+
+        <div class="form-group" id="profile-selector-group">
+          <label for="obs-profile-select">Perfil a gestionar:</label>
+          <select id="obs-profile-select" aria-label="Perfil a gestionar"></select>
+        </div>
+
+        <div class="obs-url-card">
+          <label for="obs-overlay-url">URL del Overlay con Capability Token</label>
+          <div class="input-row">
+            <input id="obs-overlay-url" type="text" readonly placeholder="https://.../overlay/canal?token=..." autocomplete="off" spellcheck="false">
+            <button type="button" id="copy-obs-link-btn" class="btn-primary">Copiar enlace para OBS</button>
+          </div>
+          <span id="obs-copy-status" class="copy-status-msg" aria-live="polite" hidden></span>
+        </div>
+
+        <div class="obs-regenerate-box">
+          <div class="warning-callout">
+            <span class="warning-icon" aria-hidden="true">⚠️</span>
+            <div class="warning-content">
+              <strong>Atención al regenerar el enlace:</strong>
+              <p>Regenerar el enlace invalidará inmediatamente la fuente de navegador actual en OBS Studio. La pantalla dejará de mostrar el chat hasta que pegues la nueva URL con el nuevo token.</p>
+            </div>
+          </div>
+          <button type="button" id="regenerate-obs-token-btn" class="btn-warning">Regenerar enlace de OBS</button>
+          <div id="regenerate-status" class="feedback-msg" role="alert" aria-live="polite" hidden></div>
+        </div>
+      </section>
+
+      <section class="dashboard-section alerts-section" id="alerts-management-section">
+        <h2 class="section-title">Alertas y Efectos Multimedia</h2>
+        <p class="hint">Configura efectos de audio y emojis para eventos en tiempo real en la retransmisión.</p>
+
+        <!-- Audio de alerta -->
+        <div class="media-config-card">
+          <h3 class="media-title">Audio de alerta</h3>
+          <p class="subhint">Reproducción instantánea en el navegador OBS al recibir una alerta.</p>
+
+          <div class="radio-toggle-group" role="radiogroup" aria-label="Origen del audio de alerta">
+            <label class="radio-toggle">
+              <input type="radio" name="audio-source-type" id="audio-type-external" value="external" checked>
+              <span>URL externa (Discord / Dropbox / Web)</span>
+            </label>
+            <label class="radio-toggle">
+              <input type="radio" name="audio-source-type" id="audio-type-upload" value="upload">
+              <span>Subir archivo (Cloudflare R2)</span>
+            </label>
+          </div>
+
+          <div id="audio-external-group" class="media-input-container">
+            <label for="audio-url-input">URL externa de audio (.mp3, .ogg, .wav, .webm)</label>
+            <input id="audio-url-input" type="url" placeholder="https://cdn.discordapp.com/attachments/.../alert.mp3" autocomplete="off">
+          </div>
+
+          <div id="audio-upload-group" class="media-input-container" hidden>
+            <label for="audio-file-input">Seleccionar archivo de audio (máx. 2 MB, formatos: .mp3, .ogg, .wav, .webm)</label>
+            <input id="audio-file-input" type="file" accept=".mp3,.ogg,.wav,.webm,audio/mpeg,audio/ogg,audio/wav,audio/webm">
+            <p id="audio-file-info" class="file-hint" hidden></p>
+          </div>
+
+          <div class="media-action-row">
+            <button type="button" id="test-audio-btn" class="btn-action btn-secondary">Probar sonido</button>
+            <span id="test-audio-feedback" class="status-note" aria-live="polite"></span>
+          </div>
+        </div>
+
+        <!-- Imagen / Emoji de alerta -->
+        <div class="media-config-card">
+          <h3 class="media-title">Imagen / Emoji de alerta</h3>
+          <p class="subhint">Insignia o emoji mostrado junto a las alertas en la vista de OBS.</p>
+
+          <div class="radio-toggle-group" role="radiogroup" aria-label="Origen de la imagen de alerta">
+            <label class="radio-toggle">
+              <input type="radio" name="image-source-type" id="image-type-external" value="external" checked>
+              <span>URL externa</span>
+            </label>
+            <label class="radio-toggle">
+              <input type="radio" name="image-source-type" id="image-type-upload" value="upload">
+              <span>Subir emoji (.webp / .png / .gif)</span>
+            </label>
+          </div>
+
+          <div id="image-external-group" class="media-input-container">
+            <label for="image-url-input">URL externa de imagen (.webp, .png, .gif — prohibido SVG)</label>
+            <input id="image-url-input" type="url" placeholder="https://.../emoji.webp" autocomplete="off">
+          </div>
+
+          <div id="image-upload-group" class="media-input-container" hidden>
+            <label for="image-file-input">Seleccionar emoji o imagen (máx. 512 KB, formatos: .webp, .png, .gif — prohibido SVG)</label>
+            <input id="image-file-input" type="file" accept=".webp,.png,.gif,image/webp,image/png,image/gif">
+            <p id="image-file-info" class="file-hint" hidden></p>
+          </div>
+
+          <div class="preview-container">
+            <span class="preview-label">Vista previa:</span>
+            <div id="image-preview-wrapper" class="image-preview-box">
+              <span id="preview-none-text" class="preview-empty">Sin imagen</span>
+              <img id="image-preview-img" class="alert-preview-img" alt="Vista previa de emoji de alerta" hidden>
+            </div>
+          </div>
+        </div>
+
+        <!-- Guardar alertas -->
+        <div class="form-actions">
+          <button type="button" id="save-alerts-btn" class="btn-primary">Guardar alertas</button>
+          <div id="save-alerts-feedback" class="feedback-msg" role="alert" hidden></div>
+        </div>
+      </section>
+
       <section class="dashboard-section add-section">
         <h2 class="section-title">Añadir Canal en Caliente</h2>
         <p class="hint">Detecta automáticamente el streamer en Twitch o YouTube, resuelve sus IDs y levanta el servicio al instante.</p>

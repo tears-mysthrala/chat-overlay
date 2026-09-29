@@ -1,41 +1,64 @@
-# Handoff F1 — issue #15 (Cierre y consolidación de entrega Fase F1)
+# Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
-- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/15
-- Rama: `docs/15-f1-closure`
-- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/15-f1-closure`
-- PR previa: https://github.com/tears-mysthrala/chat-overlay/pull/14 (MERGED en main `1f49e29`).
-- Autorizado: Cierre formal y consolidación de la Fase F1 (overlay para Twitch y YouTube en OBS Studio sin Chatterino, y diferimiento formal de Kick por inestabilidad de API upstream). Aprobado y solicitado por el operador Kalista en issue #15.
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/17
+- Rama: `feat/17-creator-auth-r2-media`
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/17-creator-auth-r2-media`
+- Autorizado: Implementación completa de la Fase F2 (ADR 0003, contrato WHAT_WE_ARE_BUILDING.md v1.2) aprobada por el operador Kalista en issue #17.
 
-## Resumen del estado de entrega de Fase F1:
+## Resumen del estado de entrega de Fase F2:
 
-1. **Plataformas operativas integradas en overlay unificado**:
-   - **Twitch**: Integración oficial vía Helix API + EventSub WebSocket con reconexión limpia y drenaje de buffers. Descubrimiento de enlaces sociales mediante GraphQL web parametrizada (`query($login: String)`) con fallback a biografía de Helix y mecanismo de desactivación (`CHAT_DISABLE_TWITCH_GQL`).
-   - **YouTube**: Soporte dual de credenciales (OAuth 2.0 Bearer y Google API Key restringida vía `X-Goog-Api-Key`), autodetección de emisiones activas de chat en vivo (`activeLiveChatId`), sincronización atómica en caliente sin reinicio de Store (`Store.update_sources/2`) y desvinculación limpia al terminar directos.
-   - **Kick**: Formalmente **DIFERIDO / SUSPENDIDO** por directriz del operador Kalista (issue #15) debido a la reiterada inestabilidad técnica de su API de desarrolladores (4-5 breaking changes en el último año) y a la fricción operativa de su portal, evitando deuda técnica recurrente en componentes no estabilizados por el proveedor.
-   - **Multistream unificado**: Agregación de chats de Twitch (morado) y YouTube (rojo) en la misma feed con badges diferenciados, soporte UTF-8 completo, filtrado de duplicados y mitigación XSS estricta (DOM text nodes).
+1. **Capa Criptográfica y Seguridad de Tokens (`ChatOverlay.Crypto`)**:
+   - Generación de **Capability Tokens** opacos de 32 bytes URL-safe no rellenados para fuentes de navegador de OBS Studio (`generate_capability_token/0`).
+   - Hashing SHA-256 (`hash_token/1`) y verificación en tiempo constante (`Plug.Crypto.secure_compare/2`) para mitigar ataques de temporización (SEC-14).
+   - Cifrado simétrico autenticado **AEAD (AES-256-GCM)** (`encrypt_aead/3`, `decrypt_aead/3`) utilizando funciones nativas de Erlang/OTP `:crypto.crypto_one_time_aead/6` para credenciales en reposo, con payload versionado (`v1:...`) y IV aleatorio por registro (SEC-15).
+   - Flujo OAuth 2.0 PKCE (`code_verifier` + `code_challenge` S256) y firmado criptográfico de parámetro `state` con HMAC-SHA256 y expiración temporal anti-CSRF.
+   - 10/10 pruebas unitarias en `test/crypto_test.exs`.
 
-2. **Validación en OBS Studio 32.2.2 en vivo**:
-   - Verificado mediante prueba reproducible y automatizada contra OBS Studio 32.2.2 real (`obs-browser` CEF 152.0.7977.83 en Linux/Hyprland) sobre WebSocket v5 (`scripts/test_obs_validation.py`).
-   - Canal alfa RGBA transparente verificado en renderizado (RGBA=0 fuera del área de mensajes).
-   - Ocultación y reactivación de la fuente de navegador probada con reconexión instantánea de SSE y reemisión de snapshot sin mensajes duplicados.
-   - Ciclo de vida inocuo con restauración automática de configuraciones previas (`overlay: False` y visibilidad de escenas).
+2. **Módulo Multimedia y Presigned URLs SigV4 (`ChatOverlay.Media`)**:
+   - Validación estricta de extensiones y MIME:
+     - Audios: `.mp3`, `.ogg`, `.wav`, `.webm` (límite: 2 MB por archivo).
+     - Imágenes/emojis: `.webp`, `.png`, `.gif` (límite: 512 KB por archivo).
+     - **Prohibición estricta de `.svg`** (`:svg_prohibited_for_security`) para evitar inyecciones XSS en el motor Chromium CEF de OBS Studio (SEC-05).
+   - Generación de **Presigned PUT URLs** compatibles con AWS SigV4 y Cloudflare R2 implementada 100% con primitivas nativas de Erlang/OTP (`:crypto.mac(:hmac, :sha256, ...)`), sin dependencias externas pesadas de SDKs.
+   - Cero custodia y cero transferencia en el servidor (*Zero Server Footprint / Zero Egress Fees*): el navegador del creador sube el archivo directamente a Cloudflare R2 sin que los bytes transiten por el nodo Elixir.
+   - Validación y desinfección de URLs externas con comprobación de esquema HTTPS, extensiones permitidas y resolución DNS de IP pública contra SSRF (`ChatOverlay.Net.public_ip?/1`).
+   - Control y cumplimiento de cuota de almacenamiento por creador (por defecto 10 MB).
+   - 9/9 pruebas unitarias en `test/media_test.exs`.
 
-3. **Fiabilidad, límites y carga sintética (REL-08)**:
-   - Ejecución de `scripts/load.exs 60` (29-09-2026): 4.500 eventos emitidos sobre 10 perfiles y 100 visores SSE concurrentes.
-   - 45.000 entregas recibidas (100% de éxito, 0 errores).
-   - Latencia p95 despacho local -> SSE: **49 ms** (objetivo contractual: <100 ms).
-   - Consumo de memoria BEAM: 468 MB -> 365 MB tras recolección de basura activa sin fugas.
+3. **Ciclo de Vida de Perfiles y Persistencia (`ChatOverlay.Profiles`, `ChatOverlay.Config`)**:
+   - Ampliación del esquema de perfil con campos F2: `capability_token_hash`, `media` (`alert_sound`, `alert_image`), `can_upload`, `storage_quota_bytes` y `storage_used_bytes`.
+   - Soporte GenServer serializado para:
+     - `regenerate_capability_token/1`: regenera token, calcula hash, persiste en JSON y devuelve nuevo enlace.
+     - `verify_capability_token/2`: valida acceso. Compatible hacia atrás con perfiles sin token previo (modo transición).
+     - `update_media/2`: actualiza y limpia configuración de alertas de sonido e imagen.
+     - `update_upload_quota/2`: incrementa/decrementa el uso de disco del perfil acotado a >= 0.
+   - Enmascaramiento de seguridad: `Profiles.list/0` y `get/1` exponen `has_capability_token: boolean`, nunca el hash del token en plano.
+   - 6/6 pruebas unitarias en `test/profiles_f2_test.exs`.
 
-4. **Seguridad y cadena de suministro (SUP / SEC)**:
-   - Contenedor Alpine 3.24.2 endurecido, ejecución sin root (UID 65532), raíz de solo lectura y capacidades eliminadas.
-   - Dependencias Hex auditadas al 100% limpias (0 advertencias) tras actualización a `mint 1.11.0` y `hpax 1.1.0`.
-   - SBOM CycloneDX 1.7 automatizado (292 componentes).
-   - Auditoría de vulnerabilidades con Grype: **0 vulnerabilidades activas** (4 excepciones de bajo nivel en paquetes base de Alpine justificadas y firmadas por Kalista en `vex.openvex.json`).
-   - Detección de secretos con Gitleaks: 0 hallazgos.
-   - Suite ExUnit: **78/78 pruebas PASS** con 0 advertencias de compilación (`--warnings-as-errors`).
+4. **Protección de Enlaces OBS y Endpoints API (`ChatOverlay.Web`, `ChatOverlay.Stream`)**:
+   - `GET /overlay/:handle`: valida `token` en query param; responde 401 Unauthorized HTML con CSP si falta o es inválido.
+   - `GET /events/:handle?view=overlay`: valida `token` antes de admitir visor SSE; responde 401 si no está autorizado.
+   - `POST /api/profiles/:handle/token/regenerate`: endpoint protegido por origen que genera y devuelve nuevo enlace de OBS.
+   - `POST /api/media/presign`: endpoint protegido por origen que valida cuota y genera URL firmada de subida a R2.
+   - `POST /api/profiles/:handle/media`: endpoint para guardar URLs y orígenes de audio/imagen.
+   - 7/7 pruebas de integración en `test/web_f2_test.exs`.
 
-5. **Próximo hito (Fase F2)**:
-   - Apertura de la Fase F2 (Panel de Creador con autenticación de usuarios, cuentas privadas y persistencia durable en PostgreSQL con RLS) sujeta a autorización y definición de alcance por parte de Kalista.
+5. **Panel de Creador y Frontend (`priv/static/index.html`, `app.js`, `app.css`)**:
+   - Sección dedicada «Enlace para OBS Studio» con visualización del capability token, botón de copia rápida y advertencia clara antes de regenerar.
+   - Sección «Alertas y Efectos Multimedia» con pestañas para alternar entre enlace externo y subida directa a R2.
+   - Reproductor integrado de prueba de sonido («Probar sonido») mediante HTML5 Audio.
+   - Vista previa inmediata de miniaturas de emoji/imagen con bloqueo proactivo de archivos `.svg`.
+   - Política de Seguridad de Contenido (CSP) ajustada en `ChatOverlay.HTTP` permitiendo `media-src 'self' https: data:`, `connect-src 'self' https:` y `img-src 'self' https://static-cdn.jtvnw.net https: data:`.
 
-Rollback: revertir al commit `1f49e29` en `main`. Al tratarse únicamente de consolidación documental, contratos y verificación, no introduce incompatibilidades de código ni de datos.
+6. **Verificación y Calidad de Código**:
+   - Suite completa ExUnit: **110/110 pruebas PASS** en 8.1s, con 0 advertencias de compilación (`--warnings-as-errors`).
+   - Verificación de formato: `mix format --check-formatted` PASS.
+   - Trazabilidad: `python3 scripts/check_traceability.py` PASS (`tears-mysthrala/chat-overlay#17; feat/17-creator-auth-r2-media`).
+   - Detección de secretos: `python3 scripts/scan_secrets.py` PASS (0 fugas).
+   - Análisis estático de seguridad: `python3 scripts/security_static.py` PASS (0 hallazgos).
+   - Construcción de imagen Docker: compilación limpia en Alpine 3.24.2 / Elixir 1.20.4.
+   - Smoke tests de release: `python3 scripts/smoke_image.py` PASS.
+   - Auditoría SBOM y vulnerabilidades: `python3 scripts/audit_image.py` PASS (0 vulnerabilidades accionables en Grype).
 
+7. **Próximo paso**:
+   - Commit y apertura de Pull Request asociada al issue #17.

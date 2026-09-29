@@ -32,3 +32,33 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 .linked-yt-hint { font-size:12px; color:var(--muted); background:rgba(255,157,153,.1); border:1px solid rgba(255,157,153,.3); border-radius:4px; padding:2px 8px }
 .btn-sync-yt { background:rgba(255,157,153,.15); color:var(--youtube); border-color:rgba(255,157,153,.4); font-weight:600 }
 .btn-sync-yt:hover { background:rgba(255,157,153,.25); border-color:var(--youtube) }
+
+/* F2 Creator Dashboard Styles */
+.obs-url-card { margin-top:14px; background:#12212d; padding:16px; border:1px solid var(--line); border-radius:8px }
+.obs-regenerate-box { margin-top:18px }
+.warning-callout { display:flex; gap:12px; padding:14px; background:rgba(255,180,50,.1); border:1px solid rgba(255,180,50,.3); border-radius:8px; margin-bottom:12px }
+.warning-icon { font-size:22px; flex-shrink:0 }
+.warning-content strong { color:#ffd166; display:block; margin-bottom:4px }
+.warning-content p { margin:0; font-size:13px; color:var(--muted); line-height:1.4 }
+.btn-warning { background:rgba(255,180,50,.15); border-color:rgba(255,180,50,.4); color:#ffd166; font-weight:650 }
+.btn-warning:hover { background:rgba(255,180,50,.25); border-color:#ffd166 }
+.copy-status-msg { display:block; margin-top:8px; font-size:13px; color:var(--kick); font-weight:600 }
+
+.media-config-card { background:#12212d; border:1px solid var(--line); border-radius:8px; padding:18px; margin-top:16px }
+.media-title { font-size:16px; margin:0 0 4px; color:var(--ink); font-weight:650 }
+.subhint { font-size:13px; color:var(--muted); margin:0 0 14px }
+.radio-toggle-group { display:flex; gap:18px; margin-bottom:14px; flex-wrap:wrap }
+.radio-toggle { display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:14px; color:var(--ink) }
+.radio-toggle input[type="radio"] { cursor:pointer; accent-color:var(--accent); margin:0 }
+.media-input-container { display:flex; flex-direction:column; gap:6px; margin-bottom:12px }
+.media-action-row { display:flex; align-items:center; gap:12px; margin-top:12px }
+.status-note { font-size:13px; color:var(--muted) }
+.preview-container { display:flex; align-items:center; gap:14px; margin-top:14px }
+.preview-label { font-size:14px; font-weight:600 }
+.image-preview-box { width:64px; height:64px; border:1px dashed var(--line); border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; background:rgba(0,0,0,.25) }
+.alert-preview-img { max-width:100%; max-height:100%; object-fit:contain }
+.preview-empty { font-size:11px; color:var(--muted); text-align:center }
+.file-hint { font-size:12px; color:var(--muted); margin:4px 0 0 }
+.btn-secondary { background:var(--panel); color:var(--ink); border-color:var(--line) }
+.btn-secondary:hover { border-color:var(--accent); color:var(--accent) }
+

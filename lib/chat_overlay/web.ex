@@ -89,6 +89,68 @@ defmodule ChatOverlay.Web do
           )
         end
 
+      {"POST", ["api", "profiles", handle, "token", "regenerate"]} ->
+        if allowed_origin?(conn) == true do
+          api_regenerate_token(conn, handle)
+        else
+          reply(
+            conn,
+            403,
+            "application/json",
+            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+          )
+        end
+
+      {"POST", ["api", "media", "presign"]} ->
+        with true <- allowed_origin?(conn),
+             true <- json_content_type?(conn) do
+          api_media_presign(conn)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          :bad_content_type ->
+            reply(
+              conn,
+              415,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Content-Type debe ser application/json"
+              })
+            )
+        end
+
+      {"POST", ["api", "profiles", handle, "media"]} ->
+        with true <- allowed_origin?(conn),
+             true <- json_content_type?(conn) do
+          api_update_media(conn, handle)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          :bad_content_type ->
+            reply(
+              conn,
+              415,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Content-Type debe ser application/json"
+              })
+            )
+        end
+
       {method, _} when method not in ["GET", "HEAD"] ->
         reply(conn, 405, "text/plain", "Method not allowed")
 
@@ -118,7 +180,7 @@ defmodule ChatOverlay.Web do
       {_, ["assets", file]} when file in ["app.js", "app.css"] ->
         asset(conn, file)
 
-      {_, [view, handle]} when view in ["reader", "overlay"] ->
+      {_, ["reader", handle]} ->
         case Config.profile(handle) do
           nil ->
             reply(conn, 404, "text/plain", "Not found")
@@ -133,6 +195,43 @@ defmodule ChatOverlay.Web do
               "text/html; charset=utf-8",
               String.replace(body, "__DEMO__", to_string(demo))
             )
+        end
+
+      {_, ["overlay", handle]} ->
+        token = extract_token_from_conn(conn)
+
+        case ChatOverlay.Profiles.verify_capability_token(handle, token) do
+          {:ok, profile} ->
+            body = File.read!(Application.app_dir(:chat_overlay, "priv/static/chat.html"))
+            demo = Enum.any?(profile["sources"], &(&1["mode"] == "demo"))
+
+            reply(
+              conn,
+              200,
+              "text/html; charset=utf-8",
+              String.replace(body, "__DEMO__", to_string(demo))
+            )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "text/html; charset=utf-8",
+              """
+              <!doctype html>
+              <html lang="es">
+              <head><meta charset="utf-8"><title>401 No Autorizado</title></head>
+              <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; text-align: center;">
+                <h1>401 No Autorizado</h1>
+                <p>Esta fuente de OBS requiere un <strong>Capability Token</strong> válido.</p>
+                <p>Copia el enlace completo actualizado o regenera el enlace desde el Panel de Creador.</p>
+              </body>
+              </html>
+              """
+            )
+
+          {:error, :not_found} ->
+            reply(conn, 404, "text/plain", "Not found")
         end
 
       _ ->
@@ -402,4 +501,268 @@ defmodule ChatOverlay.Web do
     do: "Debes especificar un canal o URL a resolver."
 
   defp format_error(other), do: "Error: #{inspect(other)}"
+
+  defp extract_token_from_conn(conn) do
+    case conn.query_params do
+      %Plug.Conn.Unfetched{} ->
+        URI.decode_query(conn.query_string || "")["token"]
+
+      map when is_map(map) ->
+        map["token"]
+    end
+  end
+
+  defp api_regenerate_token(conn, handle) do
+    case ChatOverlay.Profiles.regenerate_capability_token(handle) do
+      {:ok, token, _profile} ->
+        resp = %{
+          "ok" => true,
+          "token" => token,
+          "overlay_url" => "/overlay/#{handle}?token=#{token}"
+        }
+
+        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
+      {:error, :not_found} ->
+        reply(
+          conn,
+          404,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+        )
+
+      {:error, reason} ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
+        )
+    end
+  end
+
+  defp api_media_presign(conn) do
+    case Plug.Conn.read_body(conn, length: 65_536, read_length: 8192, read_timeout: 4000) do
+      {:ok, body, conn} ->
+        case ChatOverlay.JSON.decode(body) do
+          {:ok, %{"handle" => handle} = params} when is_binary(handle) ->
+            case Config.profile(handle) do
+              nil ->
+                reply(
+                  conn,
+                  404,
+                  "application/json",
+                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+                )
+
+              profile ->
+                used = profile["storage_used_bytes"] || 0
+                quota = profile["storage_quota_bytes"] || 10_485_760
+
+                case ChatOverlay.Media.validate_upload_request(params, used, quota) do
+                  {:ok, validated} ->
+                    r2_config = %{
+                      endpoint:
+                        System.get_env("R2_ENDPOINT") ||
+                          Application.get_env(
+                            :chat_overlay,
+                            :r2_endpoint,
+                            "https://r2.example.com"
+                          ),
+                      bucket:
+                        System.get_env("R2_BUCKET") ||
+                          Application.get_env(:chat_overlay, :r2_bucket, "chat-overlay-media"),
+                      access_key_id:
+                        System.get_env("R2_ACCESS_KEY_ID") ||
+                          Application.get_env(
+                            :chat_overlay,
+                            :r2_access_key_id,
+                            "mock_access_key"
+                          ),
+                      secret_access_key:
+                        System.get_env("R2_SECRET_ACCESS_KEY") ||
+                          Application.get_env(
+                            :chat_overlay,
+                            :r2_secret_access_key,
+                            "mock_secret_key"
+                          ),
+                      public_cdn_base:
+                        System.get_env("R2_PUBLIC_CDN") ||
+                          Application.get_env(
+                            :chat_overlay,
+                            :r2_public_cdn,
+                            "https://media.chat-overlay.example.com"
+                          )
+                    }
+
+                    case ChatOverlay.Media.generate_presigned_put(
+                           Map.merge(r2_config, %{
+                             key: validated.key,
+                             content_type: validated.mime
+                           })
+                         ) do
+                      {:ok, presigned} ->
+                        resp = %{
+                          "ok" => true,
+                          "upload_url" => presigned.upload_url,
+                          "public_url" => presigned.public_url,
+                          "key" => presigned.key
+                        }
+
+                        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
+                      {:error, reason} ->
+                        reply(
+                          conn,
+                          500,
+                          "application/json",
+                          ChatOverlay.JSON.encode(%{"ok" => false, "error" => inspect(reason)})
+                        )
+                    end
+
+                  {:error, reason} ->
+                    reply(
+                      conn,
+                      422,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" => format_media_error(reason)
+                      })
+                    )
+                end
+            end
+
+          _ ->
+            reply(
+              conn,
+              400,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Parámetros de subida inválidos"
+              })
+            )
+        end
+
+      _ ->
+        reply(
+          conn,
+          413,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Petición demasiado grande"})
+        )
+    end
+  end
+
+  defp api_update_media(conn, handle) do
+    case Plug.Conn.read_body(conn, length: 65_536, read_length: 8192, read_timeout: 4000) do
+      {:ok, body, conn} ->
+        case ChatOverlay.JSON.decode(body) do
+          {:ok, media_params} when is_map(media_params) ->
+            case Config.profile(handle) do
+              nil ->
+                reply(
+                  conn,
+                  404,
+                  "application/json",
+                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+                )
+
+              _profile ->
+                with :ok <- validate_media_params(media_params),
+                     {:ok, updated} <- ChatOverlay.Profiles.update_media(handle, media_params) do
+                  resp = %{"ok" => true, "media" => updated["media"]}
+                  reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+                else
+                  {:error, reason} ->
+                    reply(
+                      conn,
+                      422,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" => format_media_error(reason)
+                      })
+                    )
+                end
+            end
+
+          _ ->
+            reply(
+              conn,
+              400,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Cuerpo JSON inválido"})
+            )
+        end
+
+      _ ->
+        reply(
+          conn,
+          413,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Petición demasiado grande"})
+        )
+    end
+  end
+
+  defp validate_media_params(params) when is_map(params) do
+    Enum.reduce_while(params, :ok, fn
+      {"alert_sound", %{"url" => url, "source" => "external"}}, :ok
+      when is_binary(url) and url != "" ->
+        case ChatOverlay.Media.validate_external_url(url, :audio) do
+          {:ok, _} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+
+      {"alert_image", %{"url" => url, "source" => "external"}}, :ok
+      when is_binary(url) and url != "" ->
+        case ChatOverlay.Media.validate_external_url(url, :image) do
+          {:ok, _} -> {:cont, :ok}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+
+      {key, _}, :ok when key in ["alert_sound", "alert_image"] ->
+        {:cont, :ok}
+
+      {other, _}, :ok ->
+        {:halt, {:error, {:unknown_media_key, other}}}
+    end)
+  end
+
+  defp format_media_error(:svg_prohibited_for_security),
+    do: "Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF de OBS)."
+
+  defp format_media_error(:file_size_exceeded),
+    do: "El archivo supera el tamaño máximo permitido (2 MB para audio, 512 KB para imagen)."
+
+  defp format_media_error(:file_too_large),
+    do: "El archivo supera el tamaño máximo permitido (2 MB para audio, 512 KB para imagen)."
+
+  defp format_media_error(:destination_rejected),
+    do: "Destino de red no permitido o no resuelve a una IP pública."
+
+  defp format_media_error(:quota_exceeded),
+    do: "Se ha superado la cuota de almacenamiento disponible para este perfil."
+
+  defp format_media_error(:invalid_content_type),
+    do: "Tipo de archivo o formato no permitido."
+
+  defp format_media_error(:invalid_scheme_must_be_https),
+    do: "La URL debe utilizar HTTPS seguro."
+
+  defp format_media_error(:invalid_url),
+    do: "La URL debe ser válida y utilizar HTTPS seguro."
+
+  defp format_media_error(:unsupported_extension),
+    do: "Extensión de archivo no soportada."
+
+  defp format_media_error(:private_ip_forbidden),
+    do: "Dirección IP privada o bucle local prohibido (SSRF)."
+
+  defp format_media_error(:url_too_long),
+    do: "La URL supera el límite máximo de 2048 caracteres."
+
+  defp format_media_error(other), do: format_error(other)
 end
