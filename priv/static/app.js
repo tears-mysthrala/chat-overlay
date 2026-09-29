@@ -97,6 +97,16 @@
         }
         info.appendChild(badges);
 
+        if (profile.linked_youtube) {
+          const ytHint = document.createElement("span");
+          ytHint.className = "linked-yt-hint";
+          const hasYt = (profile.platforms || []).includes("youtube");
+          ytHint.textContent = hasYt
+            ? `YouTube unificado: ${profile.linked_youtube}`
+            : `YouTube vinculado: ${profile.linked_youtube}`;
+          info.appendChild(ytHint);
+        }
+
         const actions = document.createElement("div");
         actions.className = "profile-actions";
 
@@ -142,6 +152,43 @@
           }
         });
 
+        if (profile.linked_youtube) {
+          const isYtConnected = (profile.platforms || []).includes("youtube");
+          const syncYtBtn = document.createElement("button");
+          syncYtBtn.type = "button";
+          syncYtBtn.className = "btn-action btn-sync-yt";
+          const btnLabel = isYtConnected ? "↻ Resincronizar YouTube" : "▶ Sincronizar YouTube";
+          syncYtBtn.textContent = btnLabel;
+          syncYtBtn.addEventListener("click", async () => {
+            try {
+              syncYtBtn.disabled = true;
+              syncYtBtn.textContent = "Buscando directo…";
+              const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}/sync-youtube`, {
+                method: "POST",
+                headers: { "content-type": "application/json" }
+              });
+              const data = await res.json();
+              if (res.ok && data.ok) {
+                showFeedback(
+                  isYtConnected
+                    ? `¡Directo de YouTube actualizado con éxito para "${profile.handle}"!`
+                    : `¡Directo de YouTube sincronizado con éxito para "${profile.handle}"!`,
+                  "success"
+                );
+                await loadProfiles();
+              } else {
+                alert(data.error || "No se pudo sincronizar el directo de YouTube.");
+              }
+            } catch {
+              alert("Error de red al sincronizar el directo de YouTube.");
+            } finally {
+              syncYtBtn.disabled = false;
+              syncYtBtn.textContent = btnLabel;
+            }
+          });
+          actions.appendChild(syncYtBtn);
+        }
+
         actions.append(readerLink, copyBtn, deleteBtn);
         card.append(info, actions);
         profilesList.appendChild(card);
@@ -178,7 +225,16 @@
           const data = await res.json();
 
           if (res.ok && data.ok) {
-            showFeedback(`¡Canal añadido con éxito como "${data.profile.handle}"!`, "success");
+            let msg = `¡Canal añadido con éxito como "${data.profile.handle}"!`;
+            const platforms = (data.profile.sources || []).map(s => s.platform);
+            if (platforms.includes("twitch") && platforms.includes("youtube")) {
+              msg += " Feed unificada con Twitch y YouTube.";
+            } else if (data.profile.sources && data.profile.sources.length > 1) {
+              msg += " Feed unificada con múltiples fuentes.";
+            } else if (data.profile.linked_youtube) {
+              msg += ` Se detectó canal de YouTube vinculado (${data.profile.linked_youtube}) sin directo activo; podrás sincronizarlo con un clic cuando inicie emisión.`;
+            }
+            showFeedback(msg, "success");
             targetInput.value = "";
             customHandleInput.value = "";
             if (platformSelect) platformSelect.value = "auto";

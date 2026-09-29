@@ -10,6 +10,18 @@ La suscripción es una operación de control para recibir eventos, no envío de 
 
 Los mensajes `channel.chat.message` pueden incluir `message.fragments` con emotes oficiales. El adaptador solo conserva `type`/`text`/`id` y descarta campos upstream (`emote_set_id`, `owner_id`, `format`). Recurso de terceros documentado y acotado (SEC-05): las imágenes se cargan desde `https://static-cdn.jtvnw.net` (CDN oficial de Twitch, solo `img-src`), construyendo la URL en el cliente a partir del `id` validado; sin ese `id` válido se muestra texto plano. Referencia: [EventSub channel.chat.message](https://dev.twitch.tv/docs/eventsub/eventsub-subscription-types/#channelchatmessage).
 
+### Evaluación de interfaz GraphQL no documentada (ARCH-07)
+
+Para satisfacer el requerimiento **ARCH-07** sobre interfaces no documentadas al descubrir enlaces a YouTube desde perfiles públicos de Twitch:
+
+1. **Viabilidad técnica y necesidad**: La API oficial de Twitch (Helix) no expone los enlaces a redes sociales configurados por los streamers en su canal (`channel.socialMedias`). La interfaz GraphQL web pública de Twitch (`https://gql.twitch.tv/gql`) permite consultar bajo demanda `user.channel.socialMedias` para autodescubrir de forma fiable los enlaces a canales o transmisiones de YouTube configurados legítimamente por el streamer sin requerir credenciales adicionales ni recurrir a scraping frágil de HTML.
+2. **Términos revisados**: Utiliza el endpoint público y el client ID web estándar (`kimne78kx3ncx6brgo4mv6wki5h1ko`). No evade mecanismos de autenticación privada, CAPTCHA, ni restricciones de acceso, ni emplea técnicas de evasión o rotación de IPs (ARCH-07).
+3. **Tratamiento de texto como datos (AGENTS.md)**: La consulta utiliza variables GraphQL parametrizadas (`query($login: String)` / `query($id: ID)`) y nunca interpolación de cadenas de texto en el cuerpo de la query.
+4. **Límites de uso y recursos**: Se ejecuta exclusivamente bajo demanda en la resolución o sincronización inicial de perfiles (`sync_youtube`), nunca en bucles de polling periódicos ni durante el streaming de mensajes. El tamaño de la respuesta está acotado por `Net.body_limit` (256 KiB) y timeout HTTP de 10 segundos.
+5. **Mecanismo de desactivación**: Se proporciona la variable de entorno `CHAT_DISABLE_TWITCH_GQL=true` (o `1`) para desactivar de inmediato la consulta a GraphQL.
+6. **Degradación visible**: Si la interfaz GraphQL está desactivada, devuelve error o resulta bloqueada por Twitch, el sistema degrada limpiamente e intenta extraer el enlace de la descripción o bio del canal (`user["description"]`) o recurre a la configuración manual del operador, reflejando el estado en los logs sin interrumpir la ejecución del servicio ni la visualización del overlay.
+7. **Autorización**: Autorizado por el operador en el Issue #13 para la fase de pruebas y extensión local de resolución multistream en F1. Todo uso público o despliegue en producción requiere aprobación explícita de Kalista conforme a ARCH-07 y AGENTS.md.
+
 ## YouTube
 
 Habilitar YouTube Data API para una aplicación propia. Se admiten dos mecanismos de autenticación mediante la variable de entorno configurada en `credential_env`:

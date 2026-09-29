@@ -43,13 +43,27 @@ defmodule ChatOverlay.Config do
     do: is_binary(x) and byte_size(x) <= 40 and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,39}\z/, x)
 
   defp profile?(%{"handle" => handle, "sources" => sources} = p) when is_list(sources) do
-    Enum.all?(Map.keys(p), &(&1 in ["handle", "sources", "overlay_platforms"])) and
+    Enum.all?(Map.keys(p), &(&1 in ["handle", "sources", "overlay_platforms", "linked_youtube"])) and
       handle?(handle) and length(sources) in 1..3 and
       Enum.all?(sources, &source?/1) and overlay_platforms?(p) and
+      linked_youtube?(p) and
       unique?(sources, & &1["platform"])
   end
 
   defp profile?(_), do: false
+
+  defp linked_youtube?(p) do
+    case p["linked_youtube"] do
+      nil ->
+        true
+
+      url when is_binary(url) ->
+        byte_size(url) in 1..2048 and String.starts_with?(url, ["http://", "https://", "@", "UC"])
+
+      _ ->
+        false
+    end
+  end
 
   defp overlay_platforms?(p) do
     case p["overlay_platforms"] do
@@ -68,7 +82,7 @@ defmodule ChatOverlay.Config do
   defp source?(s) when is_map(s) do
     Enum.all?(
       Map.keys(s),
-      &(&1 in ~w(platform channel credential_env client_id user_id live_chat_id subscription_id moderation_subscription_id mode))
+      &(&1 in ~w(platform channel credential_env client_id user_id live_chat_id subscription_id moderation_subscription_id mode login))
     ) and
       s["platform"] in ~w(twitch youtube kick) and Event.id?(s["channel"]) and
       s["mode"] in [nil, "demo"] and
@@ -78,7 +92,9 @@ defmodule ChatOverlay.Config do
   defp source?(_), do: false
 
   defp details?(%{"platform" => "twitch"} = s),
-    do: numeric?(s["channel"]) and numeric?(s["user_id"]) and Event.id?(s["client_id"])
+    do:
+      numeric?(s["channel"]) and numeric?(s["user_id"]) and Event.id?(s["client_id"]) and
+        (is_nil(s["login"]) or (is_binary(s["login"]) and Event.id?(s["login"])))
 
   defp details?(%{"platform" => "youtube"} = s), do: Event.id?(s["live_chat_id"])
 

@@ -8,9 +8,9 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 | --- | --- | --- |
 | Elixir 1.20.4 / OTP 29.1 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
 | Bandit 1.12.5 | Servidor HTTP | MIT |
-| Mint 1.10.1 | HTTP/TLS saliente | Apache-2.0 |
+| Mint 1.11.0 | HTTP/TLS saliente | Apache-2.0 |
 | Mint.WebSocket 1.0.6 | Protocolo WebSocket | Apache-2.0 |
-| hpax 1.0.4 | Dependencia de transporte | Apache-2.0 |
+| hpax 1.1.0 | Dependencia de transporte | Apache-2.0 |
 | mime 2.0.7 | Tipos MIME de Plug | Apache-2.0 |
 | Plug 1.20.3 / plug_crypto 2.2.0 | Contrato web / primitivas de Plug | Apache-2.0 |
 | telemetry 1.4.2 | Instrumentación interna de dependencias | Apache-2.0 |

@@ -147,4 +147,31 @@ defmodule ChatOverlay.WebAPITest do
     assert resp["ok"] == false
     assert resp["error"] == "Perfil no encontrado"
   end
+
+  test "POST /api/profiles/:handle/sync-youtube rejects foreign origin and handles errors" do
+    bad_conn =
+      conn(:post, "/api/profiles/test/sync-youtube")
+      |> put_req_header("origin", "https://malicious.example")
+      |> Web.call([])
+
+    assert bad_conn.status == 403
+
+    conn = conn(:post, "/api/profiles/nonexistent/sync-youtube") |> Web.call([])
+    assert conn.status == 422
+    assert {:ok, resp} = JSON.decode(conn.resp_body)
+    assert resp["ok"] == false
+
+    {:ok, _} =
+      ChatOverlay.Profiles.create_or_update(%{
+        "handle" => "streamer-no-yt",
+        "sources" => [%{"platform" => "twitch", "channel" => "333", "mode" => "demo"}]
+      })
+
+    conn_no_yt = conn(:post, "/api/profiles/streamer-no-yt/sync-youtube") |> Web.call([])
+    assert conn_no_yt.status == 422
+    assert {:ok, resp_no_yt} = JSON.decode(conn_no_yt.resp_body)
+    assert resp_no_yt["ok"] == false
+    assert resp_no_yt["error"] =~ "No se encontró ningún canal de YouTube vinculado"
+    ChatOverlay.Profiles.delete("streamer-no-yt")
+  end
 end

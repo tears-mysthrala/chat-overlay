@@ -1,5 +1,5 @@
 defmodule ChatOverlay.ResolverTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias ChatOverlay.Resolver
 
   test "clean_twitch_slug normalizes usernames, handles, and URLs" do
@@ -62,7 +62,60 @@ defmodule ChatOverlay.ResolverTest do
     assert {:ok, {:channel, "UCynX4LJTQ_H7_KPy7QiIS2A"}} =
              Resolver.clean_youtube_target("UCynX4LJTQ_H7_KPy7QiIS2A")
 
+    assert {:ok, {:handle, "mi_canal"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/c/mi_canal")
+
+    assert {:ok, {:handle, "mi_canal"}} =
+             Resolver.clean_youtube_target("https://www.youtube.com/user/mi_canal")
+
     assert {:error, :invalid_youtube_target} =
              Resolver.clean_youtube_target("https://evil.test/bad")
+  end
+
+  test "discover_twitch_youtube extracts YouTube URLs from description fallback" do
+    desc = "¡Hola a todos! Sígueme también en https://www.youtube.com/@mi_canal y en twitter."
+
+    assert {:ok, "https://www.youtube.com/@mi_canal"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: desc)
+
+    short_desc = "VODs en https://youtu.be/abc123xyz89"
+
+    assert {:ok, "https://youtu.be/abc123xyz89"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: short_desc)
+
+    watch_desc = "Nuevo vídeo en https://www.youtube.com/watch?v=dQw4w9WgXcQ ¡míralo!"
+
+    assert {:ok, "https://www.youtube.com/watch?v=dQw4w9WgXcQ"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: watch_desc)
+
+    c_desc = "Canal en https://www.youtube.com/c/mi_canal para más vídeos"
+
+    assert {:ok, "https://www.youtube.com/c/mi_canal"} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: c_desc)
+
+    no_yt = "Solo juego videojuegos aquí. Sin redes."
+
+    assert {:error, :no_youtube_link} =
+             Resolver.discover_twitch_youtube("nonexistent_user_xyz", description: no_yt)
+
+    assert {:error, :invalid_login} = Resolver.discover_twitch_youtube(12345)
+  end
+
+  test "discover_twitch_youtube honors CHAT_DISABLE_TWITCH_GQL disablement mechanism" do
+    prev = System.get_env("CHAT_DISABLE_TWITCH_GQL")
+    System.put_env("CHAT_DISABLE_TWITCH_GQL", "true")
+    desc = "Canal en https://www.youtube.com/@mi_canal"
+
+    try do
+      assert {:ok, "https://www.youtube.com/@mi_canal"} =
+               Resolver.discover_twitch_youtube("test_channel", description: desc)
+
+      assert {:error, :no_youtube_link} =
+               Resolver.discover_twitch_youtube("test_channel", description: "sin enlaces")
+    after
+      if prev,
+        do: System.put_env("CHAT_DISABLE_TWITCH_GQL", prev),
+        else: System.delete_env("CHAT_DISABLE_TWITCH_GQL")
+    end
   end
 end

@@ -77,6 +77,18 @@ defmodule ChatOverlay.Web do
           )
         end
 
+      {"POST", ["api", "profiles", handle, "sync-youtube"]} ->
+        if allowed_origin?(conn) == true do
+          api_sync_youtube(conn, handle)
+        else
+          reply(
+            conn,
+            403,
+            "application/json",
+            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+          )
+        end
+
       {method, _} when method not in ["GET", "HEAD"] ->
         reply(conn, 405, "text/plain", "Method not allowed")
 
@@ -197,13 +209,26 @@ defmodule ChatOverlay.Web do
       {:ok, body, conn} ->
         case ChatOverlay.JSON.decode(body) do
           {:ok, %{"target" => target} = params} when is_binary(target) ->
-            opts = if params["platform"], do: [platform: params["platform"]], else: []
+            base_opts = if params["platform"], do: [platform: params["platform"]], else: []
+            opts = Keyword.put(base_opts, :with_meta, true)
 
             case ChatOverlay.Profiles.resolve_target(target, opts) do
+              {:ok, sources, suggested, meta} when is_list(sources) ->
+                resp = %{
+                  "ok" => true,
+                  "source" => hd(sources),
+                  "sources" => sources,
+                  "suggested_handle" => suggested,
+                  "meta" => meta
+                }
+
+                reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
               {:ok, source, suggested} ->
                 resp = %{
                   "ok" => true,
                   "source" => source,
+                  "sources" => [source],
                   "suggested_handle" => suggested
                 }
 
@@ -233,6 +258,50 @@ defmodule ChatOverlay.Web do
           413,
           "application/json",
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Petición demasiado grande"})
+        )
+    end
+  end
+
+  defp api_sync_youtube(conn, handle) do
+    case ChatOverlay.Profiles.sync_youtube(handle) do
+      {:ok, profile} ->
+        resp = %{
+          "ok" => true,
+          "profile" => profile,
+          "message" => "Directo de YouTube sincronizado e incorporado al perfil."
+        }
+
+        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
+      {:error, :no_active_stream} ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "error" =>
+              "El canal de YouTube vinculado no tiene ninguna emisión en directo activa en este momento."
+          })
+        )
+
+      {:error, :no_linked_youtube} ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "error" => "No se encontró ningún canal de YouTube vinculado a este perfil."
+          })
+        )
+
+      {:error, reason} ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
         )
     end
   end
@@ -304,6 +373,11 @@ defmodule ChatOverlay.Web do
 
   defp format_error(:no_active_stream),
     do: "El canal de YouTube no tiene una emisión en directo activa ahora mismo."
+
+  defp format_error(:no_linked_youtube),
+    do: "No se encontró ningún canal de YouTube vinculado a este perfil."
+
+  defp format_error(:not_found), do: "Perfil no encontrado."
 
   defp format_error(:no_active_live_chat),
     do: "El directo de YouTube no tiene un chat en vivo habilitado."
