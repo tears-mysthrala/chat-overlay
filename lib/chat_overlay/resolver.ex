@@ -290,29 +290,33 @@ defmodule ChatOverlay.Resolver do
   end
 
   defp resolve_youtube_handle(handle, headers) do
-    path =
-      "/youtube/v3/channels?" <>
-        URI.encode_query(%{
-          "forHandle" => handle,
-          "part" => "id,snippet"
-        })
+    params_to_try = [{"forHandle", handle}, {"forUsername", handle}]
 
-    case Net.request("www.googleapis.com", "GET", path, headers) do
-      {:ok, 200, _, raw} ->
-        with {:ok, %{"items" => [item | _]}} <-
-               JSON.decode(raw, Net.body_limit("www.googleapis.com")),
-             channel_id when is_binary(channel_id) <- item["id"] do
-          {:ok, channel_id}
-        else
-          _ -> {:error, :channel_not_found}
-        end
+    Enum.find_value(params_to_try, {:error, :channel_not_found}, fn {param, val} ->
+      path =
+        "/youtube/v3/channels?" <>
+          URI.encode_query(%{
+            param => val,
+            "part" => "id,snippet"
+          })
 
-      {:ok, status, _, _} ->
-        {:error, {:youtube_api_error, status}}
+      case Net.request("www.googleapis.com", "GET", path, headers) do
+        {:ok, 200, _, raw} ->
+          with {:ok, %{"items" => [item | _]}} <-
+                 JSON.decode(raw, Net.body_limit("www.googleapis.com")),
+               channel_id when is_binary(channel_id) <- item["id"] do
+            {:ok, channel_id}
+          else
+            _ -> nil
+          end
 
-      _ ->
-        {:error, :upstream_unavailable}
-    end
+        {:ok, status, _, _} ->
+          {:error, {:youtube_api_error, status}}
+
+        _ ->
+          nil
+      end
+    end)
   end
 
   defp resolve_youtube_live_stream(channel_id, headers, handle) do

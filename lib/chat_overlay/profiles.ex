@@ -32,11 +32,11 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
   defp execute_action({:delete, handle}), do: do_delete(handle)
 
-  defp execute_action({:sync_youtube, handle, yt_source, yt_target, opts}),
-    do: do_sync_youtube(handle, yt_source, yt_target, opts)
+  defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}),
+    do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
 
-  defp execute_action({:sync_youtube_offline, handle, yt_target, opts}),
-    do: do_sync_youtube_offline(handle, yt_target, opts)
+  defp execute_action({:sync_youtube_offline, handle, yt_target, resolved_for, opts}),
+    do: do_sync_youtube_offline(handle, yt_target, resolved_for, opts)
 
   defp execute_action({:update_linked_youtube, handle, yt_target}),
     do: do_update_linked_youtube(handle, yt_target)
@@ -234,14 +234,19 @@ defmodule ChatOverlay.Profiles do
                   "credential_env" => @platform_credentials["youtube"]
                 }
 
-                call_serialized({:sync_youtube, clean_handle, yt_source, stable_target, opts})
+                call_serialized(
+                  {:sync_youtube, clean_handle, yt_source, stable_target, yt_target, opts}
+                )
 
               {:error, :no_active_stream} ->
-                call_serialized({:sync_youtube_offline, clean_handle, nil, opts})
+                call_serialized({:sync_youtube_offline, clean_handle, nil, yt_target, opts})
                 {:error, :no_active_stream}
 
               {:error, {:no_active_stream, stable_target}} ->
-                call_serialized({:sync_youtube_offline, clean_handle, stable_target, opts})
+                call_serialized(
+                  {:sync_youtube_offline, clean_handle, stable_target, yt_target, opts}
+                )
+
                 {:error, :no_active_stream}
 
               error ->
@@ -251,7 +256,7 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp do_sync_youtube(handle, yt_source, yt_target, opts) do
+  defp do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -259,29 +264,36 @@ defmodule ChatOverlay.Profiles do
         {:error, :not_found}
 
       existing ->
-        existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
-        updated_sources = existing_non_yt ++ [yt_source]
+        current_linked = existing["linked_youtube"]
 
-        updated_overlay_platforms =
-          case existing["overlay_platforms"] do
-            list when is_list(list) ->
-              Enum.uniq(list ++ ["youtube"])
+        if current_linked != nil and current_linked != resolved_for and
+             current_linked != yt_target do
+          {:error, :target_changed_concurrently}
+        else
+          existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
+          updated_sources = existing_non_yt ++ [yt_source]
 
-            other ->
-              other
-          end
+          updated_overlay_platforms =
+            case existing["overlay_platforms"] do
+              list when is_list(list) ->
+                Enum.uniq(list ++ ["youtube"])
 
-        updated_profile =
-          existing
-          |> Map.put("sources", updated_sources)
-          |> Map.put("linked_youtube", yt_target)
-          |> Map.put("overlay_platforms", updated_overlay_platforms)
+              other ->
+                other
+            end
 
-        do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+          updated_profile =
+            existing
+            |> Map.put("sources", updated_sources)
+            |> Map.put("linked_youtube", yt_target)
+            |> Map.put("overlay_platforms", updated_overlay_platforms)
+
+          do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+        end
     end
   end
 
-  defp do_sync_youtube_offline(handle, yt_target, opts) do
+  defp do_sync_youtube_offline(handle, yt_target, resolved_for, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -289,30 +301,37 @@ defmodule ChatOverlay.Profiles do
         {:error, :not_found}
 
       existing ->
-        existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
-        remaining_platforms = Enum.map(existing_non_yt, & &1["platform"])
+        current_linked = existing["linked_youtube"]
 
-        updated_overlay_platforms =
-          case existing["overlay_platforms"] do
-            list when is_list(list) ->
-              filtered = Enum.filter(list, &(&1 in remaining_platforms))
-              if filtered == [], do: remaining_platforms, else: filtered
+        if current_linked != nil and current_linked != resolved_for and
+             current_linked != yt_target do
+          {:error, :target_changed_concurrently}
+        else
+          existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
+          remaining_platforms = Enum.map(existing_non_yt, & &1["platform"])
 
-            other ->
-              other
-          end
+          updated_overlay_platforms =
+            case existing["overlay_platforms"] do
+              list when is_list(list) ->
+                filtered = Enum.filter(list, &(&1 in remaining_platforms))
+                if filtered == [], do: remaining_platforms, else: filtered
 
-        updated_profile =
-          existing
-          |> Map.put("sources", existing_non_yt)
-          |> Map.put("overlay_platforms", updated_overlay_platforms)
+              other ->
+                other
+            end
 
-        updated_profile =
-          if yt_target,
-            do: Map.put(updated_profile, "linked_youtube", yt_target),
-            else: updated_profile
+          updated_profile =
+            existing
+            |> Map.put("sources", existing_non_yt)
+            |> Map.put("overlay_platforms", updated_overlay_platforms)
 
-        do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+          updated_profile =
+            if yt_target,
+              do: Map.put(updated_profile, "linked_youtube", yt_target),
+              else: updated_profile
+
+          do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+        end
     end
   end
 
