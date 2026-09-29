@@ -49,19 +49,20 @@ async def main():
     print(f"[*] Conectando a OBS Studio WebSocket en {OBS_WS_URI}...")
     async with websockets.connect(OBS_WS_URI) as ws:
         hello = json.loads(await ws.recv())
-        auth = hello["d"]["authentication"]
-        salt, challenge = auth["salt"], auth["challenge"]
-        secret = base64.b64encode(hashlib.sha256((OBS_PASSWORD + salt).encode()).digest()).decode()
-        auth_response = base64.b64encode(hashlib.sha256((secret + challenge).encode()).digest()).decode()
-        
+        auth = hello.get("d", {}).get("authentication")
         identify = {
             "op": 1,
             "d": {
                 "rpcVersion": 1,
-                "authentication": auth_response,
                 "eventSubscriptions": 33
             }
         }
+        if auth:
+            salt, challenge = auth["salt"], auth["challenge"]
+            secret = base64.b64encode(hashlib.sha256((OBS_PASSWORD + salt).encode()).digest()).decode()
+            auth_response = base64.b64encode(hashlib.sha256((secret + challenge).encode()).digest()).decode()
+            identify["d"]["authentication"] = auth_response
+
         await ws.send(json.dumps(identify))
         _ = await ws.recv()
         print("[+] ¡Autenticación exitosa en OBS Studio!")
@@ -118,7 +119,9 @@ async def main():
         # 4. Obtener sceneItemId
         scene_items = await send_req(ws, "GetSceneItemList", {"sceneName": scene_name})
         scene_item = next((item for item in scene_items.get("sceneItems", []) if item["sourceName"] == input_name), None)
-        scene_item_id = scene_item["sceneItemId"] if scene_item else None
+        if not scene_item:
+            raise RuntimeError(f"El item de escena '{input_name}' no se encontró en la escena '{scene_name}'")
+        scene_item_id = scene_item["sceneItemId"]
         print(f"[+] Item de escena ID: {scene_item_id}")
 
         # 5. Esperar a que el motor CEF cargue el HTML, ejecute JS, conecte el SSE y renderice mensajes
@@ -140,39 +143,50 @@ async def main():
         print(f"[+] Screenshot 1 guardado en: {shot1_path} ({os.path.getsize(shot1_path)} bytes)")
 
         # 7. Ciclo de vida: Ocultar la fuente (SetSceneItemEnabled: false)
-        if scene_item_id is not None:
-            print("[*] Probando ciclo de vida: Ocultando fuente en OBS (SetSceneItemEnabled: false)...")
-            await send_req(ws, "SetSceneItemEnabled", {
-                "sceneName": scene_name,
-                "sceneItemId": scene_item_id,
-                "sceneItemEnabled": False
-            })
-            print("[+] Fuente ocultada. Esperando 3 segundos...")
-            await asyncio.sleep(3)
+        print("[*] Probando ciclo de vida: Ocultando fuente en OBS (SetSceneItemEnabled: false)...")
+        await send_req(ws, "SetSceneItemEnabled", {
+            "sceneName": scene_name,
+            "sceneItemId": scene_item_id,
+            "sceneItemEnabled": False
+        })
+        print("[+] Fuente ocultada. Esperando 3 segundos...")
+        await asyncio.sleep(3)
 
-            # 8. Mostrar la fuente (SetSceneItemEnabled: true)
-            print("[*] Mostrando fuente en OBS (SetSceneItemEnabled: true)...")
-            await send_req(ws, "SetSceneItemEnabled", {
-                "sceneName": scene_name,
-                "sceneItemId": scene_item_id,
-                "sceneItemEnabled": True
-            })
-            print("[+] Fuente visible nuevamente. Esperando reconexión y replay de mensajes...")
-            await asyncio.sleep(5)
+        # 8. Mostrar la fuente (SetSceneItemEnabled: true)
+        print("[*] Mostrando fuente en OBS (SetSceneItemEnabled: true)...")
+        await send_req(ws, "SetSceneItemEnabled", {
+            "sceneName": scene_name,
+            "sceneItemId": scene_item_id,
+            "sceneItemEnabled": True
+        })
+        print("[+] Fuente visible nuevamente. Esperando reconexión y replay de mensajes...")
+        await asyncio.sleep(5)
 
-            # 9. Captura 2: Renderizado tras reconexión
-            print("[*] Capturando Screenshot 2 (Post-reconexión)...")
-            shot2 = await send_req(ws, "GetSourceScreenshot", {
-                "sourceName": input_name,
-                "imageFormat": "png",
-                "imageWidth": 1280,
-                "imageHeight": 720
-            })
-            img_b64_2 = shot2["imageData"].split(",", 1)[1] if "," in shot2["imageData"] else shot2["imageData"]
-            shot2_path = os.path.join(ARTIFACT_DIR, "obs_chat_reconnected.png")
-            with open(shot2_path, "wb") as f:
-                f.write(base64.b64decode(img_b64_2))
-            print(f"[+] Screenshot 2 guardado en: {shot2_path} ({os.path.getsize(shot2_path)} bytes)")
+        # 9. Captura 2: Renderizado tras reconexión
+        print("[*] Capturando Screenshot 2 (Post-reconexión)...")
+        shot2 = await send_req(ws, "GetSourceScreenshot", {
+            "sourceName": input_name,
+            "imageFormat": "png",
+            "imageWidth": 1280,
+            "imageHeight": 720
+        })
+        img_b64_2 = shot2["imageData"].split(",", 1)[1] if "," in shot2["imageData"] else shot2["imageData"]
+        shot2_path = os.path.join(ARTIFACT_DIR, "obs_chat_reconnected.png")
+        with open(shot2_path, "wb") as f:
+            f.write(base64.b64decode(img_b64_2))
+        print(f"[+] Screenshot 2 guardado en: {shot2_path} ({os.path.getsize(shot2_path)} bytes)")
+
+        # Verificación explícita de contenido en screenshots
+        try:
+            from PIL import Image
+            im1 = Image.open(shot1_path)
+            assert im1.getbbox() is not None, "El screenshot 1 está vacío (canal alfa = 0 en toda la imagen)"
+            im2 = Image.open(shot2_path)
+            assert im2.getbbox() is not None, "El screenshot 2 está vacío (canal alfa = 0 en toda la imagen)"
+            print(f"[+] Verificación gráfica con éxito: bbox1={im1.getbbox()}, bbox2={im2.getbbox()}")
+        except ImportError:
+            assert os.path.getsize(shot1_path) > 10000, f"Tamaño anómalo de screenshot 1: {os.path.getsize(shot1_path)} bytes"
+            assert os.path.getsize(shot2_path) > 10000, f"Tamaño anómalo de screenshot 2: {os.path.getsize(shot2_path)} bytes"
 
         # 10. Captura de la escena completa (Program Scene) para verificar transparencia sobre el lienzo
         print("[*] Capturando Screenshot 3 (Escena completa de OBS)...")

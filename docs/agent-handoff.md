@@ -1,10 +1,10 @@
-# Handoff F2 — issue #13
+# Handoff F1 — issue #13 (Autodetección de canales públicos y unificación multistream)
 
 - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/13
 - Rama: `feat/13-twitch-youtube-discovery`
 - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/13-twitch-youtube-discovery`
 - PR previa: https://github.com/tears-mysthrala/chat-overlay/pull/12 (MERGED en main `ae6ffb2`).
-- Autorizado: F2 Autodetección y vinculación de canal de YouTube desde Twitch para perfiles unificados (solicitado por operador).
+- Autorizado: Ampliación de resolución y agregación multistream F1 (resolución de canales de YouTube enlazados públicamente en Twitch para unificar feeds de chat en caliente, sin cuentas de usuario ni perfiles privados de F2). Aprobado y solicitado por el operador en issue #13.
 
 Evidencias operativas y técnicas en esta entrega:
 - **Autodetección de YouTube desde Twitch (`ChatOverlay.Resolver`)**:
@@ -49,5 +49,5 @@ Pendientes (bloquean despliegue a producción):
 - Kick diferido con prioridad -1 según directriz del operador.
 - Aprobación formal de Kalista para publicación/despliegue en producción.
 
-Rollback: volver al commit aprobado en main (`ae6ffb2`); no hay migraciones ni datos durables.
+Rollback: volver al commit aprobado en main (`ae6ffb2`); si existen perfiles locales persistidos con `"linked_youtube"`, la versión anterior ignora campos desconocidos o puede retirarse la clave antes de reiniciar. No hay migraciones de base de datos ni datos de estado incompatibles.
 

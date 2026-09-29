@@ -226,8 +226,11 @@
 
           if (res.ok && data.ok) {
             let msg = `¡Canal añadido con éxito como "${data.profile.handle}"!`;
-            if (data.profile.sources && data.profile.sources.length > 1) {
+            const platforms = (data.profile.sources || []).map(s => s.platform);
+            if (platforms.includes("twitch") && platforms.includes("youtube")) {
               msg += " Feed unificada con Twitch y YouTube.";
+            } else if (data.profile.sources && data.profile.sources.length > 1) {
+              msg += " Feed unificada con múltiples fuentes.";
             } else if (data.profile.linked_youtube) {
               msg += ` Se detectó canal de YouTube vinculado (${data.profile.linked_youtube}) sin directo activo; podrás sincronizarlo con un clic cuando inicie emisión.`;
             }
