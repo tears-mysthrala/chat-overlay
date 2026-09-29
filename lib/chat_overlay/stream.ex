@@ -3,28 +3,44 @@ defmodule ChatOverlay.Stream do
   alias ChatOverlay.{Admission, Config, HTTP, Store}
 
   def call(conn, handle) do
-    case Admission.acquire(handle) do
-      :ok ->
-        try do
-          conn =
-            conn
-            |> Plug.Conn.merge_resp_headers(HTTP.headers("text/event-stream; charset=utf-8"))
-            |> Plug.Conn.put_resp_header("x-accel-buffering", "no")
-            |> Plug.Conn.send_chunked(200)
+    params = URI.decode_query(conn.query_string || "")
+    is_overlay = params["view"] == "overlay"
+    token = params["token"]
 
-          {:ok, conn} = Plug.Conn.chunk(conn, "retry: 2000\n\n")
-          cursor = List.first(Plug.Conn.get_req_header(conn, "last-event-id"))
-          is_overlay = conn.query_string == "view=overlay"
-          poll(conn, handle, cursor, is_overlay, System.monotonic_time(:millisecond))
-        after
-          Admission.release()
-        end
+    cond do
+      is_overlay and
+          match?(
+            {:error, :unauthorized},
+            ChatOverlay.Profiles.verify_capability_token(handle, token)
+          ) ->
+        ChatOverlay.Web.reply(conn, 401, "text/plain", "Unauthorized: Capability Token Invalid")
 
-      {:error, :capacity} ->
-        ChatOverlay.Web.reply(conn, 503, "text/plain", "Unavailable")
-
-      _ ->
+      match?({:error, :not_found}, Config.profile(handle)) or is_nil(Config.profile(handle)) ->
         ChatOverlay.Web.reply(conn, 404, "text/plain", "Not found")
+
+      true ->
+        case Admission.acquire(handle) do
+          :ok ->
+            try do
+              conn =
+                conn
+                |> Plug.Conn.merge_resp_headers(HTTP.headers("text/event-stream; charset=utf-8"))
+                |> Plug.Conn.put_resp_header("x-accel-buffering", "no")
+                |> Plug.Conn.send_chunked(200)
+
+              {:ok, conn} = Plug.Conn.chunk(conn, "retry: 2000\n\n")
+              cursor = List.first(Plug.Conn.get_req_header(conn, "last-event-id"))
+              poll(conn, handle, cursor, is_overlay, System.monotonic_time(:millisecond))
+            after
+              Admission.release()
+            end
+
+          {:error, :capacity} ->
+            ChatOverlay.Web.reply(conn, 503, "text/plain", "Unavailable")
+
+          _ ->
+            ChatOverlay.Web.reply(conn, 404, "text/plain", "Not found")
+        end
     end
   end
 

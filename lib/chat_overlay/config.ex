@@ -42,15 +42,68 @@ defmodule ChatOverlay.Config do
   def handle?(x),
     do: is_binary(x) and byte_size(x) <= 40 and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,39}\z/, x)
 
+  @f2_profile_keys ~w(handle sources overlay_platforms linked_youtube capability_token_hash media can_upload storage_quota_bytes storage_used_bytes)
+
   defp profile?(%{"handle" => handle, "sources" => sources} = p) when is_list(sources) do
-    Enum.all?(Map.keys(p), &(&1 in ["handle", "sources", "overlay_platforms", "linked_youtube"])) and
+    Enum.all?(Map.keys(p), &(&1 in @f2_profile_keys)) and
       handle?(handle) and length(sources) in 1..3 and
       Enum.all?(sources, &source?/1) and overlay_platforms?(p) and
       linked_youtube?(p) and
+      capability_token_hash?(p) and
+      media?(p) and
+      upload_quota?(p) and
       unique?(sources, & &1["platform"])
   end
 
   defp profile?(_), do: false
+
+  defp capability_token_hash?(p) do
+    case p["capability_token_hash"] do
+      nil ->
+        true
+
+      hash when is_binary(hash) ->
+        byte_size(hash) == 64 and Regex.match?(~r/\A[0-9a-f]{64}\z/, hash)
+
+      _ ->
+        false
+    end
+  end
+
+  defp media?(p) do
+    case p["media"] do
+      nil ->
+        true
+
+      m when is_map(m) ->
+        Enum.all?(Map.keys(m), &(&1 in ["alert_sound", "alert_image"])) and
+          Enum.all?(Map.values(m), &media_item?/1)
+
+      _ ->
+        false
+    end
+  end
+
+  defp media_item?(item) when is_map(item) do
+    url = item["url"]
+    source = item["source"]
+
+    is_binary(url) and byte_size(url) in 1..2048 and
+      String.starts_with?(url, "https://") and
+      (is_nil(source) or source in ["r2", "external"])
+  end
+
+  defp media_item?(_), do: false
+
+  defp upload_quota?(p) do
+    can_upload = p["can_upload"]
+    quota = p["storage_quota_bytes"]
+    used = p["storage_used_bytes"]
+
+    (is_nil(can_upload) or is_boolean(can_upload)) and
+      (is_nil(quota) or (is_integer(quota) and quota >= 0 and quota <= 1_073_741_824)) and
+      (is_nil(used) or (is_integer(used) and used >= 0))
+  end
 
   defp linked_youtube?(p) do
     case p["linked_youtube"] do

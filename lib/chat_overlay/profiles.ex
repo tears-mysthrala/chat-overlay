@@ -41,6 +41,15 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:update_linked_youtube, handle, yt_target}),
     do: do_update_linked_youtube(handle, yt_target)
 
+  defp execute_action({:regenerate_capability_token, handle}),
+    do: do_regenerate_capability_token(handle)
+
+  defp execute_action({:update_media, handle, media_attrs}),
+    do: do_update_media(handle, media_attrs)
+
+  defp execute_action({:update_upload_quota, handle, delta}),
+    do: do_update_upload_quota(handle, delta)
+
   @doc "Lists all currently active profiles."
   def list do
     Enum.map(Config.profiles(), fn p ->
@@ -50,6 +59,11 @@ defmodule ChatOverlay.Profiles do
         "sources" => Enum.map(p["sources"], &format_source_summary/1),
         "overlay_platforms" => p["overlay_platforms"],
         "linked_youtube" => p["linked_youtube"],
+        "has_capability_token" => not is_nil(p["capability_token_hash"]),
+        "media" => p["media"] || %{},
+        "can_upload" => p["can_upload"] || false,
+        "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
+        "storage_used_bytes" => p["storage_used_bytes"] || 0,
         "reader_url" => "/reader/#{p["handle"]}",
         "overlay_url" => "/overlay/#{p["handle"]}"
       }
@@ -62,6 +76,57 @@ defmodule ChatOverlay.Profiles do
   end
 
   def get(_), do: nil
+
+  @doc "Generates and persists a new 32-byte capability token for the given profile handle."
+  def regenerate_capability_token(handle) when is_binary(handle) do
+    call_serialized({:regenerate_capability_token, handle})
+  end
+
+  def regenerate_capability_token(_), do: {:error, :invalid_handle}
+
+  @doc "Verifies whether a capability token matches the profile's token hash. If no hash is set, allows access for backwards compatibility."
+  def verify_capability_token(handle, token) when is_binary(handle) do
+    case Config.profile(handle) do
+      nil ->
+        {:error, :not_found}
+
+      profile ->
+        case profile["capability_token_hash"] do
+          nil ->
+            {:ok, profile}
+
+          "" ->
+            {:ok, profile}
+
+          hash when is_binary(hash) and is_binary(token) ->
+            if ChatOverlay.Crypto.verify_token(token, hash) do
+              {:ok, profile}
+            else
+              {:error, :unauthorized}
+            end
+
+          _ ->
+            {:error, :unauthorized}
+        end
+    end
+  end
+
+  def verify_capability_token(_, _), do: {:error, :unauthorized}
+
+  @doc "Updates the media settings (alert audio/images) for a profile."
+  def update_media(handle, media_attrs) when is_binary(handle) and is_map(media_attrs) do
+    call_serialized({:update_media, handle, media_attrs})
+  end
+
+  def update_media(_, _), do: {:error, :invalid_params}
+
+  @doc "Updates the storage_used_bytes for a profile by a delta amount."
+  def update_upload_quota(handle, bytes_used_delta)
+      when is_binary(handle) and is_integer(bytes_used_delta) do
+    call_serialized({:update_upload_quota, handle, bytes_used_delta})
+  end
+
+  def update_upload_quota(_, _), do: {:error, :invalid_params}
 
   @doc "Resolves a user-provided target into a source configuration."
   def resolve_target(target, opts \\ []) when is_binary(target) do
@@ -429,8 +494,15 @@ defmodule ChatOverlay.Profiles do
 
     linked_yt = profile["linked_youtube"] || (existing && existing["linked_youtube"])
 
+    base_profile =
+      if existing && opts[:replace] != true do
+        Map.merge(existing, profile)
+      else
+        profile
+      end
+
     final_profile =
-      profile
+      base_profile
       |> Map.put("sources", final_sources)
       |> then(fn p ->
         if linked_yt, do: Map.put(p, "linked_youtube", linked_yt), else: p
@@ -528,6 +600,65 @@ defmodule ChatOverlay.Profiles do
           persist_profiles(valid_profiles)
           :ok
         end
+    end
+  end
+
+  defp do_regenerate_capability_token(handle) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        token = ChatOverlay.Crypto.generate_capability_token()
+        hash = ChatOverlay.Crypto.hash_token(token)
+        updated_profile = Map.put(existing, "capability_token_hash", hash)
+
+        case do_save_profile(updated_profile, replace: true) do
+          {:ok, saved} -> {:ok, token, saved}
+          error -> error
+        end
+    end
+  end
+
+  defp do_update_media(handle, media_attrs) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        current_media = existing["media"] || %{}
+        merged_media = Map.merge(current_media, media_attrs)
+
+        cleaned_media =
+          Enum.reduce(merged_media, %{}, fn {k, v}, acc ->
+            if is_map(v) and is_binary(v["url"]) and byte_size(v["url"]) > 0 do
+              Map.put(acc, k, v)
+            else
+              acc
+            end
+          end)
+
+        updated_profile = Map.put(existing, "media", cleaned_media)
+        do_save_profile(updated_profile, replace: true)
+    end
+  end
+
+  defp do_update_upload_quota(handle, delta) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        current_used = existing["storage_used_bytes"] || 0
+        new_used = max(0, current_used + delta)
+        updated_profile = Map.put(existing, "storage_used_bytes", new_used)
+        do_save_profile(updated_profile, replace: true)
     end
   end
 

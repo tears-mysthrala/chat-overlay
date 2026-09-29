@@ -61,6 +61,12 @@ defmodule ChatOverlay.Admission do
   end
 
   defp demand(handle, action) do
-    Enum.each(Config.profile(handle)["sources"], fn source -> Source.demand(source, action) end)
+    case Config.profile(handle) do
+      %{"sources" => sources} when is_list(sources) ->
+        Enum.each(sources, fn source -> Source.demand(source, action) end)
+
+      _ ->
+        :ok
+    end
   end
 end

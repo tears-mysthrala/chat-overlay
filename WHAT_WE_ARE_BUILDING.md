@@ -1,9 +1,9 @@
 # WHAT_WE_ARE_BUILDING
 
 **Proyecto:** `chat-overlay` · **Responsable del producto y aprobación final:** Kalista  
-**Versión del documento:** 1.1 · **Fecha de referencia:** 2026-09-29  
-**Estado:** Fase F1 completada y consolidada para Twitch, YouTube y OBS; Kick formalmente diferido por inestabilidad de API upstream (issue #15).  
-**Fase autorizada vigente:** Fase F1 cerrada. F2–F4 requieren autorización explícita de Kalista. Esta autorización no incluye despliegue a producción ni registro de aplicaciones externas no aprobadas.
+**Versión del documento:** 1.2 · **Fecha de referencia:** 2026-09-29  
+**Estado:** Fase F1 completada y consolidada. Fase F2 autorizada e iniciada por Kalista el 29-09-2026 (issue #17, ADR 0003).  
+**Fase autorizada vigente:** Fase F2: Panel de Creador, autenticación OAuth/SSO, perfiles aislados y módulo multimedia (R2 + URLs externas), confirmado por Kalista (issue #17). F3–F4 requieren autorización explícita. Esta autorización no incluye despliegue a producción.
 
 ## 0. Lectura y reglas de decisión
 
@@ -47,7 +47,7 @@ Revisar fuentes y licencias antes de reutilizar; registrar commit de origen y ca
 | --- | --- | --- |
 | F0: fundamento | Trazabilidad, esqueleto mínimo, CI, amenaza inicial, contrato de eventos y una prueba técnica limitada de conectores. | PR revisable, ejecución local reproducible y riesgos concretos identificados. No es un lanzamiento público. |
 | F1: overlay | Lectores autónomos de Twitch y YouTube, normalización, SSE, vista OBS, estados, borrados y recuperación. Kick diferido por inestabilidad de API. | **Completado y verificado (issue #15).** Pruebas funcionales, de seguridad, de carga sintética (p95 49 ms) y validación en vivo en OBS Studio 32.2.2. |
-| F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. | Autorización específica; aislamiento y ciclo de vida de datos verificados antes de cuentas reales. |
+| F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. Módulo multimedia (Cloudflare R2 + URLs externas). | **Autorizado e iniciado (issue #17, ADR 0003).** Aislamiento y ciclo de vida de datos verificados antes de cuentas reales. |
 | F3: bot | Comandos, reglas y acciones autorizadas por plataforma, custodia de tokens y límites compartidos. | Autorización específica; separación lectura/escritura y pruebas de credenciales, permisos e idempotencia. |
 | F4: contenido ampliado | Subidas o personalización avanzada; runners solo cuando una función lo necesite. | Caso de uso aprobado y amenaza adicional evaluada. No implica autorizar scripts arbitrarios. |
 
