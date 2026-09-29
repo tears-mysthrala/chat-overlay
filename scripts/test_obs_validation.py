@@ -98,50 +98,57 @@ async def main():
         input_name = "ChatOverlay-OBS"
         was_created = False
         original_settings = None
+        orig_enabled = None
+        scene_item_id = None
 
         if input_name in existing_inputs:
             settings_resp = await send_req(ws, "GetInputSettings", {"inputName": input_name})
             original_settings = settings_resp.get("inputSettings", {})
-            print(f"[*] Actualizando ajustes de la fuente existente '{input_name}' a {overlay_url}...")
-            await send_req(ws, "SetInputSettings", {
-                "inputName": input_name,
-                "inputSettings": {
-                    "url": overlay_url,
-                    "is_local_file": False,
-                    "width": 1920,
-                    "height": 1080,
-                    "fps": 60,
-                    "shutdown": True,
-                    "restart_when_active": True
-                }
-            })
         else:
             was_created = True
-            print(f"[*] Creando fuente 'browser_source' ('{input_name}') apuntando a {overlay_url}...")
-            create_data = await send_req(ws, "CreateInput", {
-                "sceneName": scene_name,
-                "inputName": input_name,
-                "inputKind": "browser_source",
-                "inputSettings": {
-                    "url": overlay_url,
-                    "is_local_file": False,
-                    "width": 1920,
-                    "height": 1080,
-                    "fps": 60,
-                    "shutdown": True,
-                    "restart_when_active": True
-                }
-            })
-            print(f"[+] Fuente creada con ID: {create_data.get('sceneItemId')}")
 
         try:
-            # 4. Obtener sceneItemId
+            if was_created:
+                print(f"[*] Creando fuente 'browser_source' ('{input_name}') apuntando a {overlay_url}...")
+                create_data = await send_req(ws, "CreateInput", {
+                    "sceneName": scene_name,
+                    "inputName": input_name,
+                    "inputKind": "browser_source",
+                    "inputSettings": {
+                        "url": overlay_url,
+                        "is_local_file": False,
+                        "width": 1920,
+                        "height": 1080,
+                        "fps": 60,
+                        "shutdown": True,
+                        "restart_when_active": True
+                    }
+                })
+                print(f"[+] Fuente creada con ID: {create_data.get('sceneItemId')}")
+            else:
+                print(f"[*] Actualizando ajustes de la fuente existente '{input_name}' a {overlay_url}...")
+                await send_req(ws, "SetInputSettings", {
+                    "inputName": input_name,
+                    "inputSettings": {
+                        "url": overlay_url,
+                        "is_local_file": False,
+                        "width": 1920,
+                        "height": 1080,
+                        "fps": 60,
+                        "shutdown": True,
+                        "restart_when_active": True
+                    },
+                    "overlay": False
+                })
+
+            # 4. Obtener sceneItemId y visibilidad original
             scene_items = await send_req(ws, "GetSceneItemList", {"sceneName": scene_name})
             scene_item = next((item for item in scene_items.get("sceneItems", []) if item["sourceName"] == input_name), None)
             if not scene_item:
                 raise RuntimeError(f"El item de escena '{input_name}' no se encontró en la escena '{scene_name}'")
             scene_item_id = scene_item["sceneItemId"]
-            print(f"[+] Item de escena ID: {scene_item_id}")
+            orig_enabled = scene_item.get("sceneItemEnabled", True)
+            print(f"[+] Item de escena ID: {scene_item_id} (Visibilidad previa: {orig_enabled})")
 
             # 5. Esperar a que el motor CEF cargue el HTML, ejecute JS, conecte el SSE y renderice mensajes
             print("[*] Esperando 6 segundos a que CEF conecte el SSE y renderice los mensajes...")
@@ -236,12 +243,21 @@ async def main():
                     if was_created:
                         await send_req(ws, "RemoveInput", {"inputName": input_name})
                         print(f"[+] Fuente temporal '{input_name}' eliminada correctamente de OBS.")
-                    elif original_settings is not None:
-                        await send_req(ws, "SetInputSettings", {
-                            "inputName": input_name,
-                            "inputSettings": original_settings
-                        })
-                        print(f"[+] Ajustes previos de '{input_name}' restaurados correctamente en OBS.")
+                    else:
+                        if original_settings is not None:
+                            await send_req(ws, "SetInputSettings", {
+                                "inputName": input_name,
+                                "inputSettings": original_settings,
+                                "overlay": False
+                            })
+                            print(f"[+] Ajustes previos de '{input_name}' restaurados correctamente en OBS.")
+                        if orig_enabled is not None and scene_item_id is not None:
+                            await send_req(ws, "SetSceneItemEnabled", {
+                                "sceneName": scene_name,
+                                "sceneItemId": scene_item_id,
+                                "sceneItemEnabled": orig_enabled
+                            })
+                            print(f"[+] Estado de visibilidad previo ({orig_enabled}) restaurado.")
                 except Exception as cleanup_err:
                     print(f"[-] Nota de limpieza OBS: {cleanup_err}")
 

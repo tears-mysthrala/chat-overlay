@@ -1,5 +1,5 @@
 defmodule ChatOverlay.ResolverTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
   alias ChatOverlay.Resolver
 
   test "clean_twitch_slug normalizes usernames, handles, and URLs" do

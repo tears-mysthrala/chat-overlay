@@ -35,6 +35,9 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:sync_youtube, handle, yt_source, yt_target, opts}),
     do: do_sync_youtube(handle, yt_source, yt_target, opts)
 
+  defp execute_action({:sync_youtube_offline, handle, yt_target, opts}),
+    do: do_sync_youtube_offline(handle, yt_target, opts)
+
   defp execute_action({:update_linked_youtube, handle, yt_target}),
     do: do_update_linked_youtube(handle, yt_target)
 
@@ -234,10 +237,11 @@ defmodule ChatOverlay.Profiles do
                 call_serialized({:sync_youtube, clean_handle, yt_source, stable_target, opts})
 
               {:error, :no_active_stream} ->
+                call_serialized({:sync_youtube_offline, clean_handle, nil, opts})
                 {:error, :no_active_stream}
 
               {:error, {:no_active_stream, stable_target}} ->
-                call_serialized({:update_linked_youtube, clean_handle, stable_target})
+                call_serialized({:sync_youtube_offline, clean_handle, stable_target, opts})
                 {:error, :no_active_stream}
 
               error ->
@@ -262,6 +266,29 @@ defmodule ChatOverlay.Profiles do
           existing
           |> Map.put("sources", updated_sources)
           |> Map.put("linked_youtube", yt_target)
+
+        do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
+    end
+  end
+
+  defp do_sync_youtube_offline(handle, yt_target, opts) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
+
+        updated_profile =
+          existing
+          |> Map.put("sources", existing_non_yt)
+
+        updated_profile =
+          if yt_target,
+            do: Map.put(updated_profile, "linked_youtube", yt_target),
+            else: updated_profile
 
         do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
     end

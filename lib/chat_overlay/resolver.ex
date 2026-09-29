@@ -218,8 +218,11 @@ defmodule ChatOverlay.Resolver do
                 {:ok, live_info} ->
                   {:ok, live_info}
 
-                _ ->
+                {:error, :no_active_stream} ->
                   {:error, {:no_active_stream, "https://www.youtube.com/channel/" <> channel_id}}
+
+                error ->
+                  error
               end
 
             {:error, :no_active_live_chat} ->
