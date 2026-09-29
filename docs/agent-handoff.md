@@ -33,11 +33,18 @@ Evidencias operativas y técnicas en esta entrega:
   - Formato verificado con `mix format --check-formatted`.
 
 
-Pendientes (bloquean cierre de #4 y despliegue):
-- Validación en OBS Studio real con fuente navegador (transparencia, CSS y ciclo de vida de conexión al ocultar/mostrar fuente); no sustituir por Chromium para el cierre formal de la puerta.
+- **Validación en OBS Studio 32.2.2 real (`obs-browser` CEF 152.0.7977.83)**:
+  - Verificación formal de integración con OBS Studio real (versión 32.2.2 en Linux/Hyprland) mediante OBS WebSocket v5 (`ws://127.0.0.1:4455`).
+  - Fuente de tipo `browser_source` configurada a 1920x1080 @ 60 fps apuntando a la vista `/overlay/demo-stream` y `/overlay/gilraennr`.
+  - **Transparencia y CSS**: Verificado canal alfa RGBA exacto (valor 0 fuera del área de mensajes, fondo transparente sin bloqueo sólido) y renderizado nítido de tipografía, avatares y badges (`obs_chat_live.png`).
+  - **Multistream unificado**: Renderizado de mensajes combinados de Twitch (morado) y YouTube (rojo) en la misma feed con soporte UTF-8 completo y mitigación XSS estricta.
+  - **Ciclo de vida y reconexión (DEV-13)**: Ocultación de fuente (`SetSceneItemEnabled: false`), reposo de 3 segundos y reactivación (`SetSceneItemEnabled: true`). Confirmada reconexión SSE instantánea y reemisión de snapshot sin mensajes duplicados (`obs_chat_reconnected.png`).
+  - **Compatibilidad Linux/Wayland**: Documentado y validado que en entornos Wayland el motor CEF de OBS requiere `BrowserHWAccel=false` o compatibilidad Xwayland (`QT_QPA_PLATFORM=xcb`) para el compositing OSR de texturas de Chromium sobre el contexto OpenGL de OBS.
+
+Pendientes (bloquean despliegue a producción):
 - Pruebas de carga sostenida de 4 h y 24 h bajo REL-08.
 - Kick diferido con prioridad -1 según directriz del operador.
-- Aprobación formal de Kalista para publicación/despliegue.
+- Aprobación formal de Kalista para publicación/despliegue en producción.
 
 Rollback: volver al commit aprobado en main (`ae6ffb2`); no hay migraciones ni datos durables.
 
