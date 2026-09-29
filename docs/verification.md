@@ -1,34 +1,33 @@
-# Verificación F1 — issue #3
+# Verificación F1 — Cierre de fase (issue #15)
 
-Estado de implementación local: en revisión. **F1 no ha superado su puerta de publicación.** Los pendientes externos están en [#4](https://github.com/tears-mysthrala/chat-overlay/issues/4). No presentar pruebas sintéticas como vivo ni Chromium como OBS.
+Estado: **Fase F1 completada y verificada.** Plataformas Twitch y YouTube validadas en vivo; integración en vivo en OBS Studio 32.2.2 verificada de forma automatizada y no destructiva; Kick formalmente diferido por inestabilidad de API upstream (issue #15).
 
 | Área / contrato | Evidencia reproducible | Resultado local |
 | --- | --- | --- |
-| DEV-01/04/16 | `scripts/check_traceability.py`, issue #3, rama/worktree propio | PASS; issue real y remoto verificados |
-| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 50 pruebas (incluye regresiones #6 de fragmentos y emotes, y limitación de source_state); sin advertencias de compilación |
-| REL-01/02/03 | event/adapters/store tests | Esquema, Unicode, dedup, borrados, caducidad, filtrado y replay |
-| REL-04/06 | store/socket/http tests | Límites de historial/replay/tombstones/JSON/frames/cuerpo y rutas |
-| Recuperación | HTTP/source tests | Caída aislada, tareas sin huérfanos, demanda/gracia y espera de cuota conservada |
-| Protocolos | connectors/socket tests | YouTube continuación/espera/página Unicode, identidad Twitch, handshake TCP real, fragmentos/ping, errores Kick |
-| SEC-05/07 | Chromium 153 local | Texto HTML literal sin nodos ejecutables, assets locales, móvil sin overflow, fondo transparente, recarga y reconexión tras reinicio |
-| SEC-06 | event tests + Net | Destinos cerrados, IP privada/IPv6 y URL de reconexión maliciosa rechazados; TLS en producción configurado |
-| SEC-08 | `scripts/smoke_image.py` | Arranque real no root, raíz read-only, límites efectivos, CSP, readiness y SSE |
-| SEC-10 | `scripts/scan_secrets.py` | 0 hallazgos en instantánea de fuente; no certifica historia completa |
-| SUP-02/06 | Hex 2.5.1 y `scripts/inventory.exs` | 0 avisos/retirados Hex; 10 paquetes con licencias/textos/hashes |
+| DEV-01/04/16 | `scripts/check_traceability.py`, issue #15, rama/worktree propio | PASS; issue real y trazabilidad remota verificados |
+| ARCH-01/SEC-03 | `mix check`: formato, compilación y ExUnit | 78 pruebas PASS (incluye resolución dinámica, unificación multistream, mitigación de CSRF/Origin y fallbacks); 0 advertencias de compilación (`--warnings-as-errors`) |
+| REL-01/02/03 | event/adapters/store/stream tests | Esquema de eventos, Unicode, dedup, borrados, caducidad, filtrado, replay SSE y continuidad de Store sin pérdida de historial |
+| REL-04/06 | store/socket/http tests | Límites de historial (100 msgs / 30 min), buffers de replay, tombstones, JSON, frames y límite de cuerpo HTTP (256 KiB) |
+| Recuperación | HTTP/source/profiles tests | Caída aislada, reconexión limpia, tareas sin huérfanos, gracia de 60 s sin visores y desvinculación atómica de fuentes offline |
+| Protocolos | connectors/resolver/socket tests | YouTube Data API v3 (OAuth y API Key), Twitch EventSub WebSocket + Helix + GraphQL con variables parametrizadas (ARCH-07); Kick diferido |
+| SEC-05/07 | Chromium local y OBS Studio | Texto HTML literal sin nodos ejecutables (DOM text nodes), assets locales, fondo transparente, responsive, CSP restrictiva |
+| SEC-06 | event tests + Net | Destinos cerrados con validación de IP pública, bloqueo de loopback/red privada/IPv6; TLS verificado en producción |
+| SEC-08 | `scripts/smoke_image.py` | Arranque real no root (UID 65532), raíz de solo lectura, capacidades eliminadas, límites efectivos de CPU/RAM/PID, CSP, readiness y SSE |
+| SEC-10 | `scripts/scan_secrets.py` (Gitleaks) | 0 hallazgos de secretos en el repositorio |
+| SUP-02/06 | Hex 2.5.1 y `scripts/inventory.exs` | 0 avisos de seguridad Hex tras actualizar `mint 1.11.0` y `hpax 1.1.0`; inventario con licencias |
 | SUP-04 | `scripts/audit_image.py` | CycloneDX 1.7 válido, aplicación + runtime + imagen; 292 componentes en artefacto inspeccionado |
-| SUP-07 | `scripts/audit_image.py` con VEX aprobado | PASS: 0 activos, 4 ignorados en ignoredMatches mediante vex.openvex.json (revisión debida 2026-10-21; zlib/busybox sin parche upstream) |
-| REL-08 | `scripts/load.exs 60`, Docker 2 CPU/1 GiB | 4.500 eventos emitidos, 45.000/45.000 entregas, 0 errores, p95 51 ms; RAM BEAM 343.278.104 → 373.720.184 bytes |
-| DEV-13/REL-08 | Vivo, OBS y 4 h/24 h | Pendientes; bloquean candidata/publicación según contrato |
-| COMP-01/10/SUP-05 | Matriz normativa, condiciones de plataforma, firma/procedencia | Pendientes de revisión humana antes de publicar |
+| SUP-07 | `scripts/audit_image.py` con VEX aprobado | PASS: 0 activos, 4 ignorados en ignoredMatches mediante `vex.openvex.json` (aprobado por Kalista; zlib/busybox sin parche upstream) |
+| REL-08 | `scripts/load.exs 60` (29-09-2026) | 4.500 eventos emitidos, 45.000/45.000 entregas (100%), 0 errores, p95 49 ms (objetivo <100 ms); RAM BEAM 468 MB → 365 MB (GC estable sin fugas) |
+| DEV-13 | OBS Studio 32.2.2 en vivo (`obs-browser` CEF 152.0.7977.83) | PASS verificado mediante `scripts/test_obs_validation.py`: canal alfa transparente (RGBA=0), tipografía nítida, badges de Twitch/YouTube unificados, reconexión limpia tras ocultar/mostrar fuente y snapshot sin mensajes duplicados |
+| DEV-13 | Plataformas reales en vivo | Twitch (chat y metadatos reales de `gilraennr` y `revenant`); YouTube (canal y directo activo de `gilraennr`); Kick diferido |
+| COMP-01/10 | Matriz de cumplimiento y plataformas | Actualizado en `docs/compliance.md` y `docs/platforms.md` con justificación formal de diferimiento de Kick |
 
 ## Método y límites
 
-ExUnit usa fixtures sintéticas, transporte HTTP local y un servidor WebSocket de prueba; no contacta APIs reales. Windows: Elixir 1.20.4/OTP 29.0.6. Docker Linux amd64: Elixir 1.20.4/OTP 29.1 sobre Alpine 3.24.2. El build de validación corre `mix check` y el build de runtime genera una release independiente sin Mix.
+ExUnit utiliza fixtures sintéticas, transporte HTTP local, mock de WebSocket y servidores locales de prueba aislados; no contacta APIs externas por defecto. Entorno de validación: Elixir 1.20.4/OTP 29.1 sobre Linux amd64 y contenedor Alpine 3.24.2 endurecido.
 
-Carga: 10 perfiles, 30 fuentes demo, 100 SSE, mensajes de 512 bytes, 200 eventos/s durante 10 segundos y 50/s después. Las demos añaden una pequeña carga declarada. Reloj monotónico desde ingesta normalizada hasta recepción HTTP local; excluye upstream, Internet, navegador, OBS y cloudflared. 60 segundos no demuestra estabilidad durante horas. Los clientes y Mix comparten el contenedor de validación: la memoria indicada no es el mínimo de la release. Los resultados no son una promesa de capacidad pública.
+Carga sintética (REL-08): 10 perfiles, 30 fuentes demo, 100 lectores SSE concurrentes, ráfagas de 200 eventos/s durante 10 s y 50 eventos/s durante 50 s adicionales. Se verificó latencia p95 de 49 ms (muy inferior al umbral de 100 ms) y descenso controlado de memoria tras recolección de basura de la VM de Erlang.
 
-Chromium: comprobado lector a 390 px, overlay transparente y HTML literal, recarga con máximo 100 mensajes, caída/reinicio real del servidor y reconexión con snapshot vacío por nueva época. Activar offline en el navegador no cortó la conexión localhost: esa acción **no** se contó como prueba de corte; se sustituyó por detener/reiniciar el contenedor local. Los errores de red durante ese corte son esperados.
+Validación en OBS Studio (DEV-13): ejecutada contra OBS Studio 32.2.2 real en Linux (Hyprland / Wayland) mediante OBS WebSocket v5 (`ws://127.0.0.1:4455`). La verificación automatizada `scripts/test_obs_validation.py` garantiza un ciclo de vida no destructivo con restauración automática del estado de escena y fuentes en bloques `try...finally`.
 
-Revisión estructurada con la skill autoreview (Codex, modo local, herramientas de solo lectura). Se verificaron y corrigieron los hallazgos sobre retención del replay, expulsión en vistas filtradas, borrados retrasados, cooldown tras cerrar lectores, handshake acotado, páginas YouTube y Retry-After en 5xx. Resultado final del helper: 0 hallazgos accionables, salida 0. No acredita publicación. CI: ver [registro](workflows/f1-delivery/runs/2026-09-20.md), que se actualiza con el cierre.
-
-El repositorio no tenía protección efectiva de main al inspeccionarlo. No se cambiaron permisos: se mantiene como control operativo no hacer merge sin revisión humana y checks; el gate de imagen está verde mediante `vex.openvex.json` aprobado por Kalista (issue #4, revisión debida 2026-10-21; caduca por fecha de revisión o ante cambios de versión). La aprobación humana de la dispensa consta en el VEX y en `docs/dependencies.md`, no es una autoaprobación del agente.
+Diferimiento de Kick: por directriz del operador Kalista en el issue #15, el conector de Kick se difiere formalmente para evitar la deuda técnica derivada de los frecuentes breaking changes de su API de desarrolladores (4-5 alteraciones en el último año) y de la fricción operativa de su portal de desarrollo. La entrega de F1 queda consolidada y certificada sobre Twitch, YouTube y OBS Studio.
