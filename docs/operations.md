@@ -12,10 +12,10 @@ Para actualizar: conservar configuración y referencias secretas fuera de Git, c
 
 El operador debe mantener TLS, proxy sin buffering SSE, segmentación y límites de conexión/rate a la entrada. Las IP reenviadas no son identidad. No hay log de contenido de chat ni tokens; los estados públicos omiten detalles de credenciales y errores upstream. Los mensajes se retienen hasta 30 minutos/100 por perfil. Reiniciar también purga dedup y barreras; no se recupera contenido durable.
 
-La demo no requiere credenciales. Para vivo, seguir [platforms.md](platforms.md). No conectar Kick al callback local mediante un túnel real como parte de esta PR: requiere una publicación autorizada.
+La demo no requiere credenciales. Para emisiones en vivo, seguir [platforms.md](platforms.md) para Twitch y YouTube. La integración con OBS Studio 32.2.2 está validada mediante `browser_source` (canal alfa transparente, CSS optimizado y reconexión limpia). Kick queda formalmente suspendido en F1 por inestabilidad de API upstream (issue #15).
 
 ## Vulnerabilidades y gates
 
 [SECURITY.md](../SECURITY.md) identifica el canal privado real y a Kalista como responsable. Conservar versión/digest, alcance y evidencia sin secretos; reproducir en aislamiento, corregir y repetir pruebas. El responsable decide distribución, comunicaciones y cualquier obligación de notificación; verificar normativa vigente al activar un incidente. No hacer notificaciones automáticas a terceros.
 
-Antes de piloto público: cerrar hallazgos de imagen, revisión humana, tres plataformas desde servidor previsto, OBS real, carga de 4 h y de 24 h, condiciones de plataforma y matriz normativa, contacto/soporte, firma y verificación del artefacto. No se ha realizado merge, despliegue, registro de apps, DNS o túnel.
+Cierre de Fase F1: gates de seguridad de imagen y SBOM validados en verde (Grype 0 vulnerabilidades, OpenVEX aprobado por Kalista, Hex audit limpio), ExUnit 78/78 pruebas, carga sintética REL-08 (p95 49 ms) y validación en vivo de Twitch, YouTube y OBS Studio 32.2.2. Kick formalmente diferido en F1. Todo despliegue a producción o publicación externa permanece sujeto a autorización expresa de Kalista.

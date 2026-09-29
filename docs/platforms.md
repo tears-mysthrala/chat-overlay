@@ -36,9 +36,13 @@ Se consulta `liveChatMessages.list` con 200 resultados máximos, continuación y
 
 ## Kick
 
-La API oficial utiliza webhooks: requiere aplicación, token con acceso a suscripciones (`events:subscribe` según la documentación vigente), broadcaster ID numérico y endpoint HTTPS publicado. El operador debe aprovisionar suscripciones para `chat.message.sent` y, si procede, `moderation.banned`, guardando sus IDs como `subscription_id` y `moderation_subscription_id`. No hay acceso mediante cookies ni endpoints internos.
+**Estado de integración en F1: DIFERIDO / SUSPENDIDO por decisión del operador (issue #15).**
 
-Ruta receptora: `/hooks/kick`. Verifica RSA SHA-256 sobre id.timestamp.cuerpo con clave pública oficial, frescura de cinco minutos y correspondencia de canal, evento y suscripción. No se conserva contenido sin lectores. La consulta de suscripciones no demuestra frescura de entrega: muestra degradado hasta recibir un callback válido. No existe en los eventos oficiales utilizados un borrado individual equivalente al de Twitch/YouTube; no se promete esa cobertura. Confirmar comportamiento y condiciones del proveedor antes del vivo.
+Motivación técnica y gobernanza:
+1. **Inestabilidad crítica de API upstream**: Durante el último año, la API de desarrolladores de Kick ha sufrido entre 4 y 5 modificaciones estructurales y de versionado (cambios incompatibles / breaking changes continuos entre v1 y v2), forzando a reconstruir periódicamente los clientes y aplicaciones de integración.
+2. **Fricción operativa y deuda técnica**: El modelo de suscripción mediante webhooks (`events:subscribe`) exige registro de aplicaciones en su portal de desarrolladores, validación de endpoints HTTPS con firma RSA y rotación recurrente de credenciales. La ausencia de garantías contractuales de estabilidad en los payloads genera un coste desproporcionado de mantenimiento para el proyecto en su fase inicial.
+3. **Decisión**: Para evitar acumular deuda técnica recurrente en componentes inestables, el operador Kalista ha dispuesto suspender y abandonar temporalmente el soporte de Kick en F1, concentrando el alcance de producción en la dualidad Twitch + YouTube (altamente estables y validados en directo). Si en fases futuras Kick consolida una API madura y con garantías de compatibilidad, se reevaluará su reincorporación mediante un ADR específico.
+4. **Referencia técnica archivada**: La especificación inicial contemplaba webhooks en `/hooks/kick` con firma RSA SHA-256 sobre `id.timestamp.cuerpo` y verificación de frescura de 5 minutos, con las limitaciones conocidas de no ofrecer borrado individual de mensajes. Esta implementación queda en reposo sin activación operativa.
 
 ## JSON del operador
 

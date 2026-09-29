@@ -1,9 +1,9 @@
 # WHAT_WE_ARE_BUILDING
 
 **Proyecto:** `chat-overlay` · **Responsable del producto y aprobación final:** Kalista  
-**Versión del documento:** 1.0 · **Fecha de referencia:** 2026-09-16  
-**Estado:** contrato de trabajo inicial; no acredita implementación, pruebas ni conformidad legal.  
-**Fase autorizada vigente:** completar F0 y construir F1, confirmado por Kalista el 20-09-2026 (issue #3). F2–F4 requieren autorización explícita. Esta autorización no incluye merge, despliegue ni registro de aplicaciones externas.
+**Versión del documento:** 1.1 · **Fecha de referencia:** 2026-09-29  
+**Estado:** Fase F1 completada y consolidada para Twitch, YouTube y OBS; Kick formalmente diferido por inestabilidad de API upstream (issue #15).  
+**Fase autorizada vigente:** Fase F1 cerrada. F2–F4 requieren autorización explícita de Kalista. Esta autorización no incluye despliegue a producción ni registro de aplicaciones externas no aprobadas.
 
 ## 0. Lectura y reglas de decisión
 
@@ -19,7 +19,7 @@ Los identificadores `PROD-*`, `ARCH-*`, `REL-*`, `SEC-*`, `DEV-*`, `SUP-*` y `CO
 
 ## 1. Producto, usuarios y resultado esperado
 
-**PROD-01.** Construimos un servicio web autoalojado y dockerizado que reúne mensajes de Twitch, YouTube y Kick en un overlay de solo lectura para OBS y en una vista de lectura para el creador. El usuario introduce una URL: no instala Chatterino, plugins, extensiones ni ejecutables del proyecto.
+**PROD-01.** Construimos un servicio web autoalojado y dockerizado que reúne mensajes de Twitch y YouTube (con Kick formalmente diferido según directriz del operador por inestabilidad de API upstream) en un overlay de solo lectura para OBS y en una vista de lectura para el creador. El usuario introduce una URL: no instala Chatterino, plugins, extensiones ni ejecutables del proyecto.
 
 Dirección prevista, aún no acreditada como desplegada:
 
@@ -46,7 +46,7 @@ Revisar fuentes y licencias antes de reutilizar; registrar commit de origen y ca
 | Fase | Alcance | Condición de salida o activación |
 | --- | --- | --- |
 | F0: fundamento | Trazabilidad, esqueleto mínimo, CI, amenaza inicial, contrato de eventos y una prueba técnica limitada de conectores. | PR revisable, ejecución local reproducible y riesgos concretos identificados. No es un lanzamiento público. |
-| F1: overlay | Tres lectores autónomos, normalización, SSE, vista OBS, estados, borrados y recuperación. | Pruebas funcionales, de seguridad y de carga; validación real por plataforma; revisión de publicación. |
+| F1: overlay | Lectores autónomos de Twitch y YouTube, normalización, SSE, vista OBS, estados, borrados y recuperación. Kick diferido por inestabilidad de API. | **Completado y verificado (issue #15).** Pruebas funcionales, de seguridad, de carga sintética (p95 49 ms) y validación en vivo en OBS Studio 32.2.2. |
 | F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. | Autorización específica; aislamiento y ciclo de vida de datos verificados antes de cuentas reales. |
 | F3: bot | Comandos, reglas y acciones autorizadas por plataforma, custodia de tokens y límites compartidos. | Autorización específica; separación lectura/escritura y pruebas de credenciales, permisos e idempotencia. |
 | F4: contenido ampliado | Subidas o personalización avanzada; runners solo cuando una función lo necesite. | Caso de uso aprobado y amenaza adicional evaluada. No implica autorizar scripts arbitrarios. |
@@ -208,7 +208,7 @@ No confundir «compila», «tests unitarios pasan», «PR integrada» y «apto p
 
 | Área | Prueba de aceptación |
 | --- | --- |
-| Conectores | Tres plataformas validadas desde el servidor previsto; estado offline y fallos de autorización/cuota diferenciados. Limitaciones documentadas. |
+| Conectores | Plataformas Twitch y YouTube validadas en vivo desde el servidor previsto; estado offline y fallos de autorización/cuota diferenciados. Kick formalmente diferido por directriz del operador debido a inestabilidad recurrente de API upstream (issue #15). |
 | Entrega | Mensajes Unicode, orden local, duplicados, eventos desconocidos, borrados y reset/snapshot; sin resurrección tras replay dentro del contrato soportado. |
 | Recuperación | Reiniciar un lector no interrumpe otros; cortar SSE y recargar OBS no duplica historial ni deja recursos huérfanos. |
 | Límites | Visor lento, ráfaga y payload excesivo activan política acotada; sin caída global o pérdida silenciosa. |

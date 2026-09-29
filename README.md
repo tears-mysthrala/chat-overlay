@@ -1,8 +1,8 @@
 # Chat Overlay
 
-Overlay de solo lectura para Twitch, YouTube y Kick, con vista transparente para OBS y lector para el creador. Elixir/OTP, Bandit, Mint y frontend estático; sin cuentas, bots, base de datos ni servicios de IA.
+Overlay de solo lectura para Twitch y YouTube (Kick formalmente diferido por inestabilidad upstream), con vista transparente para OBS y lector para el creador. Elixir/OTP, Bandit, Mint y frontend estático; sin cuentas, bots, base de datos ni servicios de IA.
 
-**Estado:** implementación F1 en revisión, issue [#3](https://github.com/tears-mysthrala/chat-overlay/issues/3). Las plataformas no están validadas en vivo. No es una versión autorizada para publicar. Consulta [verificación](docs/verification.md) y [hallazgos](docs/dependencies.md).
+**Estado:** Fase F1 completada y validada en vivo en OBS Studio 32.2.2 y plataformas reales (Twitch y YouTube). Cierre de fase consolidado en issue [#15](https://github.com/tears-mysthrala/chat-overlay/issues/15). Consulta [verificación](docs/verification.md), [operación](docs/operations.md) y [plataformas](docs/platforms.md).
 
 ## Probar con mensajes sintéticos
 
