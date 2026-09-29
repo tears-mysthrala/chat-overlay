@@ -220,11 +220,13 @@ defmodule ChatOverlay.Web do
               """
               <!doctype html>
               <html lang="es">
-              <head><meta charset="utf-8"><title>401 No Autorizado</title></head>
-              <body style="font-family: sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; text-align: center;">
-                <h1>401 No Autorizado</h1>
-                <p>Esta fuente de OBS requiere un <strong>Capability Token</strong> válido.</p>
-                <p>Copia el enlace completo actualizado o regenera el enlace desde el Panel de Creador.</p>
+              <head><meta charset="utf-8"><title>401 No Autorizado</title><link rel="stylesheet" href="/assets/app.css"></head>
+              <body class="unauthorized-body">
+                <div class="unauthorized-card">
+                  <h1>401 No Autorizado</h1>
+                  <p>Esta fuente de OBS requiere un <strong>Capability Token</strong> válido.</p>
+                  <p>Copia el enlace completo actualizado o regenera el enlace desde el Panel de Creador.</p>
+                </div>
               </body>
               </html>
               """

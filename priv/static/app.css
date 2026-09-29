@@ -62,3 +62,43 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 .btn-secondary { background:var(--panel); color:var(--ink); border-color:var(--line) }
 .btn-secondary:hover { border-color:var(--accent); color:var(--accent) }
 
+.unauthorized-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f172a;
+  color: #f8fafc;
+  padding: 2rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+.unauthorized-card {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 2.5rem 2rem;
+  max-width: 480px;
+  text-align: center;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.unauthorized-card h1 {
+  color: #f43f5e;
+  font-size: 1.5rem;
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.unauthorized-card p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin: 0.5rem 0;
+}
+
+.unauthorized-card strong {
+  color: #f8fafc;
+}
