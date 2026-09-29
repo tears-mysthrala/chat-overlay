@@ -262,10 +262,20 @@ defmodule ChatOverlay.Profiles do
         existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
         updated_sources = existing_non_yt ++ [yt_source]
 
+        updated_overlay_platforms =
+          case existing["overlay_platforms"] do
+            list when is_list(list) ->
+              Enum.uniq(list ++ ["youtube"])
+
+            other ->
+              other
+          end
+
         updated_profile =
           existing
           |> Map.put("sources", updated_sources)
           |> Map.put("linked_youtube", yt_target)
+          |> Map.put("overlay_platforms", updated_overlay_platforms)
 
         do_save_profile(updated_profile, Keyword.put(opts, :replace, true))
     end
@@ -280,10 +290,22 @@ defmodule ChatOverlay.Profiles do
 
       existing ->
         existing_non_yt = Enum.reject(existing["sources"] || [], &(&1["platform"] == "youtube"))
+        remaining_platforms = Enum.map(existing_non_yt, & &1["platform"])
+
+        updated_overlay_platforms =
+          case existing["overlay_platforms"] do
+            list when is_list(list) ->
+              filtered = Enum.filter(list, &(&1 in remaining_platforms))
+              if filtered == [], do: remaining_platforms, else: filtered
+
+            other ->
+              other
+          end
 
         updated_profile =
           existing
           |> Map.put("sources", existing_non_yt)
+          |> Map.put("overlay_platforms", updated_overlay_platforms)
 
         updated_profile =
           if yt_target,
