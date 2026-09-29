@@ -94,7 +94,7 @@ defmodule ChatOverlay.Resolver do
       _ ->
         desc =
           case opts[:description] do
-            d when is_binary(d) and byte_size(d) > 0 ->
+            d when is_binary(d) ->
               d
 
             _ ->
