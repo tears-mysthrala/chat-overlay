@@ -92,7 +92,19 @@ defmodule ChatOverlay.Resolver do
         {:ok, yt_url}
 
       _ ->
-        discover_from_description(opts[:description] || "")
+        desc =
+          case opts[:description] do
+            d when is_binary(d) and byte_size(d) > 0 ->
+              d
+
+            _ ->
+              case resolve_twitch(clean_login, opts) do
+                {:ok, %{"description" => d}} when is_binary(d) -> d
+                _ -> ""
+              end
+          end
+
+        discover_from_description(desc)
     end
   end
 

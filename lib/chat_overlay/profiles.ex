@@ -294,7 +294,29 @@ defmodule ChatOverlay.Profiles do
         true -> fallback_handle
       end
 
-    case Resolver.discover_twitch_youtube(target_name) do
+    opts =
+      if twitch do
+        opts = []
+
+        opts =
+          if twitch["client_id"],
+            do: Keyword.put(opts, :client_id, twitch["client_id"]),
+            else: opts
+
+        opts =
+          if twitch["user_id"], do: Keyword.put(opts, :user_id, twitch["user_id"]), else: opts
+
+        opts =
+          if twitch["credential_env"],
+            do: Keyword.put(opts, :token, System.get_env(twitch["credential_env"])),
+            else: opts
+
+        opts
+      else
+        []
+      end
+
+    case Resolver.discover_twitch_youtube(target_name, opts) do
       {:ok, url} -> url
       _ -> nil
     end
