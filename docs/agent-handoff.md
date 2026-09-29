@@ -31,6 +31,9 @@ Evidencias operativas y técnicas en esta entrega:
   - 77 tests PASS (5 nuevos tests cubriendo detección de enlaces /c/, /user/, watch?v=, preservación de `linked_youtube`, continuidad del Store, endpoint de sincronización y mitigación CSRF/Origin).
   - 0 advertencias de compilación (`mix compile --warnings-as-errors`).
   - Formato verificado con `mix format --check-formatted`.
+- **Seguridad de dependencias (SUP-07 / DEV-12)**:
+  - Actualización de `mint` a `1.11.0` y `hpax` a `1.1.0` para subsanar los avisos de seguridad de Hex (`EEF-CVE-2026-91043`, `EEF-CVE-2026-92103`, `EEF-CVE-2026-94194`).
+  - `mix hex.audit` verificado 100% limpio (0 avisos de seguridad).
 
 
 - **Validación en OBS Studio 32.2.2 real (`obs-browser` CEF 152.0.7977.83)**:

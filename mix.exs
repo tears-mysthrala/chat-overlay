@@ -8,7 +8,7 @@ defmodule ChatOverlay.MixProject do
       elixir: "~> 1.20.4",
       test_ignore_filters: [&String.starts_with?(&1, "test/support/")],
       start_permanent: Mix.env() == :prod,
-      deps: [{:bandit, "1.12.5"}, {:mint, "1.10.1"}, {:mint_web_socket, "1.0.6"}],
+      deps: [{:bandit, "1.12.5"}, {:mint, "1.11.0"}, {:mint_web_socket, "1.0.6"}],
       aliases: [
         check: [
           "format --check-formatted",
