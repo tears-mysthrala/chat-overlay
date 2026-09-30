@@ -59,7 +59,7 @@ defmodule ChatOverlay.OAuth do
       end
 
     cond do
-      is_prod? and (is_nil(key) or key == "" or key == @default_dev_key) ->
+      is_prod? and (not is_binary(key) or key == "" or key == @default_dev_key) ->
         {:error, :missing_production_encryption_key}
 
       is_prod? and byte_size(key) < 32 ->

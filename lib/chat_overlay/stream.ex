@@ -26,15 +26,30 @@ defmodule ChatOverlay.Stream do
                 Registry.register(ChatOverlay.SSERegistry, handle, token)
               end
 
-              conn =
-                conn
-                |> Plug.Conn.merge_resp_headers(HTTP.headers("text/event-stream; charset=utf-8"))
-                |> Plug.Conn.put_resp_header("x-accel-buffering", "no")
-                |> Plug.Conn.send_chunked(200)
+              if is_overlay and
+                   match?(
+                     {:error, :unauthorized},
+                     ChatOverlay.Profiles.verify_capability_token(handle, token)
+                   ) do
+                ChatOverlay.Web.reply(
+                  conn,
+                  401,
+                  "text/plain",
+                  "Unauthorized: Capability Token Invalid"
+                )
+              else
+                conn =
+                  conn
+                  |> Plug.Conn.merge_resp_headers(
+                    HTTP.headers("text/event-stream; charset=utf-8")
+                  )
+                  |> Plug.Conn.put_resp_header("x-accel-buffering", "no")
+                  |> Plug.Conn.send_chunked(200)
 
-              {:ok, conn} = Plug.Conn.chunk(conn, "retry: 2000\n\n")
-              cursor = List.first(Plug.Conn.get_req_header(conn, "last-event-id"))
-              poll(conn, handle, cursor, is_overlay, token, System.monotonic_time(:millisecond))
+                {:ok, conn} = Plug.Conn.chunk(conn, "retry: 2000\n\n")
+                cursor = List.first(Plug.Conn.get_req_header(conn, "last-event-id"))
+                poll(conn, handle, cursor, is_overlay, token, System.monotonic_time(:millisecond))
+              end
             after
               Admission.release()
             end

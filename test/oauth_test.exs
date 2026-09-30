@@ -212,6 +212,12 @@ defmodule ChatOverlay.OAuthTest do
 
       assert {:error, :missing_production_encryption_key} =
                OAuth.validate_encryption_key(env: :prod, key: "")
+
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: 12345)
+
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: :not_a_binary)
     end
 
     test "rejects default development key in production" do

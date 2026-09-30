@@ -245,17 +245,23 @@ defmodule ChatOverlay.WebF2Test do
     ChatOverlay.TestClient.close(conn)
   end
 
-  defp await_error(conn, ref) do
-    case ChatOverlay.TestClient.await(conn, ref, 2000) do
-      {:data, :nofin, data} ->
-        if data =~ "event: error" do
-          data
+  defp await_error(conn, ref, buffer \\ "") do
+    case String.split(buffer, "\n\n", parts: 2) do
+      [frame, rest] ->
+        if frame =~ "event: error" do
+          frame <> "\n\n"
         else
-          await_error(conn, ref)
+          await_error(conn, ref, rest)
         end
 
-      other ->
-        other
+      [_incomplete] ->
+        case ChatOverlay.TestClient.await(conn, ref, 2000) do
+          {:data, :nofin, data} ->
+            await_error(conn, ref, buffer <> data)
+
+          other ->
+            other
+        end
     end
   end
 
