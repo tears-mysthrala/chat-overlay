@@ -73,7 +73,7 @@
    - Pruebas superadas en vivo en OBS Studio 32.2.2 (CEF 152.0.7977.83 / Wayland):
      1. **Rechazo 401 Unauthorized sin token**: Verificado en OBS Browser Source. El overlay devuelve 401 con pantalla de aviso amigable y CSP intacta (`obs_f2_401_unauthorized.png`).
      2. **Acceso autorizado 200 OK con Capability Token**: OBS conecta al stream SSE y renderiza el chat en directo de Twitch con badges, timestamps y sanitización XSS (`obs_f2_authorized_live.png`).
-     3. **Revocación inmediata en caliente**: Al regenerar el token mediante el endpoint API `/api/profiles/:handle/token/regenerate`, el token anterior queda invalidado de inmediato en el backend y la fuente en OBS pasa a 401 (`obs_f2_revoked_401.png`).
+     3. **Rechazo de nueva conexión tras revocación**: Al regenerar el capability token mediante `/api/profiles/:handle/token/regenerate`, el token anterior queda invalidado en el backend; cualquier recarga o nueva conexión de OBS Browser Source es rechazada con 401 (`obs_f2_revoked_401.png`). Nota: la desconexión activa forzada de sockets/conexiones SSE ya abiertas al momento de revocar se abordará como mejora en una unidad separada.
      4. **Restauración con nuevo token**: Al actualizar la fuente en OBS con el nuevo token generado, el overlay reanuda la conexión SSE sin reiniciar el proceso ni perder el estado del canal (`obs_f2_restored_live.png`).
      5. **Lienzo completo y transparencia**: Verificado sobre escena con fondo sólido (`TestColor`); la transparencia del overlay es total y el texto se dibuja sin halos ni recortes (`obs_f2_scene_full.png`).
      6. **Panel de Creador (Chromium headless)**: Captura completa del panel con gestión de enlace OBS, advertencia de regeneración y pestañas de alertas multimedia R2 (`dashboard_f2_full.png`).
@@ -110,11 +110,23 @@
     - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/25
     - Rama: `feat/25-token-lifecycle-refresh`
     - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/25-token-lifecycle-refresh`
-    - Implementación:
-      - `ChatOverlay.OAuth.refresh_tokens/3`: soporte para refresco de tokens OAuth para Twitch y Google/YouTube con rotación de refresh token y mapeo de errores tipados (`invalid_grant`, unconfigured credentials, etc.).
-      - `ChatOverlay.Profiles.update_tokens/3` y `merge_refresh_token`: preservación automática del `refresh_token` existente cuando el proveedor omite devolverlo (comportamiento estándar de Google OAuth), cifrado AEAD AES-256-GCM inmediato y persistencia forzada en disco (`require_persistence: true`).
-      - `ChatOverlay.Profiles.mark_account_reauth_required/3`: marcado tipado del estado del perfil (`status: "reauth_required"`, `last_error: "invalid_grant"`) ante revocación o expiración no recuperable sin crashear.
-      - `ChatOverlay.Tokens`: GenServer coordinador concurrente (SEC-15). Protección anti-stampede que agrupa múltiples llamadas concurrentes en una única petición remota, caché en memoria de tokens de acceso válidos, y renovación proactiva si faltan menos de 300 segundos para la expiración. Monitorización de tareas de fondo con recuperación limpia en caso de fallo del worker.
+    - Alcance y Arquitectura:
+      - Este PR introduce la **infraestructura de renovación bajo demanda y coordinación concurrente** (`ChatOverlay.Tokens.get_access_token/3`). Los conectores de streaming actuales (Twitch IRC / YouTube Polling) continúan leyendo credenciales estáticas de entorno/configuración en esta fase; su migración al coordinador `ChatOverlay.Tokens` se realizará en la Fase F3.
+    - Implementación y Robustez (feedback incorporado):
+      - `ChatOverlay.OAuth.refresh_tokens/3`: soporte para refresco de tokens OAuth para Twitch y Google/YouTube. Parser unificado estricto para transporte real y mocks que exige `access_token` binario no vacío y duración positiva (`expires_in > 0`), rechazando payloads `{}` o malformados con `{:error, :invalid_token_payload}`. Mapeo específico de respuestas de error de Twitch `400 / Bad Request / Invalid refresh token` a `{:error, :invalid_grant}`.
+      - `ChatOverlay.Profiles`:
+        - Versionado de vinculación anti-carreras (`account_version`): si un refresco de la cuenta A finaliza tras haber vinculado la cuenta B, se detecta el desajuste de versión y se aborta con `{:error, :stale_binding}`, evitando que las credenciales de A sobreescriban a B.
+        - Persistencia atómica previa a mutación de memoria: `persist_profiles` se ejecuta antes de modificar `Application.put_env`, impidiendo que fallos de disco dejen memoria y almacenamiento desincronizados.
+        - Preservación automática de `refresh_token` existente cuando el proveedor omite devolverlo (Google OAuth) y soporte de rotación cifrado con AEAD AES-256-GCM (`v1:...`).
+        - Recuperación fail-closed ante fallo de persistencia durante rotación: si el proveedor rota el token pero el disco no puede escribirse, la cuenta se marca inmediatamente como `reauth_required` (`persistence_failure_during_rotation`) para alertar al usuario y evitar bucles infinitos con credenciales no persistidas.
+        - Invalidación de caché en todos los eventos del ciclo de vida: desvinculación (`unlink_account`), vinculación (`link_account`), eliminación de perfil (`delete`) y marcado de reautenticación (`mark_account_reauth_required`).
+      - `ChatOverlay.Tokens`: GenServer coordinador concurrente (SEC-15). Protección anti-stampede (agrupación de múltiples llamadas simultáneas en 1 única petición remota), caché en memoria con invalidación selectiva, renovación proactiva ante expiración próxima (< 300s) y propiedad/cancelación de workers de fondo al terminar el coordinador.
       - Supervisión en `ChatOverlay.Application`: integrado en la estrategia `:rest_for_one` tras `ChatOverlay.Profiles`.
       - Interfaz de usuario en Panel de Creador (`priv/static/app.js`, `priv/static/app.css`): badge de estado amarillo «Reautenticación requerida», aviso explícito y botón «Reconectar» para Twitch y YouTube.
-      - 142/142 tests PASS en ExUnit (16 tests nuevos en `test/oauth_refresh_test.exs` y `test/tokens_test.exs`, cubriendo protección de estampida con 10 tareas concurrentes, retención de refresh token de Google, rotación y revocación).
+      - 150/150 tests PASS en ExUnit (incluyendo regresiones exhaustivas de carreras entre vinculaciones concurrentes, fallo de disco, respuestas malformadas, revocación e invalidación de caché).
+
+12. **Pendientes de Fase F2 para Unidades Separadas (Backlog)**:
+    - Autenticación y autorización del Panel de Creador.
+    - Clave de cifrado OAuth obligatoria (fallo en arranque si no está configurada).
+    - Desconexión y cierre forzado de visores SSE preexistentes ante revocación de capability token.
+    - Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2.

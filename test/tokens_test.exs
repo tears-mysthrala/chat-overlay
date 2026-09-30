@@ -205,7 +205,7 @@ defmodule ChatOverlay.TokensTest do
     assert stored_tokens["refresh_token"] == "rt_gen_2_rotated"
   end
 
-  test "marks account reauth_required on invalid_grant without crashing" do
+  test "marks account reauth_required on invalid_grant or Twitch 400 'Invalid refresh token' without crashing" do
     tokens = %{
       "access_token" => "expired_tok",
       "refresh_token" => "revoked_rt",
@@ -215,8 +215,9 @@ defmodule ChatOverlay.TokensTest do
     account_data = %{username: "RevokedUser", user_id: "rev_001"}
     {:ok, _} = Profiles.link_account("streamer1", "twitch", account_data, tokens)
 
+    # Twitch returns 400 Bad Request with message "Invalid refresh token"
     mock_http = fn :post, _url, _headers, _params ->
-      {:ok, 400, %{"error" => "invalid_grant"}}
+      {:ok, 400, %{"status" => 400, "message" => "Invalid refresh token"}}
     end
 
     assert {:error, :reauth_required} =
@@ -231,30 +232,241 @@ defmodule ChatOverlay.TokensTest do
     assert {:error, :reauth_required} = Tokens.get_access_token("streamer1", "twitch")
   end
 
-  test "invalidate/2 forces token refresh on next call" do
+  test "unlink_account/2 invalidates cache immediately and returns :not_linked" do
     tokens = %{
-      "access_token" => "initial_token",
-      "refresh_token" => "my_rt",
+      "access_token" => "tok_to_unlink",
+      "refresh_token" => "rt_to_unlink",
       "expires_in" => 7200
     }
 
-    account_data = %{username: "User", user_id: "1"}
+    account_data = %{username: "UserToUnlink", user_id: "u_1"}
     {:ok, _} = Profiles.link_account("streamer1", "twitch", account_data, tokens)
 
-    assert {:ok, "initial_token"} = Tokens.get_access_token("streamer1", "twitch")
+    # Prime cache
+    assert {:ok, "tok_to_unlink"} = Tokens.get_access_token("streamer1", "twitch")
 
-    # Invalidate cache
-    :ok = Tokens.invalidate("streamer1", "twitch")
+    # Unlink account
+    assert {:ok, _} = Profiles.unlink_account("streamer1", "twitch")
 
-    # Force refresh or expired will hit upstream
-    mock_http = fn :post, _url, _headers, _params ->
-      {:ok, 200, %{"access_token" => "refreshed_after_invalidate", "expires_in" => 3600}}
+    # Tokens coordinator must immediately fail with :not_linked without serving stale cached token
+    assert {:error, :not_linked} = Tokens.get_access_token("streamer1", "twitch")
+  end
+
+  test "link_account/4 invalidates cache so new credentials take effect immediately" do
+    tokens_a = %{
+      "access_token" => "token_identity_A",
+      "refresh_token" => "rt_A",
+      "expires_in" => 7200
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "AccountA", user_id: "A"},
+        tokens_a
+      )
+
+    assert {:ok, "token_identity_A"} = Tokens.get_access_token("streamer1", "twitch")
+
+    # Re-link with account B
+    tokens_b = %{
+      "access_token" => "token_identity_B",
+      "refresh_token" => "rt_B",
+      "expires_in" => 7200
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "AccountB", user_id: "B"},
+        tokens_b
+      )
+
+    # Must immediately return token_identity_B, NOT the old token_identity_A
+    assert {:ok, "token_identity_B"} = Tokens.get_access_token("streamer1", "twitch")
+  end
+
+  test "delete_profile/1 invalidates cache" do
+    tokens = %{
+      "access_token" => "token_before_delete",
+      "refresh_token" => "rt_del",
+      "expires_in" => 7200
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "StreamerOne", user_id: "1"},
+        tokens
+      )
+
+    assert {:ok, "token_before_delete"} = Tokens.get_access_token("streamer1", "twitch")
+
+    # Delete profile
+    assert :ok = Profiles.delete("streamer1")
+
+    # Coordinator must return :not_found
+    assert {:error, :not_found} = Tokens.get_access_token("streamer1", "twitch")
+  end
+
+  test "mark_account_reauth_required/3 invalidates cache immediately" do
+    tokens = %{
+      "access_token" => "token_before_revoke",
+      "refresh_token" => "rt_rev",
+      "expires_in" => 7200
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "StreamerOne", user_id: "1"},
+        tokens
+      )
+
+    assert {:ok, "token_before_revoke"} = Tokens.get_access_token("streamer1", "twitch")
+
+    # Explicitly mark reauth_required
+    assert {:ok, _} = Profiles.mark_account_reauth_required("streamer1", "twitch", :manual_revoke)
+
+    assert {:error, :reauth_required} = Tokens.get_access_token("streamer1", "twitch")
+  end
+
+  test "race condition prevention: in-flight refresh for account A is rejected if account B is linked in between" do
+    # 1. Link account A (version 1)
+    tokens_a = %{
+      "access_token" => "expiring_tok_A",
+      "refresh_token" => "rt_A",
+      "expires_in" => 10
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "Identity_A", user_id: "id_A"},
+        tokens_a
+      )
+
+    step_sync = :counters.new(1, [:atomics])
+
+    # Refresh for A will hang until account B is linked
+    mock_http = fn :post, _url, _headers, params ->
+      if params.refresh_token == "rt_A" do
+        :counters.add(step_sync, 1, 1)
+        # Wait until test links account B
+        Process.sleep(100)
+
+        {:ok, 200,
+         %{
+           "access_token" => "refreshed_tok_for_A",
+           "refresh_token" => "rt_A_rotated",
+           "expires_in" => 3600
+         }}
+      else
+        {:ok, 200,
+         %{
+           "access_token" => "refreshed_tok_for_B",
+           "refresh_token" => "rt_B",
+           "expires_in" => 3600
+         }}
+      end
     end
 
-    assert {:ok, "refreshed_after_invalidate"} =
-             Tokens.get_access_token("streamer1", "twitch",
-               force_refresh: true,
-               http_client: mock_http
-             )
+    # Launch background refresh for Account A
+    task_a =
+      Task.async(fn ->
+        Tokens.get_access_token("streamer1", "twitch",
+          http_client: mock_http,
+          margin_seconds: 300
+        )
+      end)
+
+    # Wait for mock to be reached
+    while_counter = fn ->
+      if :counters.get(step_sync, 1) == 0 do
+        Process.sleep(10)
+      end
+    end
+
+    while_counter.()
+
+    # 2. While refresh for A is in-flight, link Account B (version 2)
+    tokens_b = %{
+      "access_token" => "fresh_tok_B",
+      "refresh_token" => "rt_B",
+      "expires_in" => 7200
+    }
+
+    {:ok, _} =
+      Profiles.link_account(
+        "streamer1",
+        "twitch",
+        %{username: "Identity_B", user_id: "id_B"},
+        tokens_b
+      )
+
+    # 3. Wait for Task A to complete
+    result_a = Task.await(task_a, 5000)
+
+    # Task A was either aborted due to invalidation or rejected with stale_binding
+    assert match?({:error, err} when err in [:binding_invalidated, :stale_binding], result_a)
+
+    # 4. Critical verification: Profile must contain Account B's credentials!
+    # Account A's refreshed token must NEVER overwrite Account B!
+    assert {:ok, stored_b} = Profiles.get_linked_account_tokens("streamer1", "twitch")
+    assert stored_b["access_token"] == "fresh_tok_B"
+    assert stored_b["refresh_token"] == "rt_B"
+
+    summary = Profiles.get("streamer1")
+    assert summary["linked_accounts"]["twitch"]["username"] == "Identity_B"
+    assert summary["linked_accounts"]["twitch"]["user_id"] == "id_B"
+  end
+
+  test "fail-closed on persistence failure during token rotation" do
+    orig_path = Application.get_env(:chat_overlay, :profiles_path)
+
+    tokens = %{
+      "access_token" => "expiring_tok",
+      "refresh_token" => "rt_initial",
+      "expires_in" => 10
+    }
+
+    {:ok, _} =
+      Profiles.link_account("streamer1", "twitch", %{username: "U1", user_id: "1"}, tokens)
+
+    # Make profiles path unwritable to simulate disk failure
+    Application.put_env(:chat_overlay, :profiles_path, "/nonexistent_disk_path/profiles.json")
+
+    mock_http = fn :post, _url, _headers, _params ->
+      {:ok, 200,
+       %{
+         "access_token" => "rotated_upstream_access",
+         "refresh_token" => "rotated_upstream_refresh",
+         "expires_in" => 3600
+       }}
+    end
+
+    try do
+      # Refresh attempt must fail closed with save_failed
+      assert {:error, {:save_failed, {:directory_not_found, _}}} =
+               Tokens.get_access_token("streamer1", "twitch", http_client: mock_http)
+
+      # Memory state must NOT be corrupted with the unpersisted access token
+      # and profile status must be marked as reauth_required
+      summary = Profiles.get("streamer1")
+      assert summary["linked_accounts"]["twitch"]["status"] == "reauth_required"
+
+      assert summary["linked_accounts"]["twitch"]["last_error"] ==
+               "persistence_failure_during_rotation"
+
+      # Subsequent calls fail closed with :reauth_required
+      assert {:error, :reauth_required} = Tokens.get_access_token("streamer1", "twitch")
+    after
+      Application.put_env(:chat_overlay, :profiles_path, orig_path)
+    end
   end
 end

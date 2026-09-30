@@ -120,7 +120,8 @@ defmodule ChatOverlay.Config do
             (is_nil(data["status"]) or is_binary(data["status"])) and
             (is_nil(data["last_error"]) or is_binary(data["last_error"])) and
             (is_nil(data["expires_at"]) or is_integer(data["expires_at"])) and
-            (is_nil(data["linked_at"]) or is_integer(data["linked_at"]))
+            (is_nil(data["linked_at"]) or is_integer(data["linked_at"])) and
+            (is_nil(data["account_version"]) or is_integer(data["account_version"]))
         end)
 
       _ ->

@@ -72,6 +72,15 @@ defmodule ChatOverlay.OAuthRefreshTest do
     assert is_nil(tokens["refresh_token"])
   end
 
+  test "refresh_tokens/3 handles Twitch 400 Bad Request 'Invalid refresh token' as :invalid_grant" do
+    mock_http = fn :post, _url, _headers, _params ->
+      {:ok, 400, %{"status" => 400, "message" => "Invalid refresh token"}}
+    end
+
+    assert {:error, :invalid_grant} =
+             OAuth.refresh_tokens("twitch", "revoked_twitch_tok", http_client: mock_http)
+  end
+
   test "refresh_tokens/3 returns {:error, :invalid_grant} on 400 invalid_grant" do
     mock_http = fn :post, _url, _headers, _params ->
       {:ok, 400,
@@ -89,6 +98,42 @@ defmodule ChatOverlay.OAuthRefreshTest do
 
     assert {:error, :invalid_grant} =
              OAuth.refresh_tokens("twitch", "bad_refresh_tok", http_client: mock_http)
+  end
+
+  test "refresh_tokens/3 rejects HTTP 200 with malformed empty or invalid payload" do
+    # Empty payload
+    empty_mock = fn :post, _, _, _ -> {:ok, 200, %{}} end
+
+    assert {:error, :invalid_token_payload} =
+             OAuth.refresh_tokens("twitch", "tok", http_client: empty_mock)
+
+    # Empty access_token
+    blank_tok_mock = fn :post, _, _, _ ->
+      {:ok, 200, %{"access_token" => "", "expires_in" => 3600}}
+    end
+
+    assert {:error, :invalid_token_payload} =
+             OAuth.refresh_tokens("twitch", "tok", http_client: blank_tok_mock)
+
+    # Invalid expires_in (<= 0 or not an int)
+    invalid_exp_mock = fn :post, _, _, _ ->
+      {:ok, 200, %{"access_token" => "valid_tok", "expires_in" => 0}}
+    end
+
+    assert {:error, :invalid_token_payload} =
+             OAuth.refresh_tokens("twitch", "tok", http_client: invalid_exp_mock)
+  end
+
+  test "refresh_tokens/3 parses string expires_in correctly and accepts raw JSON bodies" do
+    json_mock = fn :post, _, _, _ ->
+      {:ok, 200, ~s({"access_token": "tok_from_json", "expires_in": "1800"})}
+    end
+
+    assert {:ok, tokens} =
+             OAuth.refresh_tokens("twitch", "tok", http_client: json_mock)
+
+    assert tokens["access_token"] == "tok_from_json"
+    assert tokens["expires_in"] == 1800
   end
 
   test "refresh_tokens/3 surfaces upstream auth errors safely" do
