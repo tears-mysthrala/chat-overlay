@@ -24,16 +24,24 @@ OBS_WS_URI = os.environ.get("OBS_WS_URI", "ws://127.0.0.1:4455")
 OBS_PASSWORD = os.environ.get("OBS_PASSWORD", "")
 SERVER_URL = os.environ.get("SERVER_URL", "http://127.0.0.1:4100")
 TEST_HANDLE = os.environ.get("TEST_HANDLE", "gilraennr")
-ARTIFACT_DIR = os.environ.get("ARTIFACT_DIR", "/home/tears/.gemini/antigravity-cli/brain/9aa6a0b0-698e-4087-a599-de4238448f2a")
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DEFAULT_ARTIFACT_DIR = os.path.join(REPO_ROOT, "output", "obs_f2")
+ARTIFACT_DIR = os.environ.get("ARTIFACT_DIR", DEFAULT_ARTIFACT_DIR)
 
-async def send_req(ws, req_type, req_data=None):
+async def send_req(ws, req_type, req_data=None, timeout=15.0):
     req_id = f"req-{time.time_ns()}"
     msg = {"op": 6, "d": {"requestType": req_type, "requestId": req_id}}
     if req_data:
         msg["d"]["requestData"] = req_data
     await ws.send(json.dumps(msg))
+    start_time = time.monotonic()
     while True:
-        raw = await ws.recv()
+        elapsed = time.monotonic() - start_time
+        remaining = max(0.1, timeout - elapsed)
+        try:
+            raw = await asyncio.wait_for(ws.recv(), timeout=remaining)
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Timeout esperando respuesta de OBS para {req_type} (id: {req_id}) tras {timeout}s")
         data = json.loads(raw)
         if data.get("op") == 7 and data.get("d", {}).get("requestId") == req_id:
             status = data["d"].get("requestStatus", {})
@@ -41,13 +49,13 @@ async def send_req(ws, req_type, req_data=None):
                 raise RuntimeError(f"OBS Request {req_type} failed: {status.get('comment', 'Unknown error')} (code {status.get('code')})")
             return data["d"].get("responseData", {})
 
-def regenerate_token(handle):
+def regenerate_token(handle, timeout=10.0):
     url = f"{SERVER_URL}/api/profiles/{handle}/token/regenerate"
     req = urllib.request.Request(url, data=b"{}", headers={
         "Content-Type": "application/json",
         "Origin": SERVER_URL
     }, method="POST")
-    with urllib.request.urlopen(req) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         body = json.loads(resp.read().decode())
         if not body.get("ok"):
             raise RuntimeError(f"Error regenerando token: {body}")
@@ -109,11 +117,26 @@ async def main():
                 }
             })
 
+        os.makedirs(ARTIFACT_DIR, exist_ok=True)
+
+        # 0. Inicializar token en el perfil para garantizar estado de protección activo
+        print(f"[*] Inicializando Capability Token para perfil '{TEST_HANDLE}'...")
+        token1 = regenerate_token(TEST_HANDLE)
+        print(f"[+] Token 1 inicializado: {token1[:12]}...")
+
         # ==============================================================
         # CASO 1: Acceso SIN Capability Token -> 401 Unauthorized
         # ==============================================================
         print("\n--- CASO 1: Acceso SIN Capability Token (Rechazo 401) ---")
         unauth_url = f"{SERVER_URL}/overlay/{TEST_HANDLE}"
+        # Verificación HTTP directa
+        try:
+            urllib.request.urlopen(unauth_url, timeout=5)
+            raise AssertionError("Se esperaba HTTP 401 pero la petición tuvo éxito sin token.")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Código inesperado sin token: {e.code}"
+            print(f"[+] Verificación HTTP OK: {unauth_url} devolvió 401 Unauthorized")
+
         print(f"[*] Configurando OBS con URL sin token: {unauth_url}")
         await send_req(ws, "SetInputSettings", {
             "inputName": input_name,
@@ -133,10 +156,12 @@ async def main():
         # CASO 2: Acceso CON Capability Token -> 200 OK y Chat en Vivo
         # ==============================================================
         print("\n--- CASO 2: Acceso CON Capability Token (200 OK y Chat en Vivo) ---")
-        token1 = regenerate_token(TEST_HANDLE)
         auth_url1 = f"{SERVER_URL}/overlay/{TEST_HANDLE}?token={token1}"
-        print(f"[*] Token 1 obtenido: {token1[:12]}...")
-        print(f"[*] Configurando OBS con URL autorizada: {auth_url1}")
+        with urllib.request.urlopen(auth_url1, timeout=5) as r:
+            assert r.status == 200, f"Código inesperado con token: {r.status}"
+            print(f"[+] Verificación HTTP OK: {SERVER_URL}/overlay/{TEST_HANDLE}?token={token1[:12]}... devolvió 200 OK")
+
+        print(f"[*] Configurando OBS con URL autorizada: {SERVER_URL}/overlay/{TEST_HANDLE}?token={token1[:12]}...")
         await send_req(ws, "SetInputSettings", {
             "inputName": input_name,
             "inputSettings": {"url": auth_url1},
@@ -157,6 +182,15 @@ async def main():
         print("\n--- CASO 3: Revocación de Token (Regenerar en Servidor y Refrescar OBS) ---")
         token2 = regenerate_token(TEST_HANDLE)
         print(f"[*] Token 2 regenerado: {token2[:12]}... (Token 1 ha sido invalidado)")
+
+        # Comprobar que Token 1 ahora devuelve 401 vía HTTP
+        try:
+            urllib.request.urlopen(auth_url1, timeout=5)
+            raise AssertionError("Se esperaba HTTP 401 tras revocación de Token 1.")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Código inesperado tras revocación de token: {e.code}"
+            print(f"[+] Verificación HTTP OK: URL con token revocado devolvió 401 Unauthorized")
+
         # Refrescamos la fuente en OBS que aún tiene Token 1
         print("[*] Refrescando la fuente en OBS manteniendo la URL antigua...")
         await send_req(ws, "PressInputPropertiesButton", {
@@ -173,7 +207,11 @@ async def main():
         # ==============================================================
         print("\n--- CASO 4: Restauración de OBS con el Nuevo Token 2 ---")
         auth_url2 = f"{SERVER_URL}/overlay/{TEST_HANDLE}?token={token2}"
-        print(f"[*] Configurando OBS con la nueva URL autorizada: {auth_url2}")
+        with urllib.request.urlopen(auth_url2, timeout=5) as r:
+            assert r.status == 200, f"Código inesperado con token nuevo: {r.status}"
+            print(f"[+] Verificación HTTP OK: {SERVER_URL}/overlay/{TEST_HANDLE}?token={token2[:12]}... devolvió 200 OK")
+
+        print(f"[*] Configurando OBS con la nueva URL autorizada: {SERVER_URL}/overlay/{TEST_HANDLE}?token={token2[:12]}...")
         await send_req(ws, "SetInputSettings", {
             "inputName": input_name,
             "inputSettings": {"url": auth_url2},
