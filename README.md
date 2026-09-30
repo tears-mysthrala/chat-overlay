@@ -32,7 +32,7 @@ Los perfiles se configuran mediante JSON (`CHAT_CONFIG`). Cada perfil soporta:
 - Conectores de chat: Twitch (Helix + EventSub WebSocket) y YouTube (Data API v3 con autodescubrimiento y soporte multistream).
 - Capability Tokens: Hash SHA-256 en reposo y verificación en tiempo constante. Los enlaces de OBS se regeneran de forma atómica en caliente vía API o panel sin reiniciar el servidor.
 - Módulo multimedia: URLs externas (validadas contra SSRF) o subidas directas a Cloudflare R2 vía URLs prefirmadas SigV4 generadas en Erlang/OTP nativo (*Zero Server Footprint / Zero Egress Fees*).
-  - Variables de entorno opcionales: `CHAT_R2_ACCOUNT_ID`, `CHAT_R2_BUCKET`, `CHAT_R2_ACCESS_KEY_ID`, `CHAT_R2_SECRET_ACCESS_KEY`, `CHAT_R2_PUBLIC_BASE_URL`.
+  - Variables de entorno opcionales: `R2_ENDPOINT`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_PUBLIC_CDN`.
   - Seguridad estricta: Bloqueo determinista de archivos `.svg` para proteger Chromium/CEF en OBS Studio contra XSS.
 
 Los tokens de plataformas se inyectan en ejecución mediante variables de entorno `CHAT_*`; el JSON contiene los nombres de las variables, nunca los valores en plano. No incluyas secretos en URLs, commits o capturas.
