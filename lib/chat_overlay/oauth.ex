@@ -243,6 +243,159 @@ defmodule ChatOverlay.OAuth do
 
   defp parse_token_response(_), do: {:error, :token_exchange_failed}
 
+  @doc """
+  Refreshes OAuth tokens using a refresh token for the specified provider.
+  Supports token rotation and handles errors like :invalid_grant.
+  """
+  @spec refresh_tokens(String.t() | atom(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def refresh_tokens(provider, refresh_token, opts \\ []) do
+    provider_str = to_string(provider)
+
+    with {:ok, config} <- Map.fetch(@providers, provider_str),
+         {:client_id, cid} when is_binary(cid) and byte_size(cid) > 0 <-
+           {:client_id, client_id(provider_str)},
+         {:client_secret, csec} when is_binary(csec) and byte_size(csec) > 0 <-
+           {:client_secret, client_secret(provider_str)} do
+      if mock_client = opts[:http_client] do
+        mock_client.(:post, config.token_url, [], %{
+          grant_type: "refresh_token",
+          refresh_token: refresh_token
+        })
+        |> parse_refresh_response()
+      else
+        body =
+          URI.encode_query(%{
+            "grant_type" => "refresh_token",
+            "refresh_token" => refresh_token,
+            "client_id" => cid,
+            "client_secret" => csec
+          })
+
+        headers = [{"content-type", "application/x-www-form-urlencoded"}]
+        uri = URI.parse(config.token_url)
+
+        case ChatOverlay.Net.request(uri.host, "POST", uri.path, headers, body) do
+          {:ok, status, _headers, resp_body} ->
+            parse_refresh_response({:ok, status, resp_body})
+
+          {:error, _} = err ->
+            err
+
+          _other ->
+            {:error, :token_refresh_failed}
+        end
+      end
+    else
+      :error ->
+        {:error, :unsupported_provider}
+
+      {:client_id, _} ->
+        {:error, {:unconfigured_client, provider_str}}
+
+      {:client_secret, _} ->
+        {:error, {:unconfigured_client_secret, provider_str}}
+    end
+  end
+
+  defp parse_refresh_response({:ok, status, raw_body}) do
+    decoded =
+      cond do
+        is_binary(raw_body) ->
+          case JSON.decode(raw_body) do
+            {:ok, map} when is_map(map) -> stringify_map(map)
+            _ -> nil
+          end
+
+        is_map(raw_body) ->
+          stringify_map(raw_body)
+
+        true ->
+          nil
+      end
+
+    cond do
+      status in 200..299 ->
+        validate_successful_tokens(decoded)
+
+      status == 400 ->
+        classify_bad_request_error(decoded)
+
+      status == 401 ->
+        {:error, :invalid_grant}
+
+      status >= 400 ->
+        {:error, :token_refresh_failed}
+
+      true ->
+        {:error, :token_refresh_failed}
+    end
+  end
+
+  defp parse_refresh_response({:error, _} = err), do: err
+  defp parse_refresh_response(_), do: {:error, :token_refresh_failed}
+
+  defp validate_successful_tokens(map) when is_map(map) do
+    access_token = map["access_token"]
+    raw_expires = map["expires_in"]
+
+    with {:access_token, token} when is_binary(token) and byte_size(token) > 0 <-
+           {:access_token, access_token},
+         {:expires_in, expires_in} when is_integer(expires_in) and expires_in > 0 <-
+           {:expires_in, parse_positive_integer(raw_expires)} do
+      {:ok, Map.put(map, "expires_in", expires_in)}
+    else
+      _ ->
+        {:error, :invalid_token_payload}
+    end
+  end
+
+  defp validate_successful_tokens(_), do: {:error, :invalid_token_payload}
+
+  defp parse_positive_integer(val) when is_integer(val) and val > 0, do: val
+
+  defp parse_positive_integer(val) when is_binary(val) do
+    case Integer.parse(val) do
+      {int, ""} when int > 0 -> int
+      _ -> nil
+    end
+  end
+
+  defp parse_positive_integer(_), do: nil
+
+  defp classify_bad_request_error(map) when is_map(map) do
+    err = to_string(map["error"] || "")
+    desc = to_string(map["error_description"] || "")
+    msg = to_string(map["message"] || "")
+
+    is_invalid_grant? =
+      err == "invalid_grant" or
+        String.contains?(String.downcase(msg), "invalid refresh token") or
+        String.contains?(String.downcase(desc), "invalid_grant") or
+        String.contains?(String.downcase(desc), "revoked") or
+        String.contains?(String.downcase(desc), "expired")
+
+    cond do
+      is_invalid_grant? ->
+        {:error, :invalid_grant}
+
+      byte_size(err) > 0 ->
+        {:error, {:upstream_auth_error, err}}
+
+      byte_size(msg) > 0 ->
+        {:error, {:upstream_auth_error, msg}}
+
+      true ->
+        {:error, :token_refresh_failed}
+    end
+  end
+
+  defp classify_bad_request_error(_), do: {:error, :token_refresh_failed}
+
+  defp stringify_map(map) when is_map(map) do
+    for {k, v} <- map, into: %{}, do: {to_string(k), v}
+  end
+
   # User info implementation
 
   defp fetch_user_info("twitch", access_token, config, opts) do

@@ -73,7 +73,7 @@
    - Pruebas superadas en vivo en OBS Studio 32.2.2 (CEF 152.0.7977.83 / Wayland):
      1. **Rechazo 401 Unauthorized sin token**: Verificado en OBS Browser Source. El overlay devuelve 401 con pantalla de aviso amigable y CSP intacta (`obs_f2_401_unauthorized.png`).
      2. **Acceso autorizado 200 OK con Capability Token**: OBS conecta al stream SSE y renderiza el chat en directo de Twitch con badges, timestamps y sanitización XSS (`obs_f2_authorized_live.png`).
-     3. **Revocación inmediata en caliente**: Al regenerar el token mediante el endpoint API `/api/profiles/:handle/token/regenerate`, el token anterior queda invalidado de inmediato en el backend y la fuente en OBS pasa a 401 (`obs_f2_revoked_401.png`).
+     3. **Rechazo de nueva conexión tras revocación**: Al regenerar el capability token mediante `/api/profiles/:handle/token/regenerate`, el token anterior queda invalidado en el backend; cualquier recarga o nueva conexión de OBS Browser Source es rechazada con 401 (`obs_f2_revoked_401.png`). Nota: la desconexión activa forzada de sockets/conexiones SSE ya abiertas al momento de revocar se abordará como mejora en una unidad separada.
      4. **Restauración con nuevo token**: Al actualizar la fuente en OBS con el nuevo token generado, el overlay reanuda la conexión SSE sin reiniciar el proceso ni perder el estado del canal (`obs_f2_restored_live.png`).
      5. **Lienzo completo y transparencia**: Verificado sobre escena con fondo sólido (`TestColor`); la transparencia del overlay es total y el texto se dibuja sin halos ni recortes (`obs_f2_scene_full.png`).
      6. **Panel de Creador (Chromium headless)**: Captura completa del panel con gestión de enlace OBS, advertencia de regeneración y pestañas de alertas multimedia R2 (`dashboard_f2_full.png`).
@@ -105,3 +105,76 @@
 
 
 
+
+11. **Ciclo de Vida, Renovación Automática y Rotación Concurrente de Tokens OAuth (Issue #25)**:
+    - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/25
+    - Rama: `feat/25-token-lifecycle-refresh`
+    - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/25-token-lifecycle-refresh`
+    - Alcance y Arquitectura:
+      - Este PR introduce la **infraestructura de renovación bajo demanda y coordinación concurrente** (`ChatOverlay.Tokens.get_access_token/3`). Los conectores de streaming actuales (Twitch IRC / YouTube Polling) continúan leyendo credenciales estáticas de entorno/configuración en esta fase; su migración al coordinador `ChatOverlay.Tokens` se realizará en la Fase F3.
+    - Implementación y Robustez (feedback incorporado):
+      - `ChatOverlay.OAuth.refresh_tokens/3`: soporte para refresco de tokens OAuth para Twitch y Google/YouTube. Parser unificado estricto para transporte real y mocks que exige `access_token` binario no vacío y duración positiva (`expires_in > 0`), rechazando payloads `{}` o malformados con `{:error, :invalid_token_payload}`. Mapeo específico de respuestas de error de Twitch `400 / Bad Request / Invalid refresh token` a `{:error, :invalid_grant}`.
+      - `ChatOverlay.Profiles`:
+        - Versionado de vinculación anti-carreras (`account_version`): si un refresco de la cuenta A finaliza tras haber vinculado la cuenta B, se detecta el desajuste de versión y se aborta con `{:error, :stale_binding}`, evitando que las credenciales de A sobreescriban a B.
+        - Persistencia atómica previa a mutación de memoria: `persist_profiles` se ejecuta antes de modificar `Application.put_env`, impidiendo que fallos de disco dejen memoria y almacenamiento desincronizados.
+        - Preservación automática de `refresh_token` existente cuando el proveedor omite devolverlo (Google OAuth) y soporte de rotación cifrado con AEAD AES-256-GCM (`v1:...`).
+        - Recuperación fail-closed ante fallo de persistencia durante rotación: si el proveedor rota el token pero el disco no puede escribirse, la cuenta se marca inmediatamente como `reauth_required` (`persistence_failure_during_rotation`) para alertar al usuario y evitar bucles infinitos con credenciales no persistidas.
+        - Invalidación de caché en todos los eventos del ciclo de vida: desvinculación (`unlink_account`), vinculación (`link_account`), eliminación de perfil (`delete`) y marcado de reautenticación (`mark_account_reauth_required`).
+      - `ChatOverlay.Tokens`: GenServer coordinador concurrente (SEC-15). Protección anti-stampede (agrupación de múltiples llamadas simultáneas en 1 única petición remota), caché en memoria con invalidación selectiva, renovación proactiva ante expiración próxima (< 300s) y propiedad/cancelación de workers de fondo al terminar el coordinador.
+      - Supervisión en `ChatOverlay.Application`: integrado en la estrategia `:rest_for_one` tras `ChatOverlay.Profiles`.
+      - Interfaz de usuario en Panel de Creador (`priv/static/app.js`, `priv/static/app.css`): badge de estado amarillo «Reautenticación requerida», aviso explícito y botón «Reconectar» para Twitch y YouTube.
+      - 150/150 tests PASS en ExUnit (incluyendo regresiones exhaustivas de carreras entre vinculaciones concurrentes, fallo de disco, respuestas malformadas, revocación e invalidación de caché).
+
+12. **Pendientes de Fase F2 para Unidades Separadas (Backlog)**:
+    - Autenticación y autorización del Panel de Creador.
+    - Clave de cifrado OAuth obligatoria (fallo en arranque si no está configurada).
+    - Desconexión y cierre forzado de visores SSE preexistentes ante revocación de capability token.
+    - Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2.
+
+## CI hardening — issue #27, same branch and PR #26
+
+Operator explicitly requested reuse of AGY's `feat/25-token-lifecycle-refresh`
+worktree and PR #26. Starting commit: `8ef5838`; initial suite: 150 passing tests.
+No production code, new dependencies, branch protection, merge or deployment changed.
+
+Added deterministic lifecycle regression tests, offline serial/concurrent full-suite
+runs, ExUnit JSON evidence validation (no failures/skips/exclusions/empty suites),
+validator tests, bounded Docker execution and a final `quality-gate`. CI triggers
+are PR/manual/weekly and obsolete executions are cancelled.
+
+Local verification: both seeds discover 153 tests, with 150 passing and the same
+three failures: pending-worker invalidation, ownership after abrupt coordinator
+death, and stale binding rejection after unlink/relink. These failures block
+acceptance and must be fixed; they are not waived. Python validator tests pass,
+as do format, static checks and JavaScript syntax. OBS/upstream/load-long-run tests
+were not repeated. The final required-check setting still needs operator action.
+
+Next action: fix the three lifecycle failures and run `MIX_ENV=test sh scripts/ci_tests.sh`
+plus `python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json`.
+Review the remote CI evidence before approving merge. Rollback: revert the CI commit.
+
+Publishing exception: the pre-push hook's green-test requirement is bypassed solely
+to publish intentionally failing regression gates on the existing review PR. This
+is the documented scripts/README.md exception; format, workflow lint, static
+checks and secret scan were executed. Remote tests remain active and merge is
+blocked. No failing test was skipped or represented as passing.
+
+Offline validation exposed two pre-existing media tests that resolved external DNS.
+Their successful URL fixtures now use literal public IPv4 addresses; no DNS
+validation is disabled and no HTTP request is made. Targeted media/web tests: 16 PASS.
+
+## CI hardening gate resolution — issue #25, issue #27
+
+The three lifecycle regression gate failures identified under CI hardening have been completely resolved:
+1. **Pending-worker invalidation**: `Tokens.handle_call({:invalidate, ...})` detects active refresh workers for the target key, terminates them (`Process.exit(pid, :shutdown)`), demonitors/unlinks, and responds to all pending callers with `{:error, :binding_invalidated}`.
+2. **Abrupt coordinator death ownership**: `Tokens` coordinator now traps exits (`Process.flag(:trap_exit, true)`) and links spawned workers via `Process.link(pid)`. When coordinator is abruptly killed (`:kill`), the VM's link exit propagation terminates workers immediately regardless of transport blocking. Linked exits from workers are trapped safely without killing the coordinator.
+3. **Stale binding rejection across unlink/relink**: `Profiles.do_link_account/4` generates `account_version` using `max(prev_version + 1, System.unique_integer([:positive, :monotonic]))`, guaranteeing that re-linking an account never reuses prior generation IDs, even after an unlink.
+
+Local verification:
+- `MIX_ENV=test sh scripts/ci_tests.sh`: Seed 0 (serial) 153/153 PASS; Seed 424242 (concurrent) 153/153 PASS (0 failures, 0 skipped, 0 excluded).
+- `python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json`: PASS (2 complete runs, 153 tests each, no omissions).
+- `mix compile --warnings-as-errors`: PASS (0 warnings).
+- `mix format --check-formatted`: PASS.
+- `python3 scripts/security_static.py`: PASS (0 findings).
+- `python3 scripts/scan_secrets.py`: PASS (no leaks found).
+- `python3 scripts/check_traceability.py`: PASS.

@@ -116,7 +116,12 @@ defmodule ChatOverlay.Config do
           provider in ["twitch", "youtube"] and is_map(data) and
             (is_nil(data["linked"]) or is_boolean(data["linked"])) and
             (is_nil(data["username"]) or is_binary(data["username"])) and
-            (is_nil(data["encrypted_tokens"]) or is_binary(data["encrypted_tokens"]))
+            (is_nil(data["encrypted_tokens"]) or is_binary(data["encrypted_tokens"])) and
+            (is_nil(data["status"]) or is_binary(data["status"])) and
+            (is_nil(data["last_error"]) or is_binary(data["last_error"])) and
+            (is_nil(data["expires_at"]) or is_integer(data["expires_at"])) and
+            (is_nil(data["linked_at"]) or is_integer(data["linked_at"])) and
+            (is_nil(data["account_version"]) or is_integer(data["account_version"]))
         end)
 
       _ ->

@@ -16,7 +16,8 @@ ENV MIX_ENV=test
 COPY .formatter.exs ./
 COPY test test
 COPY scripts scripts
-RUN mix check
+# CI runs the suite explicitly after building so failures still produce evidence.
+RUN mix format --check-formatted && mix compile --warnings-as-errors
 
 FROM alpine:3.24.2@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
 # APK pineados exactos (SUP-03): verificados en el repo v3.24 el 2026-09-21.

@@ -105,14 +105,14 @@ defmodule ChatOverlay.MediaTest do
 
   describe "External URL Validation" do
     test "accepts valid https URLs for audio and images" do
-      assert {:ok, "https://cdn.discordapp.com/attachments/123/alert.mp3"} =
+      assert {:ok, "https://8.8.8.8/attachments/123/alert.mp3"} =
                Media.validate_external_url(
-                 "https://cdn.discordapp.com/attachments/123/alert.mp3",
+                 "https://8.8.8.8/attachments/123/alert.mp3",
                  :audio
                )
 
-      assert {:ok, "https://example.com/emojis/pog.webp"} =
-               Media.validate_external_url("https://example.com/emojis/pog.webp", :image)
+      assert {:ok, "https://1.1.1.1/emojis/pog.webp"} =
+               Media.validate_external_url("https://1.1.1.1/emojis/pog.webp", :image)
     end
 
     test "rejects non-https, svg, or mismatched categories" do
