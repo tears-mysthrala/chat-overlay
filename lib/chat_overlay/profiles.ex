@@ -59,8 +59,11 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:update_tokens, handle, provider, new_tokens, opts}),
     do: do_update_tokens(handle, provider, new_tokens, opts)
 
+  defp execute_action({:mark_reauth_required, handle, provider, reason, opts}),
+    do: do_mark_reauth_required(handle, provider, reason, opts)
+
   defp execute_action({:mark_reauth_required, handle, provider, reason}),
-    do: do_mark_reauth_required(handle, provider, reason)
+    do: do_mark_reauth_required(handle, provider, reason, [])
 
   defp execute_action({:unlink_account, handle, provider}),
     do: do_unlink_account(handle, provider)
@@ -170,14 +173,19 @@ defmodule ChatOverlay.Profiles do
   def update_tokens(_, _, _, _), do: {:error, :invalid_params}
 
   @doc "Marks a linked platform account as requiring re-authentication due to token expiration or revocation."
-  def mark_account_reauth_required(handle, provider, reason \\ :invalid_grant)
+  def mark_account_reauth_required(handle, provider, reason \\ :invalid_grant, opts \\ [])
 
-  def mark_account_reauth_required(handle, provider, reason)
-      when is_binary(handle) do
-    call_serialized({:mark_reauth_required, handle, to_string(provider), to_string(reason)})
+  def mark_account_reauth_required(handle, provider, reason, opts)
+      when is_binary(handle) and is_list(opts) do
+    call_serialized({:mark_reauth_required, handle, to_string(provider), to_string(reason), opts})
   end
 
-  def mark_account_reauth_required(_, _, _), do: {:error, :invalid_params}
+  def mark_account_reauth_required(handle, provider, reason, opts)
+      when is_binary(handle) and is_nil(opts) do
+    mark_account_reauth_required(handle, provider, reason, [])
+  end
+
+  def mark_account_reauth_required(_, _, _, _), do: {:error, :invalid_params}
 
   @doc "Retrieves linked account metadata and decrypted tokens for an authorized internal component."
   def get_linked_account_auth(handle, provider) when is_binary(handle) do
@@ -819,7 +827,7 @@ defmodule ChatOverlay.Profiles do
           prev_version =
             if is_map(prev_account), do: prev_account["account_version"] || 0, else: 0
 
-          new_version = prev_version + 1
+          new_version = max(prev_version + 1, System.unique_integer([:positive, :monotonic]))
 
           entry = %{
             "linked" => true,
@@ -971,7 +979,7 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp do_mark_reauth_required(handle, provider, reason) do
+  defp do_mark_reauth_required(handle, provider, reason, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -994,7 +1002,10 @@ defmodule ChatOverlay.Profiles do
 
             case do_save_profile(updated_profile, replace: true, require_persistence: false) do
               {:ok, _} = res ->
-                invalidate_tokens(handle, provider_str)
+                if Keyword.get(opts, :invalidate_cache, true) do
+                  invalidate_tokens(handle, provider_str)
+                end
+
                 res
 
               err ->

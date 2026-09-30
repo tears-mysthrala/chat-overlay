@@ -162,3 +162,19 @@ blocked. No failing test was skipped or represented as passing.
 Offline validation exposed two pre-existing media tests that resolved external DNS.
 Their successful URL fixtures now use literal public IPv4 addresses; no DNS
 validation is disabled and no HTTP request is made. Targeted media/web tests: 16 PASS.
+
+## CI hardening gate resolution — issue #25, issue #27
+
+The three lifecycle regression gate failures identified under CI hardening have been completely resolved:
+1. **Pending-worker invalidation**: `Tokens.handle_call({:invalidate, ...})` detects active refresh workers for the target key, terminates them (`Process.exit(pid, :shutdown)`), demonitors/unlinks, and responds to all pending callers with `{:error, :binding_invalidated}`.
+2. **Abrupt coordinator death ownership**: `Tokens` coordinator now traps exits (`Process.flag(:trap_exit, true)`) and links spawned workers via `Process.link(pid)`. When coordinator is abruptly killed (`:kill`), the VM's link exit propagation terminates workers immediately regardless of transport blocking. Linked exits from workers are trapped safely without killing the coordinator.
+3. **Stale binding rejection across unlink/relink**: `Profiles.do_link_account/4` generates `account_version` using `max(prev_version + 1, System.unique_integer([:positive, :monotonic]))`, guaranteeing that re-linking an account never reuses prior generation IDs, even after an unlink.
+
+Local verification:
+- `MIX_ENV=test sh scripts/ci_tests.sh`: Seed 0 (serial) 153/153 PASS; Seed 424242 (concurrent) 153/153 PASS (0 failures, 0 skipped, 0 excluded).
+- `python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json`: PASS (2 complete runs, 153 tests each, no omissions).
+- `mix compile --warnings-as-errors`: PASS (0 warnings).
+- `mix format --check-formatted`: PASS.
+- `python3 scripts/security_static.py`: PASS (0 findings).
+- `python3 scripts/scan_secrets.py`: PASS (no leaks found).
+- `python3 scripts/check_traceability.py`: PASS.

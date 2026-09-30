@@ -65,6 +65,8 @@ defmodule ChatOverlay.Tokens do
 
   @impl true
   def init(_opts) do
+    Process.flag(:trap_exit, true)
+
     state = %{
       # %{{handle, provider} => %{access_token: binary, expires_at: integer}}
       cache: %{},
@@ -149,6 +151,8 @@ defmodule ChatOverlay.Tokens do
                       )
                     end)
 
+                  Process.link(pid)
+
                   new_in_flight = Map.put(state.in_flight, key, [from])
                   new_tasks = Map.put(state.tasks, pid, {ref, key})
                   new_refs = Map.put(state.refs, ref, pid)
@@ -163,16 +167,51 @@ defmodule ChatOverlay.Tokens do
   end
 
   @impl true
-  def handle_call({:invalidate, handle, provider_str}, _from, state) do
+  def handle_call({:invalidate, handle, provider_str}, from, state) do
     key = {handle, provider_str}
     new_cache = Map.delete(state.cache, key)
-    {:reply, :ok, %{state | cache: new_cache}}
+    {caller_pid, _} = from
+
+    is_worker? = Map.has_key?(state.tasks, caller_pid)
+
+    if is_worker? do
+      {:reply, :ok, %{state | cache: new_cache}}
+    else
+      {matching_tasks, remaining_tasks} =
+        Enum.split_with(state.tasks, fn {_pid, {_ref, k}} -> k == key end)
+
+      new_refs =
+        Enum.reduce(matching_tasks, state.refs, fn {pid, {ref, _k}}, acc_refs ->
+          Process.unlink(pid)
+          Process.demonitor(ref, [:flush])
+          Process.exit(pid, :shutdown)
+          Map.delete(acc_refs, ref)
+        end)
+
+      waiting = Map.get(state.in_flight, key, [])
+
+      Enum.each(waiting, fn caller ->
+        GenServer.reply(caller, {:error, :binding_invalidated})
+      end)
+
+      new_in_flight = Map.delete(state.in_flight, key)
+
+      {:reply, :ok,
+       %{
+         state
+         | cache: new_cache,
+           tasks: Map.new(remaining_tasks),
+           refs: new_refs,
+           in_flight: new_in_flight
+       }}
+    end
   end
 
   @impl true
   def handle_call(:clear, _from, state) do
     # Abort all in-flight workers
     Enum.each(state.tasks, fn {pid, {ref, _key}} ->
+      Process.unlink(pid)
       Process.demonitor(ref, [:flush])
       Process.exit(pid, :shutdown)
     end)
@@ -191,6 +230,7 @@ defmodule ChatOverlay.Tokens do
         {:noreply, state}
 
       {{ref, ^key}, new_tasks} ->
+        Process.unlink(pid)
         Process.demonitor(ref, [:flush])
         new_refs = Map.delete(state.refs, ref)
         waiting = Map.get(state.in_flight, key, [])
@@ -238,6 +278,8 @@ defmodule ChatOverlay.Tokens do
 
   @impl true
   def handle_info({:DOWN, ref, :process, pid, reason}, state) do
+    Process.unlink(pid)
+
     case Map.pop(state.refs, ref) do
       {nil, _} ->
         {:noreply, state}
@@ -259,11 +301,17 @@ defmodule ChatOverlay.Tokens do
   end
 
   @impl true
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_info(_other, state), do: {:noreply, state}
 
   @impl true
   def terminate(_reason, state) do
     Enum.each(state.tasks, fn {pid, {ref, _key}} ->
+      Process.unlink(pid)
       Process.demonitor(ref, [:flush])
       Process.exit(pid, :shutdown)
     end)
@@ -310,14 +358,18 @@ defmodule ChatOverlay.Tokens do
               Profiles.mark_account_reauth_required(
                 handle,
                 provider_str,
-                :persistence_failure_during_rotation
+                :persistence_failure_during_rotation,
+                invalidate_cache: false
               )
 
               {:failed, {:error, {:save_failed, reason}}}
           end
 
         {:error, :invalid_grant} ->
-          Profiles.mark_account_reauth_required(handle, provider_str, :invalid_grant)
+          Profiles.mark_account_reauth_required(handle, provider_str, :invalid_grant,
+            invalidate_cache: false
+          )
+
           {:failed, {:error, :reauth_required}}
 
         {:error, reason} ->
