@@ -240,6 +240,133 @@ defmodule ChatOverlay.WebF2Test do
       )
 
     assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn, ref)
+    assert {:data, :nofin, chunk} = ChatOverlay.TestClient.await(conn, ref)
+    assert chunk =~ "retry: 2000"
+    ChatOverlay.TestClient.close(conn)
+  end
+
+  defp await_error(conn, ref) do
+    case ChatOverlay.TestClient.await(conn, ref, 2000) do
+      {:data, :nofin, data} ->
+        if data =~ "event: error" do
+          data
+        else
+          await_error(conn, ref)
+        end
+
+      other ->
+        other
+    end
+  end
+
+  test "active SSE overlay viewers are disconnected on token regeneration (SEC-09)", %{port: port} do
+    assert {:ok, token, _} = Profiles.regenerate_capability_token("streamer")
+
+    # Connect viewer 1
+    conn1 = connection(port)
+
+    ref1 =
+      ChatOverlay.TestClient.request(
+        conn1,
+        "GET",
+        "/events/streamer?view=overlay&token=" <> token,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn1, ref1)
+    assert {:data, :nofin, chunk1} = ChatOverlay.TestClient.await(conn1, ref1)
+    assert chunk1 =~ "retry: 2000"
+
+    # Connect viewer 2
+    conn2 = connection(port)
+
+    ref2 =
+      ChatOverlay.TestClient.request(
+        conn2,
+        "GET",
+        "/events/streamer?view=overlay&token=" <> token,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn2, ref2)
+    assert {:data, :nofin, chunk2} = ChatOverlay.TestClient.await(conn2, ref2)
+    assert chunk2 =~ "retry: 2000"
+
+    # Regenerate capability token -> should actively disconnect both viewers
+    assert {:ok, new_token, _} = Profiles.regenerate_capability_token("streamer")
+    assert new_token != token
+
+    # Viewer 1 receives revocation error chunk and terminates
+    err1 = await_error(conn1, ref1)
+    assert is_binary(err1)
+    assert err1 =~ "event: error"
+    assert err1 =~ "Capability token revoked"
+    fin1 = ChatOverlay.TestClient.await(conn1, ref1, 2000)
+    assert fin1 in [{:done, ""}, {:error, :closed}]
+    ChatOverlay.TestClient.close(conn1)
+
+    # Viewer 2 receives revocation error chunk and terminates
+    err2 = await_error(conn2, ref2)
+    assert is_binary(err2)
+    assert err2 =~ "event: error"
+    assert err2 =~ "Capability token revoked"
+    fin2 = ChatOverlay.TestClient.await(conn2, ref2, 2000)
+    assert fin2 in [{:done, ""}, {:error, :closed}]
+    ChatOverlay.TestClient.close(conn2)
+
+    # Reconnecting with revoked token is rejected with 401
+    {401, _, rejected_body} =
+      request(port, "GET", "/events/streamer?view=overlay&token=" <> token)
+
+    assert rejected_body =~ "Capability Token Invalid"
+
+    # Connecting with new token succeeds
+    conn3 = connection(port)
+
+    ref3 =
+      ChatOverlay.TestClient.request(
+        conn3,
+        "GET",
+        "/events/streamer?view=overlay&token=" <> new_token,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn3, ref3)
+    assert {:data, :nofin, chunk3} = ChatOverlay.TestClient.await(conn3, ref3)
+    assert chunk3 =~ "retry: 2000"
+    ChatOverlay.TestClient.close(conn3)
+  end
+
+  test "active SSE overlay viewers are disconnected on profile deletion (SEC-09)", %{port: port} do
+    assert {:ok, token, _} = Profiles.regenerate_capability_token("streamer")
+
+    conn = connection(port)
+
+    ref =
+      ChatOverlay.TestClient.request(
+        conn,
+        "GET",
+        "/events/streamer?view=overlay&token=" <> token,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn, ref)
+    assert {:data, :nofin, chunk} = ChatOverlay.TestClient.await(conn, ref)
+    assert chunk =~ "retry: 2000"
+
+    # Delete profile -> should actively disconnect viewer
+    assert :ok = Profiles.delete("streamer")
+
+    err = await_error(conn, ref)
+    assert is_binary(err)
+    assert err =~ "event: error"
+    assert err =~ "Capability token revoked"
+    fin = ChatOverlay.TestClient.await(conn, ref, 2000)
+    assert fin in [{:done, ""}, {:error, :closed}]
     ChatOverlay.TestClient.close(conn)
   end
 end

@@ -5,12 +5,21 @@ defmodule ChatOverlay.Application do
 
   @impl true
   def start(_type, _args) do
+    case ChatOverlay.OAuth.validate_encryption_key() do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        raise "Invalid encryption key configuration: #{inspect(reason)}"
+    end
+
     profiles = ChatOverlay.Config.profiles()
     {:ok, ^profiles} = ChatOverlay.Config.validate(profiles)
 
     children =
       [
         {Registry, keys: :unique, name: ChatOverlay.Registry},
+        {Registry, keys: :duplicate, name: ChatOverlay.SSERegistry},
         # Headroom above the 30 supported sources for shutdown/relaunch churn.
         {Task.Supervisor, name: ChatOverlay.Tasks, max_children: 60}
       ] ++

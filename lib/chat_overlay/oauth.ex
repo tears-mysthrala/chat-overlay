@@ -24,12 +24,53 @@ defmodule ChatOverlay.OAuth do
     }
   }
 
+  @default_dev_key "chat_overlay_secret_key_32_bytes!"
+
   @doc """
   Returns the 32-byte encryption key used for state and token encryption.
   """
   def encryption_key do
     System.get_env("CHAT_ENCRYPTION_KEY") ||
-      Application.get_env(:chat_overlay, :encryption_key, "chat_overlay_secret_key_32_bytes!")
+      Application.get_env(:chat_overlay, :encryption_key, @default_dev_key)
+  end
+
+  @doc """
+  Validates that the encryption key is properly configured.
+  In production or release environments, requires `CHAT_ENCRYPTION_KEY` (or `:encryption_key` config)
+  to be explicitly provided, different from the default development key, and at least 32 bytes long.
+  """
+  @spec validate_encryption_key(keyword()) :: :ok | {:error, atom()}
+  def validate_encryption_key(opts \\ []) do
+    is_prod? =
+      cond do
+        Keyword.has_key?(opts, :env) -> opts[:env] == :prod
+        Keyword.has_key?(opts, :release) -> opts[:release] == true
+        Application.get_env(:chat_overlay, :env) == :prod -> true
+        System.get_env("MIX_ENV") == "prod" -> true
+        not is_nil(System.get_env("RELEASE_NAME")) -> true
+        true -> false
+      end
+
+    key =
+      cond do
+        Keyword.has_key?(opts, :key) -> opts[:key]
+        is_binary(System.get_env("CHAT_ENCRYPTION_KEY")) -> System.get_env("CHAT_ENCRYPTION_KEY")
+        true -> Application.get_env(:chat_overlay, :encryption_key)
+      end
+
+    cond do
+      is_prod? and (is_nil(key) or key == "" or key == @default_dev_key) ->
+        {:error, :missing_production_encryption_key}
+
+      is_prod? and byte_size(key) < 32 ->
+        {:error, :encryption_key_too_short}
+
+      is_binary(key) and byte_size(key) < 32 ->
+        {:error, :encryption_key_too_short}
+
+      true ->
+        :ok
+    end
   end
 
   @doc """

@@ -178,3 +178,31 @@ Local verification:
 - `python3 scripts/security_static.py`: PASS (0 findings).
 - `python3 scripts/scan_secrets.py`: PASS (no leaks found).
 - `python3 scripts/check_traceability.py`: PASS.
+
+## Desconexión activa de visores SSE y clave de cifrado obligatoria en producción — issue #28
+
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/28
+- Rama: `feat/28-sse-revocation-crypto-key`
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/28-sse-revocation-crypto-key`
+
+### Alcance e Implementación:
+1. **Desconexión activa forzada de visores SSE ante revocación de Capability Token (SEC-09)**:
+   - Registro concurrente en supervisión: `ChatOverlay.SSERegistry` añadido al árbol de supervisión con `{Registry, keys: :duplicate, name: ChatOverlay.SSERegistry}` para rastrear múltiples visores SSE activos simultáneos (`/events/:handle?view=overlay`) por handle.
+   - En `ChatOverlay.Stream.call/2`, las conexiones de tipo overlay registran su PID en `ChatOverlay.SSERegistry`.
+   - `ChatOverlay.Stream.disconnect_viewers/1`: despacha el mensaje `:capability_token_revoked` a todos los visores registrados para el handle.
+   - En `ChatOverlay.Stream.poll/6`: al recibir `:capability_token_revoked`, emite inmediatamente un fragmento SSE `event: error\ndata: {"error":"unauthorized","message":"Capability token revoked"}\n\n` y finaliza la conexión chunked, liberando recursos (`Admission.release/0`). Al terminar el proceso, el BEAM desregistra automáticamente el PID del `Registry`.
+   - Invocación garantizada en `ChatOverlay.Profiles`:
+     - `do_regenerate_capability_token/1`: tras persistir el nuevo token y hash, ejecuta `ChatOverlay.Stream.disconnect_viewers(handle)`.
+     - `delete/1`: tras persistir la eliminación e invalidar credenciales, ejecuta `ChatOverlay.Stream.disconnect_viewers(handle)`.
+2. **Validación estricta de clave de cifrado en producción (SEC-15)**:
+   - En `ChatOverlay.OAuth`:
+     - `validate_encryption_key/1`: en entornos de producción (`MIX_ENV=prod` o release binaria activa vía `RELEASE_NAME`), valida obligatoriamente que la clave de cifrado (`CHAT_ENCRYPTION_KEY` o `:encryption_key`) esté configurada, no esté vacía, sea distinta a la clave por defecto de desarrollo (`chat_overlay_secret_key_32_bytes!`) y tenga una longitud mínima de 32 bytes.
+   - En `ChatOverlay.Application.start/2`:
+     - Realiza `ChatOverlay.OAuth.validate_encryption_key()` antes del arranque del árbol de supervisión y falla de inmediato (`raise "Invalid encryption key configuration: ..."`) si las condiciones de producción no se cumplen (fail-closed).
+3. **Smoke testing y contenedor de release**:
+   - `scripts/smoke_image.py`: configurado con variable de entorno `CHAT_ENCRYPTION_KEY` válida (32+ bytes) para verificar que la release compilada de producción arranca y pasa todas las comprobaciones con su propia clave inyectada.
+4. **Regresiones y Verificación**:
+   - `test/web_f2_test.exs`: pruebas de desconexión activa concurrente ante regeneración de capability token y eliminación de perfil, comprobando emisión de evento de error, cierre de socket y rechazo 401 de conexiones subsecuentes con el token revocado.
+   - `test/oauth_test.exs`: pruebas exhaustivas de validación de clave de cifrado para entornos test, dev, prod y release, comprobando longitud insuficiente, clave por defecto y clave válida.
+   - Suite completa ExUnit: **162/162 pruebas PASS** en doble pasada (semilla 0 y 424242, 0 fallos, 0 skips, 0 exclusiones).
+   - Verificaciones de formato, static checks (`python3 scripts/security_static.py`), escaneo de secretos (`python3 scripts/scan_secrets.py`), trazabilidad (`python3 scripts/check_traceability.py`) y smoke test de release (`python3 scripts/smoke_image.py`) con resultado 100% PASS.
