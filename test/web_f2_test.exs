@@ -182,11 +182,11 @@ defmodule ChatOverlay.WebF2Test do
     update_payload =
       JSON.encode(%{
         "alert_sound" => %{
-          "url" => "https://example.com/alerts/ping.ogg",
+          "url" => "https://8.8.8.8/alerts/ping.ogg",
           "source" => "external"
         },
         "alert_image" => %{
-          "url" => "https://example.com/alerts/badge.webp",
+          "url" => "https://8.8.8.8/alerts/badge.webp",
           "source" => "r2"
         }
       })
@@ -196,8 +196,8 @@ defmodule ChatOverlay.WebF2Test do
 
     assert {:ok, data} = JSON.decode(body)
     assert data["ok"] == true
-    assert data["media"]["alert_sound"]["url"] == "https://example.com/alerts/ping.ogg"
-    assert data["media"]["alert_image"]["url"] == "https://example.com/alerts/badge.webp"
+    assert data["media"]["alert_sound"]["url"] == "https://8.8.8.8/alerts/ping.ogg"
+    assert data["media"]["alert_image"]["url"] == "https://8.8.8.8/alerts/badge.webp"
 
     # Reject non-HTTPS or prohibited extensions
     invalid_payload =

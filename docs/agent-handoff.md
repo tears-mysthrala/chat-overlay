@@ -158,3 +158,7 @@ to publish intentionally failing regression gates on the existing review PR. Thi
 is the documented scripts/README.md exception; format, workflow lint, static
 checks and secret scan were executed. Remote tests remain active and merge is
 blocked. No failing test was skipped or represented as passing.
+
+Offline validation exposed two pre-existing media tests that resolved external DNS.
+Their successful URL fixtures now use literal public IPv4 addresses; no DNS
+validation is disabled and no HTTP request is made. Targeted media/web tests: 16 PASS.
