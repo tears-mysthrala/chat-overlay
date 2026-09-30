@@ -83,11 +83,25 @@
 
 9. **Cierre Formal de Fase F2 (Issue #21)**:
    - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/21
+   - Pull Request: https://github.com/tears-mysthrala/chat-overlay/pull/22 (MERGED a `main` en `bab387b`, Closes #21).
    - Rama: `docs/21-f2-closure`
    - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/21-f2-closure`
    - Estado: Consolidación documental y certificación de cierre de Fase F2 aprobada por el operador Kalista el 30-09-2026.
    - Matrices de verificación (`docs/verification.md`), operación (`docs/operations.md`), cumplimiento (`docs/compliance.md`), contrato (`WHAT_WE_ARE_BUILDING.md`) y `README.md` actualizadas con las evidencias completas de F2.
-   - Siguiente hito acordado: Opción B (flujo interactivo OAuth/SSO para vinculación de cuentas de Twitch/Google en el Panel de Creador como base para Fase F3).
+
+10. **Flujo Interactivo OAuth 2.0 PKCE para Vinculación de Cuentas (Issue #23)**:
+   - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/23
+   - Rama: `feat/23-oauth-account-linking`
+   - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/23-oauth-account-linking`
+   - Implementación:
+     - `ChatOverlay.OAuth`: soporte de flujo OAuth 2.0 PKCE (RFC 7636) para Twitch y YouTube. Generación de URLs de autorización con `code_challenge_method=S256` y state cifrado simétricamente con AEAD (AES-256-GCM) conteniendo el `code_verifier`, handle, proveedor y timestamp (Stateless PKCE anti-tamper y anti-replay).
+     - Intercambio de código por tokens con destinos autorizados en `ChatOverlay.Net` (`oauth2.googleapis.com` añadido al allowlist de hosts TLS bajo SEC-06).
+     - Cifrado de credenciales en reposo mediante AEAD AES-256-GCM en `ChatOverlay.Profiles.link_account/4` bajo SEC-15.
+     - Sanitización estricta: `Profiles.list/0` y `get/1` eliminan `encrypted_tokens` y exponen únicamente metadatos públicos (`linked: true`, `username`, `linked_at`).
+     - Endpoints en `ChatOverlay.Web`: `GET /api/oauth/authorize/:provider`, `GET /oauth/callback/:provider` y `POST /api/profiles/:handle/unlink/:provider` protegido por origen anti-CSRF.
+     - Interfaz de usuario en Panel de Creador (`priv/static/index.html`, `app.js`, `app.css`) con tarjetas para Twitch y YouTube, estados de conexión en vivo y desvinculación interactiva.
+     - 126/126 tests PASS en ExUnit (16 tests nuevos en `oauth_test.exs`, `profiles_oauth_test.exs` y `web_oauth_test.exs`).
+
 
 
 

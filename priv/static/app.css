@@ -102,3 +102,95 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 .unauthorized-card strong {
   color: #f8fafc;
 }
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.account-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.account-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.platform-badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.platform-badge.twitch {
+  background: #9146ff;
+  color: #ffffff;
+}
+
+.platform-badge.youtube {
+  background: #ff0000;
+  color: #ffffff;
+}
+
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.connected {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.status-badge.disconnected {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.account-user-info {
+  font-size: 14px;
+  color: var(--ink);
+  margin: 0;
+  min-height: 24px;
+  word-break: break-all;
+}
+
+.account-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-danger {
+  background: #e11d48;
+  color: #ffffff;
+  border: 1px solid #be123c;
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-danger:hover {
+  background: #be123c;
+}
+

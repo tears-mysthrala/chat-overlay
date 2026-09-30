@@ -12,6 +12,12 @@ defmodule ChatOverlay.Web do
       {"GET", ["events", handle]} ->
         ChatOverlay.Stream.call(conn, handle)
 
+      {"GET", ["api", "oauth", "authorize", provider]} ->
+        api_oauth_authorize(conn, provider)
+
+      {"GET", ["oauth", "callback", provider]} ->
+        oauth_callback(conn, provider)
+
       {"GET", ["api", "profiles"]} ->
         api_list_profiles(conn)
 
@@ -148,6 +154,19 @@ defmodule ChatOverlay.Web do
                 "ok" => false,
                 "error" => "Content-Type debe ser application/json"
               })
+            )
+        end
+
+      {"POST", ["api", "profiles", handle, "unlink", provider]} ->
+        with true <- allowed_origin?(conn) do
+          api_unlink_account(conn, handle, provider)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
             )
         end
 
@@ -767,4 +786,192 @@ defmodule ChatOverlay.Web do
     do: "La URL supera el límite máximo de 2048 caracteres."
 
   defp format_media_error(other), do: format_error(other)
+
+  defp api_oauth_authorize(conn, provider) do
+    params = URI.decode_query(conn.query_string || "")
+    handle = params["handle"]
+
+    cond do
+      is_nil(handle) or Config.profile(handle) == nil ->
+        reply(
+          conn,
+          404,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+        )
+
+      provider not in ["twitch", "youtube"] ->
+        reply(
+          conn,
+          400,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Proveedor no soportado"})
+        )
+
+      true ->
+        redirect_uri = build_redirect_uri(conn, provider)
+
+        case ChatOverlay.OAuth.authorize_url(provider, handle, redirect_uri) do
+          {:ok, auth_url} ->
+            if params["redirect"] == "true" do
+              redirect(conn, auth_url)
+            else
+              reply(
+                conn,
+                200,
+                "application/json",
+                ChatOverlay.JSON.encode(%{"ok" => true, "url" => auth_url})
+              )
+            end
+
+          {:error, {:unconfigured_client, prov}} ->
+            reply(
+              conn,
+              400,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" =>
+                  "El proveedor #{prov} no tiene client_id configurado (configure la variable de entorno correspondiente)."
+              })
+            )
+
+          {:error, _reason} ->
+            reply(
+              conn,
+              500,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Error al generar enlace OAuth"
+              })
+            )
+        end
+    end
+  end
+
+  defp oauth_callback(conn, provider) do
+    params = URI.decode_query(conn.query_string || "")
+    code = params["code"]
+    state = params["state"]
+    error = params["error"]
+
+    cond do
+      error != nil ->
+        handle =
+          case state && ChatOverlay.OAuth.verify_state(state) do
+            {:ok, %{"handle" => h}} -> h
+            _ -> ""
+          end
+
+        dest =
+          if handle != "",
+            do: "/?handle=#{handle}&error=#{URI.encode_www_form(error)}",
+            else: "/?error=#{URI.encode_www_form(error)}"
+
+        redirect(conn, dest)
+
+      code == nil or state == nil ->
+        redirect(conn, "/?error=missing_oauth_params")
+
+      true ->
+        redirect_uri = build_redirect_uri(conn, provider)
+
+        case ChatOverlay.OAuth.handle_callback(provider, code, state, redirect_uri) do
+          {:ok, result} ->
+            account_data = %{
+              username: result.username,
+              user_id: result.user_id
+            }
+
+            case ChatOverlay.Profiles.link_account(
+                   result.handle,
+                   result.provider,
+                   account_data,
+                   result.tokens
+                 ) do
+              {:ok, _} ->
+                redirect(conn, "/?handle=#{result.handle}&linked=#{result.provider}")
+
+              {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
+                redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
+
+              {:error, _reason} ->
+                redirect(conn, "/?handle=#{result.handle}&error=link_failed")
+            end
+
+          {:error, _reason} ->
+            handle =
+              case state && ChatOverlay.OAuth.verify_state(state) do
+                {:ok, %{"handle" => h}} -> h
+                _ -> ""
+              end
+
+            dest =
+              if handle != "",
+                do: "/?handle=#{handle}&error=oauth_failed",
+                else: "/?error=oauth_failed"
+
+            redirect(conn, dest)
+        end
+    end
+  end
+
+  defp api_unlink_account(conn, handle, provider) do
+    if Config.profile(handle) == nil do
+      reply(
+        conn,
+        404,
+        "application/json",
+        ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+      )
+    else
+      case ChatOverlay.Profiles.unlink_account(handle, provider) do
+        {:ok, _} ->
+          reply(
+            conn,
+            200,
+            "application/json",
+            ChatOverlay.JSON.encode(%{"ok" => true, "unlinked" => provider})
+          )
+
+        {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
+          reply(
+            conn,
+            500,
+            "application/json",
+            ChatOverlay.JSON.encode(%{
+              "ok" => false,
+              "error" => "Almacenamiento no escribible para persistir cambios"
+            })
+          )
+
+        {:error, _reason} ->
+          reply(
+            conn,
+            400,
+            "application/json",
+            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Error al desvincular la cuenta"})
+          )
+      end
+    end
+  end
+
+  defp build_redirect_uri(conn, provider) do
+    host = Plug.Conn.get_req_header(conn, "host") |> List.first() || "localhost:4100"
+    proto = if String.starts_with?(host, ["localhost", "127.0.0.1"]), do: "http", else: "https"
+    "#{proto}://#{host}/oauth/callback/#{provider}"
+  end
+
+  def redirect(conn, location) do
+    safe_location = Plug.HTML.html_escape(location)
+
+    conn
+    |> Plug.Conn.merge_resp_headers(HTTP.headers("text/html; charset=utf-8"))
+    |> Plug.Conn.put_resp_header("location", location)
+    |> Plug.Conn.send_resp(
+      302,
+      "<html><body>Redirecting to <a href=\"#{safe_location}\">#{safe_location}</a></body></html>"
+    )
+  end
 end
