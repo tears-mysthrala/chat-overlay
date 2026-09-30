@@ -6,7 +6,7 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 
 | Componente fijado | Papel | Licencia de paquete |
 | --- | --- | --- |
-| Elixir 1.20.4 / OTP 29.1 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
+| Elixir 1.20.4 / OTP 29.1.1 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
 | Bandit 1.12.5 | Servidor HTTP | MIT |
 | Mint 1.11.0 | HTTP/TLS saliente | Apache-2.0 |
 | Mint.WebSocket 1.0.6 | Protocolo WebSocket | Apache-2.0 |
