@@ -16,6 +16,7 @@ defmodule ChatOverlay.Application do
       ] ++
         [
           ChatOverlay.Profiles,
+          ChatOverlay.Tokens,
           ChatOverlay.Stores,
           ChatOverlay.Admission,
           ChatOverlay.WebhookGate

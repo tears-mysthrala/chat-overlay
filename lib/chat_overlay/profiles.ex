@@ -53,6 +53,12 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:link_account, handle, provider, account_data, tokens}),
     do: do_link_account(handle, provider, account_data, tokens)
 
+  defp execute_action({:update_tokens, handle, provider, new_tokens}),
+    do: do_update_tokens(handle, provider, new_tokens)
+
+  defp execute_action({:mark_reauth_required, handle, provider, reason}),
+    do: do_mark_reauth_required(handle, provider, reason)
+
   defp execute_action({:unlink_account, handle, provider}),
     do: do_unlink_account(handle, provider)
 
@@ -150,8 +156,26 @@ defmodule ChatOverlay.Profiles do
 
   def unlink_account(_, _), do: {:error, :invalid_params}
 
-  @doc "Retrieves and decrypts stored tokens for an authorized internal component."
-  def get_linked_account_tokens(handle, provider) when is_binary(handle) do
+  @doc "Updates tokens for a linked platform account, merging with existing tokens and preserving refresh_token if not rotated."
+  def update_tokens(handle, provider, new_tokens)
+      when is_binary(handle) and is_map(new_tokens) do
+    call_serialized({:update_tokens, handle, to_string(provider), new_tokens})
+  end
+
+  def update_tokens(_, _, _), do: {:error, :invalid_params}
+
+  @doc "Marks a linked platform account as requiring re-authentication due to token expiration or revocation."
+  def mark_account_reauth_required(handle, provider, reason \\ :invalid_grant)
+
+  def mark_account_reauth_required(handle, provider, reason)
+      when is_binary(handle) do
+    call_serialized({:mark_reauth_required, handle, to_string(provider), to_string(reason)})
+  end
+
+  def mark_account_reauth_required(_, _, _), do: {:error, :invalid_params}
+
+  @doc "Retrieves linked account metadata and decrypted tokens for an authorized internal component."
+  def get_linked_account_auth(handle, provider) when is_binary(handle) do
     case Config.profile(handle) do
       nil ->
         {:error, :not_found}
@@ -168,12 +192,34 @@ defmodule ChatOverlay.Profiles do
                  key,
                  "token:#{handle}:#{provider_str}"
                ) do
-            {:ok, json_str} -> ChatOverlay.JSON.decode(json_str)
-            error -> error
+            {:ok, json_str} ->
+              case ChatOverlay.JSON.decode(json_str) do
+                {:ok, tokens} when is_map(tokens) ->
+                  tokens_with_exp = Map.put_new(tokens, "expires_at", linked["expires_at"])
+
+                  {:ok,
+                   %{account: Map.delete(linked, "encrypted_tokens"), tokens: tokens_with_exp}}
+
+                err ->
+                  err
+              end
+
+            error ->
+              error
           end
         else
           {:error, :not_linked}
         end
+    end
+  end
+
+  def get_linked_account_auth(_, _), do: {:error, :invalid_params}
+
+  @doc "Retrieves and decrypts stored tokens for an authorized internal component."
+  def get_linked_account_tokens(handle, provider) when is_binary(handle) do
+    case get_linked_account_auth(handle, provider) do
+      {:ok, %{tokens: tokens}} -> {:ok, tokens}
+      error -> error
     end
   end
 
@@ -756,7 +802,8 @@ defmodule ChatOverlay.Profiles do
               ),
             "linked_at" => now,
             "expires_at" => now + expires_in,
-            "encrypted_tokens" => enc_tokens
+            "encrypted_tokens" => enc_tokens,
+            "status" => "active"
           }
 
           existing_linked = existing["linked_accounts"] || %{}
@@ -780,6 +827,122 @@ defmodule ChatOverlay.Profiles do
         updated_linked = Map.delete(existing_linked, provider_str)
         updated_profile = Map.put(existing, "linked_accounts", updated_linked)
         do_save_profile(updated_profile, replace: true, require_persistence: true)
+    end
+  end
+
+  defp do_update_tokens(handle, provider, new_tokens) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        provider_str = to_string(provider)
+        existing_linked = existing["linked_accounts"] || %{}
+
+        case Map.fetch(existing_linked, provider_str) do
+          {:ok, current_account} when is_map(current_account) ->
+            key = ChatOverlay.OAuth.encryption_key()
+            old_enc_tokens = current_account["encrypted_tokens"]
+            normalized_tokens = for {k, v} <- new_tokens, into: %{}, do: {to_string(k), v}
+
+            with {:ok, merged_tokens} <-
+                   merge_refresh_token(
+                     normalized_tokens,
+                     old_enc_tokens,
+                     handle,
+                     provider_str,
+                     key
+                   ),
+                 {:ok, enc_tokens} <-
+                   ChatOverlay.Crypto.encrypt_aead(
+                     ChatOverlay.JSON.encode(merged_tokens),
+                     key,
+                     "token:#{handle}:#{provider_str}"
+                   ) do
+              expires_in = merged_tokens["expires_in"] || 3600
+              now = System.system_time(:second)
+
+              updated_account =
+                current_account
+                |> Map.put("encrypted_tokens", enc_tokens)
+                |> Map.put("expires_at", now + expires_in)
+                |> Map.put("status", "active")
+                |> Map.delete("last_error")
+
+              updated_linked = Map.put(existing_linked, provider_str, updated_account)
+              updated_profile = Map.put(existing, "linked_accounts", updated_linked)
+              do_save_profile(updated_profile, replace: true, require_persistence: true)
+            end
+
+          _ ->
+            {:error, :not_linked}
+        end
+    end
+  end
+
+  defp merge_refresh_token(new_tokens, old_enc_tokens, handle, provider_str, key) do
+    new_refresh = new_tokens["refresh_token"]
+
+    if is_binary(new_refresh) and byte_size(new_refresh) > 0 do
+      {:ok, new_tokens}
+    else
+      if is_binary(old_enc_tokens) do
+        case ChatOverlay.Crypto.decrypt_aead(
+               old_enc_tokens,
+               key,
+               "token:#{handle}:#{provider_str}"
+             ) do
+          {:ok, json_str} ->
+            case ChatOverlay.JSON.decode(json_str) do
+              {:ok, prev_tokens} when is_map(prev_tokens) ->
+                old_refresh = prev_tokens["refresh_token"] || prev_tokens[:refresh_token]
+
+                if is_binary(old_refresh) and byte_size(old_refresh) > 0 do
+                  {:ok, Map.put(new_tokens, "refresh_token", old_refresh)}
+                else
+                  {:ok, new_tokens}
+                end
+
+              _ ->
+                {:ok, new_tokens}
+            end
+
+          _ ->
+            {:ok, new_tokens}
+        end
+      else
+        {:ok, new_tokens}
+      end
+    end
+  end
+
+  defp do_mark_reauth_required(handle, provider, reason) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        provider_str = to_string(provider)
+        existing_linked = existing["linked_accounts"] || %{}
+
+        case Map.fetch(existing_linked, provider_str) do
+          {:ok, current_account} when is_map(current_account) ->
+            updated_account =
+              current_account
+              |> Map.put("status", "reauth_required")
+              |> Map.put("last_error", to_string(reason))
+
+            updated_linked = Map.put(existing_linked, provider_str, updated_account)
+            updated_profile = Map.put(existing, "linked_accounts", updated_linked)
+            do_save_profile(updated_profile, replace: true, require_persistence: true)
+
+          _ ->
+            {:error, :not_linked}
+        end
     end
   end
 

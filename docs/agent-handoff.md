@@ -105,3 +105,16 @@
 
 
 
+
+11. **Ciclo de Vida, Renovación Automática y Rotación Concurrente de Tokens OAuth (Issue #25)**:
+    - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/25
+    - Rama: `feat/25-token-lifecycle-refresh`
+    - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/25-token-lifecycle-refresh`
+    - Implementación:
+      - `ChatOverlay.OAuth.refresh_tokens/3`: soporte para refresco de tokens OAuth para Twitch y Google/YouTube con rotación de refresh token y mapeo de errores tipados (`invalid_grant`, unconfigured credentials, etc.).
+      - `ChatOverlay.Profiles.update_tokens/3` y `merge_refresh_token`: preservación automática del `refresh_token` existente cuando el proveedor omite devolverlo (comportamiento estándar de Google OAuth), cifrado AEAD AES-256-GCM inmediato y persistencia forzada en disco (`require_persistence: true`).
+      - `ChatOverlay.Profiles.mark_account_reauth_required/3`: marcado tipado del estado del perfil (`status: "reauth_required"`, `last_error: "invalid_grant"`) ante revocación o expiración no recuperable sin crashear.
+      - `ChatOverlay.Tokens`: GenServer coordinador concurrente (SEC-15). Protección anti-stampede que agrupa múltiples llamadas concurrentes en una única petición remota, caché en memoria de tokens de acceso válidos, y renovación proactiva si faltan menos de 300 segundos para la expiración. Monitorización de tareas de fondo con recuperación limpia en caso de fallo del worker.
+      - Supervisión en `ChatOverlay.Application`: integrado en la estrategia `:rest_for_one` tras `ChatOverlay.Profiles`.
+      - Interfaz de usuario en Panel de Creador (`priv/static/app.js`, `priv/static/app.css`): badge de estado amarillo «Reautenticación requerida», aviso explícito y botón «Reconectar» para Twitch y YouTube.
+      - 142/142 tests PASS en ExUnit (16 tests nuevos en `test/oauth_refresh_test.exs` y `test/tokens_test.exs`, cubriendo protección de estampida con 10 tareas concurrentes, retención de refresh token de Google, rotación y revocación).

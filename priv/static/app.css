@@ -164,6 +164,12 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
   border: 1px solid rgba(148, 163, 184, 0.3);
 }
 
+.status-badge.reauth-required {
+  background: rgba(234, 179, 8, 0.2);
+  color: #facc15;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
 .account-user-info {
   font-size: 14px;
   color: var(--ink);

@@ -243,6 +243,118 @@ defmodule ChatOverlay.OAuth do
 
   defp parse_token_response(_), do: {:error, :token_exchange_failed}
 
+  @doc """
+  Refreshes OAuth tokens using a refresh token for the specified provider.
+  Supports token rotation and handles errors like :invalid_grant.
+  """
+  @spec refresh_tokens(String.t() | atom(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, term()}
+  def refresh_tokens(provider, refresh_token, opts \\ []) do
+    provider_str = to_string(provider)
+
+    with {:ok, config} <- Map.fetch(@providers, provider_str),
+         {:client_id, cid} when is_binary(cid) and byte_size(cid) > 0 <-
+           {:client_id, client_id(provider_str)},
+         {:client_secret, csec} when is_binary(csec) and byte_size(csec) > 0 <-
+           {:client_secret, client_secret(provider_str)} do
+      if mock_client = opts[:http_client] do
+        mock_client.(:post, config.token_url, [], %{
+          grant_type: "refresh_token",
+          refresh_token: refresh_token
+        })
+        |> parse_refresh_response()
+      else
+        body =
+          URI.encode_query(%{
+            "grant_type" => "refresh_token",
+            "refresh_token" => refresh_token,
+            "client_id" => cid,
+            "client_secret" => csec
+          })
+
+        headers = [{"content-type", "application/x-www-form-urlencoded"}]
+        uri = URI.parse(config.token_url)
+
+        case ChatOverlay.Net.request(uri.host, "POST", uri.path, headers, body) do
+          {:ok, status, _headers, resp_body} when status in 200..299 ->
+            case JSON.decode(resp_body) do
+              {:ok, tokens} when is_map(tokens) -> {:ok, tokens}
+              _ -> {:error, :token_refresh_failed}
+            end
+
+          {:ok, 400, _headers, resp_body} ->
+            case JSON.decode(resp_body) do
+              {:ok, %{"error" => "invalid_grant"}} -> {:error, :invalid_grant}
+              {:ok, %{"error" => err}} -> {:error, {:upstream_auth_error, err}}
+              _ -> {:error, :token_refresh_failed}
+            end
+
+          {:ok, 401, _headers, _resp_body} ->
+            {:error, :invalid_grant}
+
+          _other ->
+            {:error, :token_refresh_failed}
+        end
+      end
+    else
+      :error ->
+        {:error, :unsupported_provider}
+
+      {:client_id, _} ->
+        {:error, {:unconfigured_client, provider_str}}
+
+      {:client_secret, _} ->
+        {:error, {:unconfigured_client_secret, provider_str}}
+    end
+  end
+
+  defp parse_refresh_response({:ok, status, %{"access_token" => _} = tokens})
+       when status in 200..299,
+       do: {:ok, tokens}
+
+  defp parse_refresh_response({:ok, status, %{access_token: _} = tokens})
+       when status in 200..299,
+       do: {:ok, stringify_map(tokens)}
+
+  defp parse_refresh_response({:ok, status, body})
+       when status in 200..299 and is_binary(body) do
+    case JSON.decode(body) do
+      {:ok, tokens} when is_map(tokens) -> {:ok, tokens}
+      _ -> {:error, :token_refresh_failed}
+    end
+  end
+
+  defp parse_refresh_response({:ok, 400, %{"error" => "invalid_grant"}}),
+    do: {:error, :invalid_grant}
+
+  defp parse_refresh_response({:ok, 400, %{error: "invalid_grant"}}), do: {:error, :invalid_grant}
+
+  defp parse_refresh_response({:ok, 400, %{"error" => err}}),
+    do: {:error, {:upstream_auth_error, err}}
+
+  defp parse_refresh_response({:ok, 400, %{error: err}}),
+    do: {:error, {:upstream_auth_error, err}}
+
+  defp parse_refresh_response({:ok, 400, body}) when is_binary(body) do
+    case JSON.decode(body) do
+      {:ok, %{"error" => "invalid_grant"}} -> {:error, :invalid_grant}
+      {:ok, %{"error" => err}} -> {:error, {:upstream_auth_error, err}}
+      _ -> {:error, :token_refresh_failed}
+    end
+  end
+
+  defp parse_refresh_response({:ok, 401, _}), do: {:error, :invalid_grant}
+
+  defp parse_refresh_response({:ok, status, _}) when status >= 400,
+    do: {:error, :token_refresh_failed}
+
+  defp parse_refresh_response({:error, _} = err), do: err
+  defp parse_refresh_response(_), do: {:error, :token_refresh_failed}
+
+  defp stringify_map(map) when is_map(map) do
+    for {k, v} <- map, into: %{}, do: {to_string(k), v}
+  end
+
   # User info implementation
 
   defp fetch_user_info("twitch", access_token, config, opts) do

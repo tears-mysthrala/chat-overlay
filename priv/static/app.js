@@ -179,15 +179,30 @@
       const youtube = linked.youtube;
 
       if (twitch && twitch.linked) {
-        if (twitchStatusBadge) {
-          twitchStatusBadge.textContent = "Vinculado";
-          twitchStatusBadge.className = "status-badge connected";
+        if (twitch.status === "reauth_required") {
+          if (twitchStatusBadge) {
+            twitchStatusBadge.textContent = "Reautenticación requerida";
+            twitchStatusBadge.className = "status-badge reauth-required";
+          }
+          if (twitchUserInfo) {
+            twitchUserInfo.textContent = `Acceso expirado o revocado (@${twitch.username || twitch.user_id}). Vuelve a conectar.`;
+          }
+          if (connectTwitchBtn) {
+            connectTwitchBtn.hidden = false;
+            connectTwitchBtn.textContent = "Reconectar Twitch";
+          }
+          if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = false;
+        } else {
+          if (twitchStatusBadge) {
+            twitchStatusBadge.textContent = "Vinculado";
+            twitchStatusBadge.className = "status-badge connected";
+          }
+          if (twitchUserInfo) {
+            twitchUserInfo.textContent = `Conectado como @${twitch.username || twitch.user_id}`;
+          }
+          if (connectTwitchBtn) connectTwitchBtn.hidden = true;
+          if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = false;
         }
-        if (twitchUserInfo) {
-          twitchUserInfo.textContent = `Conectado como @${twitch.username || twitch.user_id}`;
-        }
-        if (connectTwitchBtn) connectTwitchBtn.hidden = true;
-        if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = false;
       } else {
         if (twitchStatusBadge) {
           twitchStatusBadge.textContent = "No vinculado";
@@ -196,20 +211,38 @@
         if (twitchUserInfo) {
           twitchUserInfo.textContent = "Ninguna cuenta de Twitch vinculada a este perfil.";
         }
-        if (connectTwitchBtn) connectTwitchBtn.hidden = false;
+        if (connectTwitchBtn) {
+          connectTwitchBtn.hidden = false;
+          connectTwitchBtn.textContent = "Vincular Twitch";
+        }
         if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = true;
       }
 
       if (youtube && youtube.linked) {
-        if (youtubeStatusBadge) {
-          youtubeStatusBadge.textContent = "Vinculado";
-          youtubeStatusBadge.className = "status-badge connected";
+        if (youtube.status === "reauth_required") {
+          if (youtubeStatusBadge) {
+            youtubeStatusBadge.textContent = "Reautenticación requerida";
+            youtubeStatusBadge.className = "status-badge reauth-required";
+          }
+          if (youtubeUserInfo) {
+            youtubeUserInfo.textContent = `Acceso expirado o revocado (${youtube.username || youtube.user_id}). Vuelve a conectar.`;
+          }
+          if (connectYoutubeBtn) {
+            connectYoutubeBtn.hidden = false;
+            connectYoutubeBtn.textContent = "Reconectar YouTube";
+          }
+          if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = false;
+        } else {
+          if (youtubeStatusBadge) {
+            youtubeStatusBadge.textContent = "Vinculado";
+            youtubeStatusBadge.className = "status-badge connected";
+          }
+          if (youtubeUserInfo) {
+            youtubeUserInfo.textContent = `Conectado como ${youtube.username || youtube.user_id}`;
+          }
+          if (connectYoutubeBtn) connectYoutubeBtn.hidden = true;
+          if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = false;
         }
-        if (youtubeUserInfo) {
-          youtubeUserInfo.textContent = `Conectado como ${youtube.username || youtube.user_id}`;
-        }
-        if (connectYoutubeBtn) connectYoutubeBtn.hidden = true;
-        if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = false;
       } else {
         if (youtubeStatusBadge) {
           youtubeStatusBadge.textContent = "No vinculado";
@@ -218,7 +251,10 @@
         if (youtubeUserInfo) {
           youtubeUserInfo.textContent = "Ninguna cuenta de Google/YouTube vinculada a este perfil.";
         }
-        if (connectYoutubeBtn) connectYoutubeBtn.hidden = false;
+        if (connectYoutubeBtn) {
+          connectYoutubeBtn.hidden = false;
+          connectYoutubeBtn.textContent = "Vincular YouTube";
+        }
         if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = true;
       }
     }
