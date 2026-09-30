@@ -751,6 +751,8 @@
           }
         }
       });
+    }
+
     if (connectTwitchBtn) {
       connectTwitchBtn.addEventListener("click", async () => {
         const p = getSelectedProfile();
