@@ -25,7 +25,21 @@ defmodule ChatOverlay.WebF2Test do
       "storage_used_bytes" => 0
     }
 
-    profiles = Enum.reject(original_profiles, &(&1["handle"] == "streamer")) ++ [f2_profile]
+    streamer2_profile = %{
+      "handle" => "streamer2",
+      "sources" => [
+        %{"platform" => "twitch", "channel" => "streamer2", "mode" => "demo"}
+      ],
+      "can_upload" => true,
+      "storage_quota_bytes" => 10_485_760,
+      "storage_used_bytes" => 0
+    }
+
+    profiles =
+      original_profiles
+      |> Enum.reject(&(&1["handle"] in ["streamer", "streamer2"]))
+      |> Kernel.++([f2_profile, streamer2_profile])
+
     Application.put_env(:chat_overlay, :profiles, profiles)
     :ok
   end
@@ -373,6 +387,96 @@ defmodule ChatOverlay.WebF2Test do
     assert err =~ "Capability token revoked"
     fin = ChatOverlay.TestClient.await(conn, ref, 2000)
     assert fin in [{:done, ""}, {:error, :closed}]
+    ChatOverlay.TestClient.close(conn)
+  end
+
+  test "HTTP/1.1 keep-alive unregisters viewer and isolates subsequent streams on reused connection",
+       %{port: port} do
+    assert {:ok, token1, _} = Profiles.regenerate_capability_token("streamer")
+    assert {:ok, token2, _} = Profiles.regenerate_capability_token("streamer2")
+
+    conn = connection(port)
+
+    # 1. Connect to streamer on keep-alive connection
+    ref1 =
+      ChatOverlay.TestClient.request(
+        conn,
+        "GET",
+        "/events/streamer?view=overlay&token=" <> token1,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn, ref1)
+    assert {:data, :nofin, chunk1} = ChatOverlay.TestClient.await(conn, ref1)
+    assert chunk1 =~ "retry: 2000"
+
+    # Verify registration exists in SSERegistry
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer") != []
+
+    # 2. Regenerate capability token for streamer -> disconnects stream 1
+    assert {:ok, _new_token1, _} = Profiles.regenerate_capability_token("streamer")
+
+    err1 = await_error(conn, ref1)
+    assert is_binary(err1)
+    assert err1 =~ "Capability token revoked"
+    fin1 = ChatOverlay.TestClient.await(conn, ref1, 2000)
+    assert fin1 in [{:done, ""}, {:error, :closed}]
+
+    # 3. CRITICAL: SSERegistry unregisters handle on response end even though Bandit
+    # keeps the socket process alive for HTTP/1.1 keep-alive
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer") == []
+
+    # 4. REUSE the same HTTP/1.1 keep-alive connection for streamer2
+    ref2 =
+      ChatOverlay.TestClient.request(
+        conn,
+        "GET",
+        "/events/streamer2?view=overlay&token=" <> token2,
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 200, _} = ChatOverlay.TestClient.await(conn, ref2)
+    assert {:data, :nofin, chunk2} = ChatOverlay.TestClient.await(conn, ref2)
+    assert chunk2 =~ "retry: 2000"
+
+    # Verify streamer2 is registered, and streamer is still empty
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer2") != []
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer") == []
+
+    # 5. Regenerating streamer AGAIN must NOT disrupt streamer2 on this reused connection
+    assert {:ok, _another_token1, _} = Profiles.regenerate_capability_token("streamer")
+
+    # Ensure no spurious message disconnects streamer2
+    Process.sleep(100)
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer2") != []
+
+    # 6. Now regenerate streamer2 -> actively disconnects stream 2
+    assert {:ok, _new_token2, _} = Profiles.regenerate_capability_token("streamer2")
+
+    err2 = await_error(conn, ref2)
+    assert is_binary(err2)
+    assert err2 =~ "Capability token revoked"
+    fin2 = ChatOverlay.TestClient.await(conn, ref2, 2000)
+    assert fin2 in [{:done, ""}, {:error, :closed}]
+
+    # Verify streamer2 registry entry is cleaned up on exit
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer2") == []
+
+    # 7. Test that 401 exit also leaves no stale registration
+    ref3 =
+      ChatOverlay.TestClient.request(
+        conn,
+        "GET",
+        "/events/streamer?view=overlay&token=invalid_token",
+        [],
+        ""
+      )
+
+    assert {:response, :nofin, 401, _} = ChatOverlay.TestClient.await(conn, ref3)
+    assert Registry.lookup(ChatOverlay.SSERegistry, "streamer") == []
+
     ChatOverlay.TestClient.close(conn)
   end
 end

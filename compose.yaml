@@ -11,7 +11,7 @@ services:
       TWITCH_CLIENT_SECRET: "${TWITCH_CLIENT_SECRET:-}"
       GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
-      CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY:-}"
+      CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY:?Falta CHAT_ENCRYPTION_KEY (mínimo 32 caracteres). Configúrala o genera una con: export CHAT_ENCRYPTION_KEY=$$(openssl rand -hex 32)}"
     volumes:
       # Demo mode mounts demo.json read-only.
       # For persistent mode with OAuth account linking and dynamic profiles, mount a writable config file or volume:

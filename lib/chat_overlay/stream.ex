@@ -23,6 +23,7 @@ defmodule ChatOverlay.Stream do
           :ok ->
             try do
               if is_overlay and Process.whereis(ChatOverlay.SSERegistry) do
+                flush_stale_revocations()
                 Registry.register(ChatOverlay.SSERegistry, handle, token)
               end
 
@@ -51,6 +52,10 @@ defmodule ChatOverlay.Stream do
                 poll(conn, handle, cursor, is_overlay, token, System.monotonic_time(:millisecond))
               end
             after
+              if is_overlay and Process.whereis(ChatOverlay.SSERegistry) do
+                Registry.unregister(ChatOverlay.SSERegistry, handle)
+              end
+
               Admission.release()
             end
 
@@ -71,7 +76,7 @@ defmodule ChatOverlay.Stream do
     if Process.whereis(ChatOverlay.SSERegistry) do
       Registry.dispatch(ChatOverlay.SSERegistry, handle, fn entries ->
         for {pid, _token} <- entries do
-          send(pid, :capability_token_revoked)
+          send(pid, {:capability_token_revoked, handle})
         end
       end)
     else
@@ -80,6 +85,15 @@ defmodule ChatOverlay.Stream do
   end
 
   def disconnect_viewers(_), do: :ok
+
+  defp flush_stale_revocations do
+    receive do
+      {:capability_token_revoked, _} -> flush_stale_revocations()
+      :capability_token_revoked -> flush_stale_revocations()
+    after
+      0 -> :ok
+    end
+  end
 
   defp poll(conn, handle, cursor, is_overlay, token, last) do
     result = Store.read(Store.name(handle), cursor)
@@ -116,6 +130,24 @@ defmodule ChatOverlay.Stream do
 
           {:tcp_error, _, _} ->
             conn
+
+          {:capability_token_revoked, ^handle} ->
+            _ =
+              Plug.Conn.chunk(
+                conn,
+                "event: error\ndata: " <>
+                  ChatOverlay.JSON.encode(%{
+                    "error" => "unauthorized",
+                    "message" => "Capability token revoked"
+                  }) <>
+                  "\n\n"
+              )
+
+            conn
+
+          {:capability_token_revoked, _other_handle} ->
+            # Discard stale revocation from previous request on keep-alive connection
+            poll(conn, handle, result.cursor, is_overlay, token, if(data, do: now, else: last))
 
           :capability_token_revoked ->
             _ =

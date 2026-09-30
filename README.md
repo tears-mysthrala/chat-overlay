@@ -6,9 +6,21 @@ Overlay unificado para Twitch y YouTube (Kick formalmente diferido por inestabil
 
 ## Probar con mensajes sintéticos
 
+Para levantar la demo con Docker Compose, genera primero una clave de cifrado local (mínimo 32 caracteres) y arranca el contenedor:
+
 ```sh
+export CHAT_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 docker compose -p chat-overlay-demo up --build
 ```
+
+O creando un archivo local `.env`:
+
+```sh
+echo "CHAT_ENCRYPTION_KEY=$(openssl rand -hex 32)" > .env
+docker compose -p chat-overlay-demo up --build
+```
+
+> **Conservación de la clave y persistencia:** La clave `CHAT_ENCRYPTION_KEY` cifra los tokens y estados OAuth en reposo (AES-256-GCM). Si se vinculan cuentas o se persisten perfiles (`config/local-profiles.json`), es imprescindible conservar la misma clave entre reinicios para poder descifrar los datos persistidos. En entornos de producción y en la release en contenedor, el sistema falla de inmediato (*fail-closed*) si `CHAT_ENCRYPTION_KEY` no se define, está vacía, tiene menos de 32 bytes o coincide con la clave por defecto de desarrollo. Compose fallará con un mensaje explicativo si la variable no está definida.
 
 Abre <http://127.0.0.1:4100/> para acceder al Panel de Creador o <http://127.0.0.1:4100/reader/demo> para la vista de lectura. Desde el panel puedes gestionar el enlace protegido de OBS Studio, probar las alertas de sonido con el reproductor integrado y simular la regeneración de tokens en caliente.
 
@@ -24,7 +36,7 @@ mix check
 CHAT_CONFIG=config/demo.json mix run --no-halt
 ```
 
-PowerShell: `$env:CHAT_CONFIG='config/demo.json'; mix run --no-halt`. El puerto por defecto es 4100; `CHAT_PORT` permite otro puerto no privilegiado. El listener local se limita a loopback. El contenedor escucha internamente en todas sus interfaces, pero Compose publica únicamente en loopback.
+PowerShell: `$env:CHAT_CONFIG='config/demo.json'; mix run --no-halt`. En ejecución local con Mix se permite la clave de desarrollo por defecto si `CHAT_ENCRYPTION_KEY` no se especifica. El puerto por defecto es 4100; `CHAT_PORT` permite otro puerto no privilegiado. El listener local se limita a loopback. El contenedor escucha internamente en todas sus interfaces, pero Compose publica únicamente en loopback.
 
 ## Configuración y Perfiles de Creador
 
