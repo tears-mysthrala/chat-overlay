@@ -66,7 +66,7 @@
 
 8. **Validación en Vivo en OBS Studio 32.2.2 (Issue #19, PR #20)**:
    - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/19
-   - Pull Request: https://github.com/tears-mysthrala/chat-overlay/pull/20
+   - Pull Request: https://github.com/tears-mysthrala/chat-overlay/pull/20 (MERGED a `main` en `da9d911`, Closes #19).
    - Rama: `test/19-obs-f2-validation`
    - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/19-obs-f2-validation`
    - Script automatizado vía OBS WebSocket (puerto 4455): `scripts/test_obs_f2.py`.
@@ -80,5 +80,14 @@
    - **Ajustes de CSP aplicados**:
      - Sustituido estilo inline en la página de error 401 por hoja de estilo `app.css` y clase `.unauthorized-body` (evitando violación de `style-src`).
      - Añadido el hash `sha256-Yd1GhiWi47kUsi/SDfKQTY7E39TboDOQOjTJBsT0GQg=` a `style-src` en `ChatOverlay.HTTP` para autorizar de forma estricta el CSS inyectado por defecto por OBS Studio sin relajar la directiva a `unsafe-inline`.
+
+9. **Cierre Formal de Fase F2 (Issue #21)**:
+   - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/21
+   - Rama: `docs/21-f2-closure`
+   - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/21-f2-closure`
+   - Estado: Consolidación documental y certificación de cierre de Fase F2 aprobada por el operador Kalista el 30-09-2026.
+   - Matrices de verificación (`docs/verification.md`), operación (`docs/operations.md`), cumplimiento (`docs/compliance.md`), contrato (`WHAT_WE_ARE_BUILDING.md`) y `README.md` actualizadas con las evidencias completas de F2.
+   - Siguiente hito acordado: Opción B (flujo interactivo OAuth/SSO para vinculación de cuentas de Twitch/Google en el Panel de Creador como base para Fase F3).
+
 
 
