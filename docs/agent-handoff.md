@@ -60,9 +60,25 @@
    - Smoke tests de release: `python3 scripts/smoke_image.py` PASS.
    - Auditoría SBOM y vulnerabilidades: `python3 scripts/audit_image.py` PASS (0 vulnerabilidades accionables en Grype).
 
-7. **Estado de Pull Request y CI**:
-   - Pull Request abierta: https://github.com/tears-mysthrala/chat-overlay/pull/18
-   - Commit: `e754203` (`feat(f2): panel de creador, capability tokens y multimedia R2 (Closes #17)`).
-   - CI en GitHub Actions: **100% PASS** (`CI/source-and-tests` exitoso en 1m39s, `CI/image-security` exitoso en 2m0s).
-   - Listo para revisión y merge por parte del operador humano (Kalista).
+7. **Estado de Pull Request y CI (Fase F2 Core)**:
+   - Pull Request: https://github.com/tears-mysthrala/chat-overlay/pull/18 (MERGED a `main` en `0ccae4b`, Closes #17).
+   - CI en GitHub Actions: **100% PASS** (`CI/source-and-tests` exitoso en 1m18s, `CI/image-security` exitoso en 1m56s).
+
+8. **Validación en Vivo en OBS Studio 32.2.2 (Issue #19, PR #20)**:
+   - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/19
+   - Pull Request: https://github.com/tears-mysthrala/chat-overlay/pull/20
+   - Rama: `test/19-obs-f2-validation`
+   - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/19-obs-f2-validation`
+   - Script automatizado vía OBS WebSocket (puerto 4455): `scripts/test_obs_f2.py`.
+   - Pruebas superadas en vivo en OBS Studio 32.2.2 (CEF 152.0.7977.83 / Wayland):
+     1. **Rechazo 401 Unauthorized sin token**: Verificado en OBS Browser Source. El overlay devuelve 401 con pantalla de aviso amigable y CSP intacta (`obs_f2_401_unauthorized.png`).
+     2. **Acceso autorizado 200 OK con Capability Token**: OBS conecta al stream SSE y renderiza el chat en directo de Twitch con badges, timestamps y sanitización XSS (`obs_f2_authorized_live.png`).
+     3. **Revocación inmediata en caliente**: Al regenerar el token mediante el endpoint API `/api/profiles/:handle/token/regenerate`, el token anterior queda invalidado de inmediato en el backend y la fuente en OBS pasa a 401 (`obs_f2_revoked_401.png`).
+     4. **Restauración con nuevo token**: Al actualizar la fuente en OBS con el nuevo token generado, el overlay reanuda la conexión SSE sin reiniciar el proceso ni perder el estado del canal (`obs_f2_restored_live.png`).
+     5. **Lienzo completo y transparencia**: Verificado sobre escena con fondo sólido (`TestColor`); la transparencia del overlay es total y el texto se dibuja sin halos ni recortes (`obs_f2_scene_full.png`).
+     6. **Panel de Creador (Chromium headless)**: Captura completa del panel con gestión de enlace OBS, advertencia de regeneración y pestañas de alertas multimedia R2 (`dashboard_f2_full.png`).
+   - **Ajustes de CSP aplicados**:
+     - Sustituido estilo inline en la página de error 401 por hoja de estilo `app.css` y clase `.unauthorized-body` (evitando violación de `style-src`).
+     - Añadido el hash `sha256-Yd1GhiWi47kUsi/SDfKQTY7E39TboDOQOjTJBsT0GQg=` a `style-src` en `ChatOverlay.HTTP` para autorizar de forma estricta el CSS inyectado por defecto por OBS Studio sin relajar la directiva a `unsafe-inline`.
+
 

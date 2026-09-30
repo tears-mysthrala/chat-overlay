@@ -43,7 +43,7 @@ defmodule ChatOverlay.HTTP do
       {"x-content-type-options", "nosniff"},
       {"referrer-policy", "no-referrer"},
       {"content-security-policy",
-       "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self' https:; img-src 'self' https://static-cdn.jtvnw.net https: data:; media-src 'self' https: data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"},
+       "default-src 'none'; script-src 'self'; style-src 'self' 'sha256-Yd1GhiWi47kUsi/SDfKQTY7E39TboDOQOjTJBsT0GQg='; connect-src 'self' https:; img-src 'self' https://static-cdn.jtvnw.net https: data:; media-src 'self' https: data:; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"},
       {"permissions-policy", "camera=(), microphone=(), geolocation=()"}
     ]
 end
