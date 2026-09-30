@@ -130,3 +130,31 @@
     - Clave de cifrado OAuth obligatoria (fallo en arranque si no está configurada).
     - Desconexión y cierre forzado de visores SSE preexistentes ante revocación de capability token.
     - Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2.
+
+## CI hardening — issue #27, same branch and PR #26
+
+Operator explicitly requested reuse of AGY's `feat/25-token-lifecycle-refresh`
+worktree and PR #26. Starting commit: `8ef5838`; initial suite: 150 passing tests.
+No production code, new dependencies, branch protection, merge or deployment changed.
+
+Added deterministic lifecycle regression tests, offline serial/concurrent full-suite
+runs, ExUnit JSON evidence validation (no failures/skips/exclusions/empty suites),
+validator tests, bounded Docker execution and a final `quality-gate`. CI triggers
+are PR/manual/weekly and obsolete executions are cancelled.
+
+Local verification: both seeds discover 153 tests, with 150 passing and the same
+three failures: pending-worker invalidation, ownership after abrupt coordinator
+death, and stale binding rejection after unlink/relink. These failures block
+acceptance and must be fixed; they are not waived. Python validator tests pass,
+as do format, static checks and JavaScript syntax. OBS/upstream/load-long-run tests
+were not repeated. The final required-check setting still needs operator action.
+
+Next action: fix the three lifecycle failures and run `MIX_ENV=test sh scripts/ci_tests.sh`
+plus `python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json`.
+Review the remote CI evidence before approving merge. Rollback: revert the CI commit.
+
+Publishing exception: the pre-push hook's green-test requirement is bypassed solely
+to publish intentionally failing regression gates on the existing review PR. This
+is the documented scripts/README.md exception; format, workflow lint, static
+checks and secret scan were executed. Remote tests remain active and merge is
+blocked. No failing test was skipped or represented as passing.

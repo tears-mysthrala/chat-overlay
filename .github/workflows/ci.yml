@@ -1,11 +1,12 @@
 name: CI
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
   schedule:
     - cron: "17 6 * * 1"
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
   issues: read
@@ -19,14 +20,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/check_traceability.py
+      - name: Verify CI evidence validator
+        run: python3 -m unittest discover -s scripts/tests
       - name: Project static checks
         run: |
           python3 scripts/security_static.py
           node --check priv/static/app.js
       - name: Scan repository source for secrets
         run: python3 scripts/scan_secrets.py
-      - name: Compile, audit Hex, check licenses and run ExUnit in Linux
+      - name: Build validation image, audit Hex and check licenses
         run: docker build --target validation -t chat-overlay:validation .
+      - name: ExUnit serial and concurrent, no network
+        id: exunit
+        run: |
+          mkdir -p output/tests
+          docker run --rm --network none --cpus 2 --memory 1g --pids-limit 128 -e ERL_FLAGS='+S 2:2' -e CI_TEST_REPORT_DIR=/evidence -v "$PWD/output/tests:/evidence" chat-overlay:validation sh scripts/ci_tests.sh
+      - name: Reject skipped, excluded, empty or incomplete test results
+        if: ${{ always() && steps.exunit.outcome != 'skipped' }}
+        run: python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json
       - name: Synthetic load (no platform access)
         run: |
           set -o pipefail
@@ -36,6 +47,7 @@ jobs:
         with:
           name: source-evidence
           path: |
+            output/tests/*.json
             output/load.json
             output/secrets/gitleaks.json
           retention-days: 14
@@ -61,3 +73,17 @@ jobs:
           path: |
             output/audit/*.json
           retention-days: 14
+
+  quality-gate:
+    if: ${{ always() }}
+    needs: [source-and-tests, image-security]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require all validation jobs to succeed
+        env:
+          SOURCE_RESULT: ${{ needs.source-and-tests.result }}
+          IMAGE_RESULT: ${{ needs.image-security.result }}
+        run: |
+          test "$SOURCE_RESULT" = success
+          test "$IMAGE_RESULT" = success
