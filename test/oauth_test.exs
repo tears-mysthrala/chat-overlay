@@ -62,6 +62,17 @@ defmodule ChatOverlay.OAuthTest do
       assert {:error, :unsupported_provider} =
                OAuth.authorize_url("facebook", "streamer", "https://example.com/callback")
     end
+
+    test "rejects unconfigured client ID" do
+      Application.delete_env(:chat_overlay, :twitch_client_id)
+      System.delete_env("TWITCH_CLIENT_ID")
+
+      assert {:error, {:unconfigured_client, "twitch"}} =
+               OAuth.authorize_url("twitch", "streamer", "https://example.com/callback")
+
+      # Restore
+      Application.put_env(:chat_overlay, :twitch_client_id, "mock_twitch_id")
+    end
   end
 
   describe "verify_state/2" do

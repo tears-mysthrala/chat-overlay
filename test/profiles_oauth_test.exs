@@ -65,4 +65,24 @@ defmodule ChatOverlay.ProfilesOAuthTest do
 
     assert {:error, :not_linked} = Profiles.get_linked_account_tokens("creator1", "youtube")
   end
+
+  test "link_account/4 fails and surfaces error when persistence storage path is unwritable" do
+    orig_path = Application.get_env(:chat_overlay, :profiles_path)
+    # Set to an unwritable directory
+    Application.put_env(:chat_overlay, :profiles_path, "/nonexistent_root_dir/profiles.json")
+
+    account_data = %{username: "UnwritableUser", user_id: "999"}
+    tokens = %{"access_token" => "tok_xyz"}
+
+    try do
+      assert {:error, {:directory_not_found, "/nonexistent_root_dir"}} =
+               Profiles.link_account("creator1", "twitch", account_data, tokens)
+    after
+      if orig_path do
+        Application.put_env(:chat_overlay, :profiles_path, orig_path)
+      else
+        Application.delete_env(:chat_overlay, :profiles_path)
+      end
+    end
+  end
 end

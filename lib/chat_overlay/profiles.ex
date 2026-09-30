@@ -620,8 +620,20 @@ defmodule ChatOverlay.Profiles do
         # Clean up any orphaned source workers that were removed from this profile
         cleanup_removed_sources(removed_sources, valid_profiles)
 
-        persist_profiles(valid_profiles)
-        {:ok, final_profile}
+        case persist_profiles(valid_profiles) do
+          :ok ->
+            {:ok, final_profile}
+
+          {:error, reason} = err ->
+            require Logger
+            Logger.warning("No se pudo persistir el perfil en disco: #{inspect(reason)}")
+
+            if opts[:require_persistence] do
+              err
+            else
+              {:ok, final_profile}
+            end
+        end
 
       error ->
         error
@@ -750,7 +762,7 @@ defmodule ChatOverlay.Profiles do
           existing_linked = existing["linked_accounts"] || %{}
           updated_linked = Map.put(existing_linked, provider_str, entry)
           updated_profile = Map.put(existing, "linked_accounts", updated_linked)
-          do_save_profile(updated_profile, replace: true)
+          do_save_profile(updated_profile, replace: true, require_persistence: true)
         end
     end
   end
@@ -767,7 +779,7 @@ defmodule ChatOverlay.Profiles do
         existing_linked = existing["linked_accounts"] || %{}
         updated_linked = Map.delete(existing_linked, provider_str)
         updated_profile = Map.put(existing, "linked_accounts", updated_linked)
-        do_save_profile(updated_profile, replace: true)
+        do_save_profile(updated_profile, replace: true, require_persistence: true)
     end
   end
 
@@ -949,24 +961,36 @@ defmodule ChatOverlay.Profiles do
 
     doc = %{"profiles" => profiles}
 
-    try do
-      case ChatOverlay.JSON.encode(doc) do
-        json when is_binary(json) ->
-          dir = Path.dirname(path)
+    case ChatOverlay.JSON.encode(doc) do
+      json when is_binary(json) ->
+        dir = Path.dirname(path)
 
-          if File.dir?(dir) do
-            tmp = Path.join(dir, ".profiles-#{:erlang.unique_integer([:positive])}.tmp")
-            File.write!(tmp, json)
-            File.rename!(tmp, path)
+        if File.dir?(dir) do
+          tmp = Path.join(dir, ".profiles-#{:erlang.unique_integer([:positive])}.tmp")
+
+          case File.write(tmp, json) do
+            :ok ->
+              case File.rename(tmp, path) do
+                :ok ->
+                  :ok
+
+                {:error, reason} ->
+                  _ = File.rm(tmp)
+                  {:error, {:persist_failed, reason}}
+              end
+
+            {:error, reason} ->
+              {:error, {:persist_failed, reason}}
           end
+        else
+          {:error, {:directory_not_found, dir}}
+        end
 
-          :ok
-
-        _ ->
-          :ok
-      end
-    rescue
-      _ -> :ok
+      error ->
+        {:error, {:json_encode_failed, error}}
     end
+  rescue
+    e ->
+      {:error, {:persist_failed, e}}
   end
 end

@@ -37,13 +37,13 @@ defmodule ChatOverlay.OAuth do
   """
   def client_id(provider) when provider in ["twitch", :twitch] do
     System.get_env("TWITCH_CLIENT_ID") ||
-      Application.get_env(:chat_overlay, :twitch_client_id, "mock_twitch_client_id")
+      Application.get_env(:chat_overlay, :twitch_client_id)
   end
 
   def client_id(provider) when provider in ["youtube", :youtube, "google", :google] do
     System.get_env("GOOGLE_CLIENT_ID") ||
       System.get_env("YOUTUBE_CLIENT_ID") ||
-      Application.get_env(:chat_overlay, :google_client_id, "mock_google_client_id")
+      Application.get_env(:chat_overlay, :google_client_id)
   end
 
   def client_id(_), do: nil
@@ -53,13 +53,13 @@ defmodule ChatOverlay.OAuth do
   """
   def client_secret(provider) when provider in ["twitch", :twitch] do
     System.get_env("TWITCH_CLIENT_SECRET") ||
-      Application.get_env(:chat_overlay, :twitch_client_secret, "mock_twitch_client_secret")
+      Application.get_env(:chat_overlay, :twitch_client_secret)
   end
 
   def client_secret(provider) when provider in ["youtube", :youtube, "google", :google] do
     System.get_env("GOOGLE_CLIENT_SECRET") ||
       System.get_env("YOUTUBE_CLIENT_SECRET") ||
-      Application.get_env(:chat_overlay, :google_client_secret, "mock_google_client_secret")
+      Application.get_env(:chat_overlay, :google_client_secret)
   end
 
   def client_secret(_), do: nil
@@ -74,23 +74,29 @@ defmodule ChatOverlay.OAuth do
 
     case Map.fetch(@providers, provider_str) do
       {:ok, config} ->
-        pkce = Crypto.generate_pkce()
-        state = generate_state(handle, provider_str, pkce.verifier)
+        case client_id(provider_str) do
+          cid when is_binary(cid) and byte_size(cid) > 0 ->
+            pkce = Crypto.generate_pkce()
+            state = generate_state(handle, provider_str, pkce.verifier)
 
-        params =
-          %{
-            "client_id" => client_id(provider_str),
-            "redirect_uri" => redirect_uri,
-            "response_type" => "code",
-            "scope" => opts[:scope] || config.default_scope,
-            "state" => state,
-            "code_challenge" => pkce.challenge,
-            "code_challenge_method" => pkce.method
-          }
-          |> maybe_add_google_opts(provider_str)
+            params =
+              %{
+                "client_id" => cid,
+                "redirect_uri" => redirect_uri,
+                "response_type" => "code",
+                "scope" => opts[:scope] || config.default_scope,
+                "state" => state,
+                "code_challenge" => pkce.challenge,
+                "code_challenge_method" => pkce.method
+              }
+              |> maybe_add_google_opts(provider_str)
 
-        query = URI.encode_query(params)
-        {:ok, "#{config.auth_url}?#{query}"}
+            query = URI.encode_query(params)
+            {:ok, "#{config.auth_url}?#{query}"}
+
+          _ ->
+            {:error, {:unconfigured_client, provider_str}}
+        end
 
       :error ->
         {:error, :unsupported_provider}
@@ -195,25 +201,37 @@ defmodule ChatOverlay.OAuth do
       })
       |> parse_token_response()
     else
-      body =
-        URI.encode_query(%{
-          "client_id" => client_id(provider),
-          "client_secret" => client_secret(provider),
-          "code" => code,
-          "code_verifier" => verifier,
-          "grant_type" => "authorization_code",
-          "redirect_uri" => redirect_uri
-        })
+      cid = client_id(provider)
+      csec = client_secret(provider)
 
-      headers = [{"content-type", "application/x-www-form-urlencoded"}]
-      uri = URI.parse(config.token_url)
+      cond do
+        is_nil(cid) or cid == "" ->
+          {:error, {:unconfigured_client, provider}}
 
-      case ChatOverlay.Net.request(uri.host, "POST", uri.path, headers, body) do
-        {:ok, %{status: status, body: resp_body}} when status in 200..299 ->
-          JSON.decode(resp_body)
+        is_nil(csec) or csec == "" ->
+          {:error, {:unconfigured_client_secret, provider}}
 
-        _other ->
-          {:error, :token_exchange_failed}
+        true ->
+          body =
+            URI.encode_query(%{
+              "client_id" => cid,
+              "client_secret" => csec,
+              "code" => code,
+              "code_verifier" => verifier,
+              "grant_type" => "authorization_code",
+              "redirect_uri" => redirect_uri
+            })
+
+          headers = [{"content-type", "application/x-www-form-urlencoded"}]
+          uri = URI.parse(config.token_url)
+
+          case ChatOverlay.Net.request(uri.host, "POST", uri.path, headers, body) do
+            {:ok, %{status: status, body: resp_body}} when status in 200..299 ->
+              JSON.decode(resp_body)
+
+            _other ->
+              {:error, :token_exchange_failed}
+          end
       end
     end
   end

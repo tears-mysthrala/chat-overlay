@@ -58,6 +58,23 @@ defmodule ChatOverlay.WebOAuthTest do
     assert data["url"] =~ "code_challenge="
   end
 
+  test "GET /api/oauth/authorize/:provider rejects unconfigured provider credentials", %{
+    port: port
+  } do
+    original_id = Application.get_env(:chat_overlay, :twitch_client_id)
+    Application.delete_env(:chat_overlay, :twitch_client_id)
+    System.delete_env("TWITCH_CLIENT_ID")
+
+    try do
+      {400, _, body} = request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer")
+      {:ok, data} = JSON.decode(body)
+      assert data["ok"] == false
+      assert data["error"] =~ "no tiene client_id configurado"
+    after
+      if original_id, do: Application.put_env(:chat_overlay, :twitch_client_id, original_id)
+    end
+  end
+
   test "GET /api/oauth/authorize/:provider rejects unknown handle", %{port: port} do
     {404, _, body} = request(port, "GET", "/api/oauth/authorize/twitch?handle=nonexistent")
     {:ok, data} = JSON.decode(body)

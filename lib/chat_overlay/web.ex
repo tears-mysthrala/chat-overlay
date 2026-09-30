@@ -824,6 +824,18 @@ defmodule ChatOverlay.Web do
               )
             end
 
+          {:error, {:unconfigured_client, prov}} ->
+            reply(
+              conn,
+              400,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" =>
+                  "El proveedor #{prov} no tiene client_id configurado (configure la variable de entorno correspondiente)."
+              })
+            )
+
           {:error, _reason} ->
             reply(
               conn,
@@ -872,14 +884,24 @@ defmodule ChatOverlay.Web do
               user_id: result.user_id
             }
 
-            ChatOverlay.Profiles.link_account(
-              result.handle,
-              result.provider,
-              account_data,
-              result.tokens
-            )
+            case ChatOverlay.Profiles.link_account(
+                   result.handle,
+                   result.provider,
+                   account_data,
+                   result.tokens
+                 ) do
+              {:ok, _} ->
+                redirect(conn, "/?handle=#{result.handle}&linked=#{result.provider}")
 
-            redirect(conn, "/?handle=#{result.handle}&linked=#{result.provider}")
+              {:error, {:persist_failed, _}} ->
+                redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
+
+              {:error, reason} ->
+                redirect(
+                  conn,
+                  "/?handle=#{result.handle}&error=#{URI.encode_www_form(to_string(reason))}"
+                )
+            end
 
           {:error, _reason} ->
             handle =
@@ -914,6 +936,17 @@ defmodule ChatOverlay.Web do
             200,
             "application/json",
             ChatOverlay.JSON.encode(%{"ok" => true, "unlinked" => provider})
+          )
+
+        {:error, {:persist_failed, _}} ->
+          reply(
+            conn,
+            500,
+            "application/json",
+            ChatOverlay.JSON.encode(%{
+              "ok" => false,
+              "error" => "Almacenamiento no escribible para persistir cambios"
+            })
           )
 
         {:error, reason} ->
