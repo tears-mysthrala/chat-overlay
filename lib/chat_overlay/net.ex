@@ -1,6 +1,6 @@
 defmodule ChatOverlay.Net do
   @moduledoc "Fixed destinations, pinned public IPs, verified TLS, bounded passive reads."
-  @hosts ~w(api.twitch.tv id.twitch.tv eventsub.wss.twitch.tv www.googleapis.com api.kick.com gql.twitch.tv)
+  @hosts ~w(api.twitch.tv id.twitch.tv eventsub.wss.twitch.tv www.googleapis.com oauth2.googleapis.com api.kick.com gql.twitch.tv)
   def open(host) when host in @hosts do
     with {:ok, addresses} <- :inet.getaddrs(String.to_charlist(host), :inet),
          true <- addresses != [] and Enum.all?(addresses, &public_ip?/1) do

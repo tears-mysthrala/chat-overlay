@@ -56,6 +56,45 @@
         </div>
       </section>
 
+      <section class="dashboard-section accounts-section" id="accounts-management-section">
+        <h2 class="section-title">Cuentas de Plataformas Vinculadas (OAuth 2.0 PKCE)</h2>
+        <p class="hint">Vincula interactivamente tus cuentas oficiales de Twitch y YouTube. Las credenciales se custodian cifradas con AEAD (AES-256-GCM) sin secretos en plano (SEC-14, SEC-15).</p>
+
+        <div class="accounts-grid">
+          <!-- Tarjeta Twitch -->
+          <div class="account-card" id="twitch-account-card">
+            <div class="account-header">
+              <span class="platform-badge twitch">Twitch</span>
+              <span id="twitch-status-badge" class="status-badge disconnected">No vinculado</span>
+            </div>
+            <div class="account-body">
+              <p id="twitch-user-info" class="account-user-info">Ninguna cuenta de Twitch vinculada a este perfil.</p>
+              <div class="account-actions">
+                <button type="button" id="connect-twitch-btn" class="btn-primary">Vincular cuenta de Twitch</button>
+                <button type="button" id="unlink-twitch-btn" class="btn-danger" hidden>Desvincular</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tarjeta YouTube -->
+          <div class="account-card" id="youtube-account-card">
+            <div class="account-header">
+              <span class="platform-badge youtube">YouTube</span>
+              <span id="youtube-status-badge" class="status-badge disconnected">No vinculado</span>
+            </div>
+            <div class="account-body">
+              <p id="youtube-user-info" class="account-user-info">Ninguna cuenta de Google/YouTube vinculada a este perfil.</p>
+              <div class="account-actions">
+                <button type="button" id="connect-youtube-btn" class="btn-primary">Vincular cuenta de YouTube</button>
+                <button type="button" id="unlink-youtube-btn" class="btn-danger" hidden>Desvincular</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="oauth-feedback" class="feedback-msg" role="alert" aria-live="polite" hidden></div>
+      </section>
+
       <section class="dashboard-section alerts-section" id="alerts-management-section">
         <h2 class="section-title">Alertas y Efectos Multimedia</h2>
         <p class="hint">Configura efectos de audio y emojis para eventos en tiempo real en la retransmisión.</p>

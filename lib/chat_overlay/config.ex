@@ -42,7 +42,7 @@ defmodule ChatOverlay.Config do
   def handle?(x),
     do: is_binary(x) and byte_size(x) <= 40 and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,39}\z/, x)
 
-  @f2_profile_keys ~w(handle sources overlay_platforms linked_youtube capability_token_hash media can_upload storage_quota_bytes storage_used_bytes)
+  @f2_profile_keys ~w(handle sources overlay_platforms linked_youtube capability_token_hash media can_upload storage_quota_bytes storage_used_bytes linked_accounts)
 
   defp profile?(%{"handle" => handle, "sources" => sources} = p) when is_list(sources) do
     Enum.all?(Map.keys(p), &(&1 in @f2_profile_keys)) and
@@ -52,6 +52,7 @@ defmodule ChatOverlay.Config do
       capability_token_hash?(p) and
       media?(p) and
       upload_quota?(p) and
+      linked_accounts?(p) and
       unique?(sources, & &1["platform"])
   end
 
@@ -103,6 +104,24 @@ defmodule ChatOverlay.Config do
     (is_nil(can_upload) or is_boolean(can_upload)) and
       (is_nil(quota) or (is_integer(quota) and quota >= 0 and quota <= 1_073_741_824)) and
       (is_nil(used) or (is_integer(used) and used >= 0))
+  end
+
+  defp linked_accounts?(p) do
+    case p["linked_accounts"] do
+      nil ->
+        true
+
+      accounts when is_map(accounts) ->
+        Enum.all?(accounts, fn {provider, data} ->
+          provider in ["twitch", "youtube"] and is_map(data) and
+            (is_nil(data["linked"]) or is_boolean(data["linked"])) and
+            (is_nil(data["username"]) or is_binary(data["username"])) and
+            (is_nil(data["encrypted_tokens"]) or is_binary(data["encrypted_tokens"]))
+        end)
+
+      _ ->
+        false
+    end
   end
 
   defp linked_youtube?(p) do

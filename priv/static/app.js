@@ -86,6 +86,26 @@
     const saveAlertsBtn = document.getElementById("save-alerts-btn");
     const saveAlertsFeedback = document.getElementById("save-alerts-feedback");
 
+    // Platform Accounts (OAuth 2.0 PKCE)
+    const twitchStatusBadge = document.getElementById("twitch-status-badge");
+    const twitchUserInfo = document.getElementById("twitch-user-info");
+    const connectTwitchBtn = document.getElementById("connect-twitch-btn");
+    const unlinkTwitchBtn = document.getElementById("unlink-twitch-btn");
+
+    const youtubeStatusBadge = document.getElementById("youtube-status-badge");
+    const youtubeUserInfo = document.getElementById("youtube-user-info");
+    const connectYoutubeBtn = document.getElementById("connect-youtube-btn");
+    const unlinkYoutubeBtn = document.getElementById("unlink-youtube-btn");
+
+    const oauthFeedback = document.getElementById("oauth-feedback");
+
+    function showOAuthFeedback(msg, type) {
+      if (!oauthFeedback) return;
+      oauthFeedback.hidden = false;
+      oauthFeedback.className = `feedback-msg ${type}`;
+      oauthFeedback.textContent = msg;
+    }
+
     function getSelectedProfile() {
       if (!obsProfileSelect || !obsProfileSelect.value) return null;
       return currentProfiles.find(p => p.handle === obsProfileSelect.value) || null;
@@ -151,6 +171,55 @@
         imageTypeExternal.checked = true;
         imageExternalGroup.hidden = false;
         imageUploadGroup.hidden = true;
+      }
+
+      // Populate linked platform accounts
+      const linked = p.linked_accounts || {};
+      const twitch = linked.twitch;
+      const youtube = linked.youtube;
+
+      if (twitch && twitch.linked) {
+        if (twitchStatusBadge) {
+          twitchStatusBadge.textContent = "Vinculado";
+          twitchStatusBadge.className = "status-badge connected";
+        }
+        if (twitchUserInfo) {
+          twitchUserInfo.textContent = `Conectado como @${twitch.username || twitch.user_id}`;
+        }
+        if (connectTwitchBtn) connectTwitchBtn.hidden = true;
+        if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = false;
+      } else {
+        if (twitchStatusBadge) {
+          twitchStatusBadge.textContent = "No vinculado";
+          twitchStatusBadge.className = "status-badge disconnected";
+        }
+        if (twitchUserInfo) {
+          twitchUserInfo.textContent = "Ninguna cuenta de Twitch vinculada a este perfil.";
+        }
+        if (connectTwitchBtn) connectTwitchBtn.hidden = false;
+        if (unlinkTwitchBtn) unlinkTwitchBtn.hidden = true;
+      }
+
+      if (youtube && youtube.linked) {
+        if (youtubeStatusBadge) {
+          youtubeStatusBadge.textContent = "Vinculado";
+          youtubeStatusBadge.className = "status-badge connected";
+        }
+        if (youtubeUserInfo) {
+          youtubeUserInfo.textContent = `Conectado como ${youtube.username || youtube.user_id}`;
+        }
+        if (connectYoutubeBtn) connectYoutubeBtn.hidden = true;
+        if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = false;
+      } else {
+        if (youtubeStatusBadge) {
+          youtubeStatusBadge.textContent = "No vinculado";
+          youtubeStatusBadge.className = "status-badge disconnected";
+        }
+        if (youtubeUserInfo) {
+          youtubeUserInfo.textContent = "Ninguna cuenta de Google/YouTube vinculada a este perfil.";
+        }
+        if (connectYoutubeBtn) connectYoutubeBtn.hidden = false;
+        if (unlinkYoutubeBtn) unlinkYoutubeBtn.hidden = true;
       }
     }
 
@@ -682,6 +751,95 @@
           }
         }
       });
+    if (connectTwitchBtn) {
+      connectTwitchBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+        try {
+          const res = await fetch(`/api/oauth/authorize/twitch?handle=${encodeURIComponent(p.handle)}`);
+          const data = await res.json();
+          if (data.ok && data.url) {
+            location.assign(data.url);
+          } else {
+            showOAuthFeedback(data.error || "Error al generar enlace de autorización", "error");
+          }
+        } catch {
+          showOAuthFeedback("Error de conexión al iniciar autorización de Twitch", "error");
+        }
+      });
+    }
+
+    if (unlinkTwitchBtn) {
+      unlinkTwitchBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+        if (!confirm(`¿Desvincular la cuenta de Twitch del perfil "${p.handle}"?`)) return;
+        try {
+          const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/unlink/twitch`, {
+            method: "POST",
+            headers: { "content-type": "application/json" }
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showOAuthFeedback("Cuenta de Twitch desvinculada con éxito.", "success");
+            await loadProfiles();
+          } else {
+            showOAuthFeedback(data.error || "Error al desvincular", "error");
+          }
+        } catch {
+          showOAuthFeedback("Error de red al desvincular", "error");
+        }
+      });
+    }
+
+    if (connectYoutubeBtn) {
+      connectYoutubeBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+        try {
+          const res = await fetch(`/api/oauth/authorize/youtube?handle=${encodeURIComponent(p.handle)}`);
+          const data = await res.json();
+          if (data.ok && data.url) {
+            location.assign(data.url);
+          } else {
+            showOAuthFeedback(data.error || "Error al generar enlace de autorización", "error");
+          }
+        } catch {
+          showOAuthFeedback("Error de conexión al iniciar autorización de YouTube", "error");
+        }
+      });
+    }
+
+    if (unlinkYoutubeBtn) {
+      unlinkYoutubeBtn.addEventListener("click", async () => {
+        const p = getSelectedProfile();
+        if (!p) return;
+        if (!confirm(`¿Desvincular la cuenta de YouTube del perfil "${p.handle}"?`)) return;
+        try {
+          const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/unlink/youtube`, {
+            method: "POST",
+            headers: { "content-type": "application/json" }
+          });
+          const data = await res.json();
+          if (data.ok) {
+            showOAuthFeedback("Cuenta de YouTube desvinculada con éxito.", "success");
+            await loadProfiles();
+          } else {
+            showOAuthFeedback(data.error || "Error al desvincular", "error");
+          }
+        } catch {
+          showOAuthFeedback("Error de red al desvincular", "error");
+        }
+      });
+    }
+
+    const dashboardParams = new URLSearchParams(window.location.search);
+    if (dashboardParams.has("linked")) {
+      const prov = dashboardParams.get("linked");
+      showOAuthFeedback(`¡Cuenta de ${prov.toUpperCase()} vinculada exitosamente!`, "success");
+    } else if (dashboardParams.has("error")) {
+      const err = dashboardParams.get("error");
+      showOAuthFeedback(`Aviso de autorización: ${err}`, "error");
     }
 
     loadProfiles();

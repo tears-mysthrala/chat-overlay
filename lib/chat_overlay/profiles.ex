@@ -50,6 +50,12 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:update_upload_quota, handle, delta}),
     do: do_update_upload_quota(handle, delta)
 
+  defp execute_action({:link_account, handle, provider, account_data, tokens}),
+    do: do_link_account(handle, provider, account_data, tokens)
+
+  defp execute_action({:unlink_account, handle, provider}),
+    do: do_unlink_account(handle, provider)
+
   @doc "Lists all currently active profiles."
   def list do
     Enum.map(Config.profiles(), fn p ->
@@ -64,6 +70,7 @@ defmodule ChatOverlay.Profiles do
         "can_upload" => p["can_upload"] || false,
         "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
         "storage_used_bytes" => p["storage_used_bytes"] || 0,
+        "linked_accounts" => format_linked_accounts_summary(p["linked_accounts"]),
         "reader_url" => "/reader/#{p["handle"]}",
         "overlay_url" => "/overlay/#{p["handle"]}"
       }
@@ -127,6 +134,50 @@ defmodule ChatOverlay.Profiles do
   end
 
   def update_upload_quota(_, _), do: {:error, :invalid_params}
+
+  @doc "Links an external platform account (Twitch, YouTube) with encrypted tokens."
+  def link_account(handle, provider, account_data, tokens)
+      when is_binary(handle) and is_map(account_data) and is_map(tokens) do
+    call_serialized({:link_account, handle, to_string(provider), account_data, tokens})
+  end
+
+  def link_account(_, _, _, _), do: {:error, :invalid_params}
+
+  @doc "Unlinks an external platform account, removing stored encrypted credentials."
+  def unlink_account(handle, provider) when is_binary(handle) do
+    call_serialized({:unlink_account, handle, to_string(provider)})
+  end
+
+  def unlink_account(_, _), do: {:error, :invalid_params}
+
+  @doc "Retrieves and decrypts stored tokens for an authorized internal component."
+  def get_linked_account_tokens(handle, provider) when is_binary(handle) do
+    case Config.profile(handle) do
+      nil ->
+        {:error, :not_found}
+
+      profile ->
+        provider_str = to_string(provider)
+        linked = (profile["linked_accounts"] || %{})[provider_str]
+
+        if is_map(linked) and is_binary(linked["encrypted_tokens"]) do
+          key = ChatOverlay.OAuth.encryption_key()
+
+          case ChatOverlay.Crypto.decrypt_aead(
+                 linked["encrypted_tokens"],
+                 key,
+                 "token:#{handle}:#{provider_str}"
+               ) do
+            {:ok, json_str} -> ChatOverlay.JSON.decode(json_str)
+            error -> error
+          end
+        else
+          {:error, :not_linked}
+        end
+    end
+  end
+
+  def get_linked_account_tokens(_, _), do: {:error, :invalid_params}
 
   @doc "Resolves a user-provided target into a source configuration."
   def resolve_target(target, opts \\ []) when is_binary(target) do
@@ -661,6 +712,81 @@ defmodule ChatOverlay.Profiles do
         do_save_profile(updated_profile, replace: true)
     end
   end
+
+  defp do_link_account(handle, provider, account_data, tokens) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        provider_str = to_string(provider)
+        key = ChatOverlay.OAuth.encryption_key()
+
+        with {:ok, enc_tokens} <-
+               ChatOverlay.Crypto.encrypt_aead(
+                 ChatOverlay.JSON.encode(tokens),
+                 key,
+                 "token:#{handle}:#{provider_str}"
+               ) do
+          expires_in = tokens["expires_in"] || tokens[:expires_in] || 3600
+          now = System.system_time(:second)
+
+          entry = %{
+            "linked" => true,
+            "provider" => provider_str,
+            "user_id" => to_string(account_data[:user_id] || account_data["user_id"] || ""),
+            "username" =>
+              to_string(
+                account_data[:username] || account_data["username"] || account_data[:title] ||
+                  account_data["title"] || ""
+              ),
+            "linked_at" => now,
+            "expires_at" => now + expires_in,
+            "encrypted_tokens" => enc_tokens
+          }
+
+          existing_linked = existing["linked_accounts"] || %{}
+          updated_linked = Map.put(existing_linked, provider_str, entry)
+          updated_profile = Map.put(existing, "linked_accounts", updated_linked)
+          do_save_profile(updated_profile, replace: true)
+        end
+    end
+  end
+
+  defp do_unlink_account(handle, provider) do
+    current_profiles = Config.profiles()
+
+    case Enum.find(current_profiles, &(&1["handle"] == handle)) do
+      nil ->
+        {:error, :not_found}
+
+      existing ->
+        provider_str = to_string(provider)
+        existing_linked = existing["linked_accounts"] || %{}
+        updated_linked = Map.delete(existing_linked, provider_str)
+        updated_profile = Map.put(existing, "linked_accounts", updated_linked)
+        do_save_profile(updated_profile, replace: true)
+    end
+  end
+
+  defp format_linked_accounts_summary(linked) when is_map(linked) do
+    Enum.reduce(linked, %{}, fn {provider, data}, acc ->
+      if is_map(data) do
+        sanitized =
+          data
+          |> Map.delete("encrypted_tokens")
+          |> Map.put_new("linked", true)
+
+        Map.put(acc, provider, sanitized)
+      else
+        acc
+      end
+    end)
+  end
+
+  defp format_linked_accounts_summary(_), do: %{}
 
   defp cleanup_removed_sources(removed_sources, valid_profiles) do
     if is_pid(Process.whereis(ChatOverlay.Sources)) and removed_sources != [] do
