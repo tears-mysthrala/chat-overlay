@@ -226,7 +226,7 @@ defmodule ChatOverlay.OAuth do
           uri = URI.parse(config.token_url)
 
           case ChatOverlay.Net.request(uri.host, "POST", uri.path, headers, body) do
-            {:ok, %{status: status, body: resp_body}} when status in 200..299 ->
+            {:ok, status, _headers, resp_body} when status in 200..299 ->
               JSON.decode(resp_body)
 
             _other ->
@@ -267,7 +267,7 @@ defmodule ChatOverlay.OAuth do
       uri = URI.parse(config.user_url)
 
       case ChatOverlay.Net.request(uri.host, "GET", uri.path, headers, "") do
-        {:ok, %{status: 200, body: body}} ->
+        {:ok, 200, _headers, body} ->
           with {:ok, %{"data" => [first | _]}} <- JSON.decode(body) do
             {:ok,
              %{
@@ -302,7 +302,7 @@ defmodule ChatOverlay.OAuth do
       uri = URI.parse(config.user_url)
 
       case ChatOverlay.Net.request(uri.host, "GET", uri.path, headers, "") do
-        {:ok, %{status: 200, body: body}} ->
+        {:ok, 200, _headers, body} ->
           with {:ok, info} <- JSON.decode(body) do
             {:ok,
              %{

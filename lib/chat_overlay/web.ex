@@ -893,14 +893,11 @@ defmodule ChatOverlay.Web do
               {:ok, _} ->
                 redirect(conn, "/?handle=#{result.handle}&linked=#{result.provider}")
 
-              {:error, {:persist_failed, _}} ->
+              {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
                 redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
 
-              {:error, reason} ->
-                redirect(
-                  conn,
-                  "/?handle=#{result.handle}&error=#{URI.encode_www_form(to_string(reason))}"
-                )
+              {:error, _reason} ->
+                redirect(conn, "/?handle=#{result.handle}&error=link_failed")
             end
 
           {:error, _reason} ->
@@ -938,7 +935,7 @@ defmodule ChatOverlay.Web do
             ChatOverlay.JSON.encode(%{"ok" => true, "unlinked" => provider})
           )
 
-        {:error, {:persist_failed, _}} ->
+        {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
           reply(
             conn,
             500,
@@ -949,12 +946,12 @@ defmodule ChatOverlay.Web do
             })
           )
 
-        {:error, reason} ->
+        {:error, _reason} ->
           reply(
             conn,
             400,
             "application/json",
-            ChatOverlay.JSON.encode(%{"ok" => false, "error" => to_string(reason)})
+            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Error al desvincular la cuenta"})
           )
       end
     end
