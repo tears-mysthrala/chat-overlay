@@ -1,7 +1,7 @@
 defmodule ChatOverlay.Web do
   @moduledoc "Closed routing; creator dashboard, dynamic profiles API, and chat views."
   @behaviour Plug
-  alias ChatOverlay.{Config, HTTP}
+  alias ChatOverlay.{Config, HTTP, Session}
   def init(opts), do: opts
 
   def call(conn, _) do
@@ -17,6 +17,25 @@ defmodule ChatOverlay.Web do
 
       {"GET", ["oauth", "callback", provider]} ->
         oauth_callback(conn, provider)
+
+      {"GET", ["api", "auth", "me"]} ->
+        api_auth_me(conn)
+
+      {"GET", ["api", "session"]} ->
+        api_auth_me(conn)
+
+      {"POST", ["api", "auth", "logout"]} ->
+        with true <- allowed_origin?(conn) do
+          api_auth_logout(conn)
+        else
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+        end
 
       {"GET", ["api", "profiles"]} ->
         api_list_profiles(conn)
@@ -72,39 +91,102 @@ defmodule ChatOverlay.Web do
         end
 
       {"DELETE", ["api", "profiles", handle]} ->
-        if allowed_origin?(conn) == true do
+        with true <- allowed_origin?(conn),
+             :ok <- Session.authorize(conn, handle) do
           api_delete_profile(conn, handle)
         else
-          reply(
-            conn,
-            403,
-            "application/json",
-            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
-          )
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+            )
+
+          {:error, :forbidden} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Acceso no autorizado al perfil solicitado"
+              })
+            )
         end
 
       {"POST", ["api", "profiles", handle, "sync-youtube"]} ->
-        if allowed_origin?(conn) == true do
+        with true <- allowed_origin?(conn),
+             :ok <- Session.authorize(conn, handle) do
           api_sync_youtube(conn, handle)
         else
-          reply(
-            conn,
-            403,
-            "application/json",
-            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
-          )
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+            )
+
+          {:error, :forbidden} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Acceso no autorizado al perfil solicitado"
+              })
+            )
         end
 
       {"POST", ["api", "profiles", handle, "token", "regenerate"]} ->
-        if allowed_origin?(conn) == true do
+        with true <- allowed_origin?(conn),
+             :ok <- Session.authorize(conn, handle) do
           api_regenerate_token(conn, handle)
         else
-          reply(
-            conn,
-            403,
-            "application/json",
-            ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
-          )
+          :bad_origin ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+            )
+
+          {:error, :forbidden} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Acceso no autorizado al perfil solicitado"
+              })
+            )
         end
 
       {"POST", ["api", "media", "presign"]} ->
@@ -134,7 +216,8 @@ defmodule ChatOverlay.Web do
 
       {"POST", ["api", "profiles", handle, "media"]} ->
         with true <- allowed_origin?(conn),
-             true <- json_content_type?(conn) do
+             true <- json_content_type?(conn),
+             :ok <- Session.authorize(conn, handle) do
           api_update_media(conn, handle)
         else
           :bad_origin ->
@@ -155,10 +238,30 @@ defmodule ChatOverlay.Web do
                 "error" => "Content-Type debe ser application/json"
               })
             )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+            )
+
+          {:error, :forbidden} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Acceso no autorizado al perfil solicitado"
+              })
+            )
         end
 
       {"POST", ["api", "profiles", handle, "unlink", provider]} ->
-        with true <- allowed_origin?(conn) do
+        with true <- allowed_origin?(conn),
+             :ok <- Session.authorize(conn, handle) do
           api_unlink_account(conn, handle, provider)
         else
           :bad_origin ->
@@ -167,6 +270,25 @@ defmodule ChatOverlay.Web do
               403,
               "application/json",
               ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          {:error, :unauthorized} ->
+            reply(
+              conn,
+              401,
+              "application/json",
+              ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+            )
+
+          {:error, :forbidden} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" => "Acceso no autorizado al perfil solicitado"
+              })
             )
         end
 
@@ -276,8 +398,21 @@ defmodule ChatOverlay.Web do
   end
 
   defp api_list_profiles(conn) do
-    data = %{"profiles" => ChatOverlay.Profiles.list()}
-    reply(conn, 200, "application/json", ChatOverlay.JSON.encode(data))
+    all_profiles = ChatOverlay.Profiles.list()
+
+    case Session.scope_profiles(conn, all_profiles) do
+      {:ok, profiles} ->
+        data = %{"profiles" => profiles}
+        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(data))
+
+      {:error, :unauthorized} ->
+        reply(
+          conn,
+          401,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+        )
+    end
   end
 
   defp api_create_profile(conn) do
@@ -285,23 +420,45 @@ defmodule ChatOverlay.Web do
       {:ok, body, conn} ->
         case ChatOverlay.JSON.decode(body) do
           {:ok, params} when is_map(params) ->
-            case ChatOverlay.Profiles.create_or_update(params) do
-              {:ok, profile} ->
-                resp = %{
-                  "ok" => true,
-                  "profile" => profile,
-                  "reader_url" => "/reader/#{profile["handle"]}",
-                  "overlay_url" => "/overlay/#{profile["handle"]}"
-                }
+            case Session.authorize_profile_creation(conn, params) do
+              :ok ->
+                case ChatOverlay.Profiles.create_or_update(params) do
+                  {:ok, profile} ->
+                    resp = %{
+                      "ok" => true,
+                      "profile" => profile,
+                      "reader_url" => "/reader/#{profile["handle"]}",
+                      "overlay_url" => "/overlay/#{profile["handle"]}"
+                    }
 
-                reply(conn, 201, "application/json", ChatOverlay.JSON.encode(resp))
+                    reply(conn, 201, "application/json", ChatOverlay.JSON.encode(resp))
 
-              {:error, reason} ->
+                  {:error, reason} ->
+                    reply(
+                      conn,
+                      422,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
+                    )
+                end
+
+              {:error, :unauthorized} ->
                 reply(
                   conn,
-                  422,
+                  401,
                   "application/json",
-                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
+                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
+                )
+
+              {:error, :forbidden} ->
+                reply(
+                  conn,
+                  403,
+                  "application/json",
+                  ChatOverlay.JSON.encode(%{
+                    "ok" => false,
+                    "error" => "Acceso no autorizado al perfil solicitado"
+                  })
                 )
             end
 
@@ -567,91 +724,112 @@ defmodule ChatOverlay.Web do
       {:ok, body, conn} ->
         case ChatOverlay.JSON.decode(body) do
           {:ok, %{"handle" => handle} = params} when is_binary(handle) ->
-            case Config.profile(handle) do
-              nil ->
+            with :ok <- Session.authorize(conn, handle) do
+              case Config.profile(handle) do
+                nil ->
+                  reply(
+                    conn,
+                    404,
+                    "application/json",
+                    ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+                  )
+
+                profile ->
+                  used = profile["storage_used_bytes"] || 0
+                  quota = profile["storage_quota_bytes"] || 10_485_760
+
+                  case ChatOverlay.Media.validate_upload_request(params, used, quota) do
+                    {:ok, validated} ->
+                      r2_config = %{
+                        endpoint:
+                          System.get_env("R2_ENDPOINT") ||
+                            Application.get_env(
+                              :chat_overlay,
+                              :r2_endpoint,
+                              "https://r2.example.com"
+                            ),
+                        bucket:
+                          System.get_env("R2_BUCKET") ||
+                            Application.get_env(:chat_overlay, :r2_bucket, "chat-overlay-media"),
+                        access_key_id:
+                          System.get_env("R2_ACCESS_KEY_ID") ||
+                            Application.get_env(
+                              :chat_overlay,
+                              :r2_access_key_id,
+                              "mock_access_key"
+                            ),
+                        secret_access_key:
+                          System.get_env("R2_SECRET_ACCESS_KEY") ||
+                            Application.get_env(
+                              :chat_overlay,
+                              :r2_secret_access_key,
+                              "mock_secret_key"
+                            ),
+                        public_cdn_base:
+                          System.get_env("R2_PUBLIC_CDN") ||
+                            Application.get_env(
+                              :chat_overlay,
+                              :r2_public_cdn,
+                              "https://media.chat-overlay.example.com"
+                            )
+                      }
+
+                      case ChatOverlay.Media.generate_presigned_put(
+                             Map.merge(r2_config, %{
+                               key: validated.key,
+                               content_type: validated.mime
+                             })
+                           ) do
+                        {:ok, presigned} ->
+                          resp = %{
+                            "ok" => true,
+                            "upload_url" => presigned.upload_url,
+                            "public_url" => presigned.public_url,
+                            "key" => presigned.key
+                          }
+
+                          reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
+                        {:error, reason} ->
+                          reply(
+                            conn,
+                            500,
+                            "application/json",
+                            ChatOverlay.JSON.encode(%{"ok" => false, "error" => inspect(reason)})
+                          )
+                      end
+
+                    {:error, reason} ->
+                      reply(
+                        conn,
+                        422,
+                        "application/json",
+                        ChatOverlay.JSON.encode(%{
+                          "ok" => false,
+                          "error" => format_media_error(reason)
+                        })
+                      )
+                  end
+              end
+            else
+              {:error, :unauthorized} ->
                 reply(
                   conn,
-                  404,
+                  401,
                   "application/json",
-                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Perfil no encontrado"})
+                  ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado"})
                 )
 
-              profile ->
-                used = profile["storage_used_bytes"] || 0
-                quota = profile["storage_quota_bytes"] || 10_485_760
-
-                case ChatOverlay.Media.validate_upload_request(params, used, quota) do
-                  {:ok, validated} ->
-                    r2_config = %{
-                      endpoint:
-                        System.get_env("R2_ENDPOINT") ||
-                          Application.get_env(
-                            :chat_overlay,
-                            :r2_endpoint,
-                            "https://r2.example.com"
-                          ),
-                      bucket:
-                        System.get_env("R2_BUCKET") ||
-                          Application.get_env(:chat_overlay, :r2_bucket, "chat-overlay-media"),
-                      access_key_id:
-                        System.get_env("R2_ACCESS_KEY_ID") ||
-                          Application.get_env(
-                            :chat_overlay,
-                            :r2_access_key_id,
-                            "mock_access_key"
-                          ),
-                      secret_access_key:
-                        System.get_env("R2_SECRET_ACCESS_KEY") ||
-                          Application.get_env(
-                            :chat_overlay,
-                            :r2_secret_access_key,
-                            "mock_secret_key"
-                          ),
-                      public_cdn_base:
-                        System.get_env("R2_PUBLIC_CDN") ||
-                          Application.get_env(
-                            :chat_overlay,
-                            :r2_public_cdn,
-                            "https://media.chat-overlay.example.com"
-                          )
-                    }
-
-                    case ChatOverlay.Media.generate_presigned_put(
-                           Map.merge(r2_config, %{
-                             key: validated.key,
-                             content_type: validated.mime
-                           })
-                         ) do
-                      {:ok, presigned} ->
-                        resp = %{
-                          "ok" => true,
-                          "upload_url" => presigned.upload_url,
-                          "public_url" => presigned.public_url,
-                          "key" => presigned.key
-                        }
-
-                        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
-
-                      {:error, reason} ->
-                        reply(
-                          conn,
-                          500,
-                          "application/json",
-                          ChatOverlay.JSON.encode(%{"ok" => false, "error" => inspect(reason)})
-                        )
-                    end
-
-                  {:error, reason} ->
-                    reply(
-                      conn,
-                      422,
-                      "application/json",
-                      ChatOverlay.JSON.encode(%{
-                        "ok" => false,
-                        "error" => format_media_error(reason)
-                      })
-                    )
-                end
+              {:error, :forbidden} ->
+                reply(
+                  conn,
+                  403,
+                  "application/json",
+                  ChatOverlay.JSON.encode(%{
+                    "ok" => false,
+                    "error" => "Acceso no autorizado al perfil solicitado"
+                  })
+                )
             end
 
           _ ->
@@ -891,7 +1069,16 @@ defmodule ChatOverlay.Web do
                    result.tokens
                  ) do
               {:ok, _} ->
-                redirect(conn, "/?handle=#{result.handle}&linked=#{result.provider}")
+                session_data = %{
+                  "handle" => result.handle,
+                  "provider" => result.provider,
+                  "user_id" => result.user_id,
+                  "username" => result.username
+                }
+
+                conn
+                |> Session.put_session(session_data)
+                |> redirect("/?handle=#{result.handle}&linked=#{result.provider}")
 
               {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
                 redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
@@ -915,6 +1102,37 @@ defmodule ChatOverlay.Web do
             redirect(conn, dest)
         end
     end
+  end
+
+  defp api_auth_me(conn) do
+    case Session.fetch_session(conn) do
+      {:ok, session} ->
+        resp = %{
+          "ok" => true,
+          "authenticated" => true,
+          "handle" => session["handle"],
+          "provider" => session["provider"],
+          "user_id" => session["user_id"],
+          "created_at" => session["created_at"],
+          "expires_at" => session["expires_at"]
+        }
+
+        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+
+      {:error, _reason} ->
+        resp = %{
+          "ok" => true,
+          "authenticated" => false
+        }
+
+        reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
+    end
+  end
+
+  defp api_auth_logout(conn) do
+    conn = Session.delete_session(conn)
+    resp = %{"ok" => true, "message" => "Sesión cerrada correctamente"}
+    reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
   end
 
   defp api_unlink_account(conn, handle, provider) do

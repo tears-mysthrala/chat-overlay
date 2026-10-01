@@ -96,7 +96,14 @@ defmodule ChatOverlay.Stream do
   end
 
   defp poll(conn, handle, cursor, is_overlay, token, last) do
-    result = Store.read(Store.name(handle), cursor)
+    result =
+      try do
+        Store.read(Store.name(handle), cursor)
+      catch
+        :exit, _ ->
+          %{cursor: cursor, events: []}
+      end
+
     now = System.monotonic_time(:millisecond)
     current_platforms = platforms_for(handle, is_overlay)
 

@@ -213,3 +213,41 @@ Local verification:
    - `test/oauth_test.exs`: pruebas exhaustivas de validación de clave de cifrado para entornos test, dev, prod y release, comprobando tipos no binarios, longitud insuficiente, clave por defecto y clave válida.
    - Suite completa ExUnit: **163/163 pruebas PASS** en doble pasada (semilla 0 y 424242, 0 fallos, 0 skips, 0 exclusiones).
    - Verificaciones de formato, static checks (`python3 scripts/security_static.py`), escaneo de secretos (`python3 scripts/scan_secrets.py`), trazabilidad (`python3 scripts/check_traceability.py`) y smoke test de release (`python3 scripts/smoke_image.py`) con resultado 100% PASS.
+
+## Autenticación de sesión en Panel de Creador y autorización por perfil — issue #30
+
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/30
+- Rama: `feat/30-dashboard-session-auth`
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/30-dashboard-session-auth`
+
+### Alcance e Implementación:
+1. **Gestión de Sesiones Seguras (`ChatOverlay.Session`) (SEC-12, SEC-14, ADR-0003)**:
+   - Emisión de cookies de sesión `chat_overlay_session` con cifrado simétrico autenticado AEAD (AES-256-GCM) utilizando `ChatOverlay.Crypto.encrypt_aead/3` y `decrypt_aead/3` con la clave de cifrado del sistema (`ChatOverlay.OAuth.encryption_key/0`).
+   - Separación estricta de dominios criptográficos (AAD): el AAD se fija a `"chat_overlay_session"` evitando confusiones o sustituciones de tokens (ej. parámetros state de OAuth con AAD `"oauth_state"`).
+   - Atributos de seguridad de cookie: `HttpOnly: true`, `SameSite=Lax`, `Path: "/"`, `Max-Age: 604_800` (7 días) y `Secure` condicionado a conexiones HTTPS o cabecera de proxy reverso (`x-forwarded-proto: https`).
+   - Verificación de timestamps: comprobación de expiración (`expires_at`) e integridad en cada petición.
+   - Endpoint de estado de sesión: `GET /api/auth/me` (y alias `GET /api/session`) que devuelve el estado de autenticación y metadatos de sesión (handle, proveedor, user_id, timestamps).
+   - Endpoint de cierre de sesión: `POST /api/auth/logout` protegido contra CSRF (verificación de origen) que purga la cookie con `max-age=0`.
+2. **Emisión de Sesión en Callback OAuth (`ChatOverlay.Web.oauth_callback/2`)**:
+   - Al completar exitosamente el intercambio OAuth 2.0 PKCE con Twitch/Google e indexar la vinculación de cuenta, se genera la cookie de sesión del creador en `conn` antes de redirigir al panel (`/?handle=...&linked=...`).
+3. **Control de Acceso Estricto por Perfil y Aislamiento (SEC-12, SEC-14)**:
+   - `GET /api/profiles`: alcance acotado (`Session.scope_profiles/2`). Un creador autenticado únicamente recibe su propio perfil en la respuesta JSON, garantizando aislamiento total entre creadores. En accesos remotos no autenticados, responde 401 Unauthorized.
+   - Endpoints protegidos en `ChatOverlay.Web`:
+     - `POST /api/profiles/:handle/token/regenerate`
+     - `POST /api/profiles/:handle/media`
+     - `POST /api/profiles/:handle/unlink/:provider`
+     - `POST /api/profiles/:handle/sync-youtube`
+     - `POST /api/media/presign`
+     - `DELETE /api/profiles/:handle`
+     - `POST /api/profiles` (creación de perfiles)
+   - Respuestas estándar: 401 Unauthorized si falta sesión o credenciales en contexto no-demo, 403 Forbidden si un creador autenticado intenta mutar o acceder a un perfil ajeno (tampering / suplantación cross-profile).
+4. **Modo Demo y Loopback de Fricción Cero**:
+   - Acceso no autenticado permitido exclusivamente para conexiones locales loopback (`127.0.0.1` o `::1`) bajo perfiles con fuentes demo (`mode: "demo"`) o `config/demo.json`, garantizando compatibilidad total con el quick start y las pruebas automáticas.
+5. **Panel de Creador y Frontend (`priv/static/index.html`, `app.js`, `app.css`)**:
+   - Añadido banner visual de sesión en el panel que informa del handle y proveedor activo si existe sesión, junto con el botón «Cerrar sesión» con llamada a `/api/auth/logout`.
+   - Modificación 100% segura usando `.textContent` y manipulación DOM sin violar directivas de sink HTML en `security_static.py`.
+6. **Regresiones y Verificación**:
+   - `test/session_test.exs`: 16 pruebas unitarias verificando ciclo de vida, expiración, anti-tampering, flags de cookie (`HttpOnly`, `SameSite=Lax`, `Secure`), separación de AAD, y lógica de autorización/scoping.
+   - `test/web_session_auth_test.exs`: 9 pruebas de integración HTTP sobre Bandit verificando `GET /api/auth/me`, `POST /api/auth/logout`, aislamiento en `GET /api/profiles`, rechazo 401 sin sesión, rechazo 403 entre perfiles distintos, y emisión de cookie en OAuth callback.
+   - Suite completa ExUnit: **188/188 pruebas PASS** en doble pasada (semilla 0 serial y semilla 424242 concurrente, 0 fallos, 0 skips, 0 exclusiones).
+   - Verificaciones automáticas completas: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `docker build --target validation`, `docker run` con `--network none`, test de carga sintética `scripts/load.exs` y release smoke test `python3 scripts/smoke_image.py`.

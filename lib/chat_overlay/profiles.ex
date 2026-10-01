@@ -726,6 +726,7 @@ defmodule ChatOverlay.Profiles do
 
         with {:ok, valid_profiles} <- Config.validate(remaining_profiles) do
           Application.put_env(:chat_overlay, :profiles, valid_profiles)
+          ChatOverlay.Stream.disconnect_viewers(handle)
 
           if Process.whereis(ChatOverlay.Stores) do
             _ = Supervisor.terminate_child(ChatOverlay.Stores, {:store, handle})
@@ -737,7 +738,6 @@ defmodule ChatOverlay.Profiles do
           persist_profiles(valid_profiles)
           invalidate_tokens(handle, "twitch")
           invalidate_tokens(handle, "youtube")
-          ChatOverlay.Stream.disconnect_viewers(handle)
           :ok
         end
     end

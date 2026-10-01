@@ -13,6 +13,12 @@
     <h1>La conversación,<br>en un solo lugar.</h1>
     <p class="intro">Twitch, YouTube y Kick. Detección automática en caliente, sin editar JSON ni reiniciar el servidor.</p>
 
+    <div id="session-banner" class="session-banner" hidden>
+      <span class="session-user-icon" aria-hidden="true">👤</span>
+      <span id="session-status-text" class="session-status-text"></span>
+      <button type="button" id="session-logout-btn" class="btn-secondary btn-sm">Cerrar sesión</button>
+    </div>
+
     <div id="dashboard">
       <section class="dashboard-section">
         <h2 class="section-title">Canales y Perfiles Activos</h2>

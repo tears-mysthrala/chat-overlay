@@ -234,7 +234,7 @@ defmodule ChatOverlay.OAuth do
   # Token exchange implementation
 
   defp exchange_token(provider, code, verifier, redirect_uri, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = opts[:http_client] || Application.get_env(:chat_overlay, :oauth_http_client) do
       mock_client.(:post, config.token_url, [], %{
         code: code,
         verifier: verifier,
@@ -440,7 +440,7 @@ defmodule ChatOverlay.OAuth do
   # User info implementation
 
   defp fetch_user_info("twitch", access_token, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = opts[:http_client] || Application.get_env(:chat_overlay, :oauth_http_client) do
       case mock_client.(:get, config.user_url, [], "") do
         {:ok, 200, %{"data" => [first | _]}} ->
           {:ok,
@@ -479,7 +479,7 @@ defmodule ChatOverlay.OAuth do
   end
 
   defp fetch_user_info("youtube", access_token, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = opts[:http_client] || Application.get_env(:chat_overlay, :oauth_http_client) do
       case mock_client.(:get, config.user_url, [], "") do
         {:ok, 200, info} ->
           {:ok,

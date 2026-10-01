@@ -880,6 +880,38 @@
       showOAuthFeedback(`Aviso de autorización: ${err}`, "error");
     }
 
+    async function loadSession() {
+      const banner = document.getElementById("session-banner");
+      const statusText = document.getElementById("session-status-text");
+      const logoutBtn = document.getElementById("session-logout-btn");
+      if (!banner || !statusText || !logoutBtn) return;
+
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.ok && data.authenticated) {
+          statusText.textContent = `Sesión activa: ${data.handle} (${data.provider})`;
+          banner.hidden = false;
+          logoutBtn.addEventListener("click", async () => {
+            logoutBtn.disabled = true;
+            try {
+              await fetch("/api/auth/logout", {
+                method: "POST",
+                headers: { "content-type": "application/json" }
+              });
+              location.reload();
+            } catch {
+              logoutBtn.disabled = false;
+            }
+          });
+        }
+      } catch {
+        // Mode offline or without session
+      }
+    }
+
+    loadSession();
     loadProfiles();
   }
 
