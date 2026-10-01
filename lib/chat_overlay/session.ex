@@ -42,6 +42,7 @@ defmodule ChatOverlay.Session do
       provider = payload["provider"] || payload[:provider] || "direct"
       user_id = payload["user_id"] || payload[:user_id] || ""
       username = payload["username"] || payload[:username]
+      account_version = payload["account_version"] || payload[:account_version]
       key = Keyword.get_lazy(opts, :key, &encryption_key/0)
       max_age = Keyword.get(opts, :max_age, @default_max_age)
       now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
@@ -55,6 +56,7 @@ defmodule ChatOverlay.Session do
           "expires_at" => now + max_age
         }
         |> maybe_put("username", username)
+        |> maybe_put("account_version", account_version)
 
       json = JSON.encode(data)
       Crypto.encrypt_aead(json, key, @session_aad)
@@ -300,16 +302,20 @@ defmodule ChatOverlay.Session do
             profile = ChatOverlay.Config.profile(handle)
             provider = session["provider"]
 
-            if provider && profile["linked_accounts"] && profile["linked_accounts"][provider] do
-              linked = profile["linked_accounts"][provider]
+            if provider in ["twitch", "youtube"] do
+              linked = (profile["linked_accounts"] || %{})[provider]
 
               cond do
+                is_nil(linked) ->
+                  {:error, :unauthorized}
+
                 session["user_id"] &&
                     to_string(linked["user_id"]) != to_string(session["user_id"]) ->
                   {:error, :unauthorized}
 
                 session["account_version"] &&
-                    (linked["account_version"] || 1) != session["account_version"] ->
+                    to_string(linked["account_version"] || 1) !=
+                      to_string(session["account_version"]) ->
                   {:error, :unauthorized}
 
                 true ->

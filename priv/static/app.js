@@ -794,7 +794,10 @@
         const p = getSelectedProfile();
         if (!p) return;
         try {
-          const res = await fetch(`/api/oauth/authorize/twitch?handle=${encodeURIComponent(p.handle)}`);
+          const urlParams = new URLSearchParams(location.search);
+          const token = urlParams.get("token") || sessionStorage.getItem(`obs_token_${p.handle}`);
+          const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
+          const res = await fetch(`/api/oauth/authorize/twitch?handle=${encodeURIComponent(p.handle)}${tokenQuery}`);
           const data = await res.json();
           if (data.ok && data.url) {
             location.assign(data.url);
@@ -835,7 +838,10 @@
         const p = getSelectedProfile();
         if (!p) return;
         try {
-          const res = await fetch(`/api/oauth/authorize/youtube?handle=${encodeURIComponent(p.handle)}`);
+          const urlParams = new URLSearchParams(location.search);
+          const token = urlParams.get("token") || sessionStorage.getItem(`obs_token_${p.handle}`);
+          const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
+          const res = await fetch(`/api/oauth/authorize/youtube?handle=${encodeURIComponent(p.handle)}${tokenQuery}`);
           const data = await res.json();
           if (data.ok && data.url) {
             location.assign(data.url);
@@ -877,7 +883,13 @@
       showOAuthFeedback(`¡Cuenta de ${prov.toUpperCase()} vinculada exitosamente!`, "success");
     } else if (dashboardParams.has("error")) {
       const err = dashboardParams.get("error");
-      showOAuthFeedback(`Aviso de autorización: ${err}`, "error");
+      const msgMap = {
+        identity_mismatch: "La cuenta autenticada no coincide con el titular del canal.",
+        unauthorized_profile_claim: "Reclamación no autorizada: titularidad no acreditada.",
+        oauth_failed: "Error durante el proceso de autenticación OAuth.",
+        profile_not_found: "Perfil no encontrado para completar la vinculación."
+      };
+      showOAuthFeedback(msgMap[err] || `Aviso de autorización: ${err}`, "error");
     }
 
     async function loadSession() {

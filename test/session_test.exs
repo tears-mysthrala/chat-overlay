@@ -312,5 +312,60 @@ defmodule ChatOverlay.SessionTest do
       assert Session.revoked?(token)
       assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
+
+    test "authorize/3 invalidates session when provider account is unlinked or mismatched" do
+      prod_with_link = %{
+        "handle" => "streamer-linked",
+        "sources" => [%{"platform" => "twitch", "channel" => "streamer-linked"}],
+        "linked_accounts" => %{
+          "twitch" => %{"user_id" => "55555", "username" => "linked_user", "account_version" => 1}
+        }
+      }
+
+      Application.put_env(:chat_overlay, :profiles, [prod_with_link])
+
+      {:ok, token} =
+        Session.create_token(
+          %{
+            "handle" => "streamer-linked",
+            "provider" => "twitch",
+            "user_id" => "55555",
+            "account_version" => 1
+          },
+          key: @test_key
+        )
+
+      conn =
+        conn(:get, "/")
+        |> put_req_header("cookie", "chat_overlay_session=#{token}")
+
+      # 1. Matching linked account -> authorized
+      assert :ok = Session.authorize(conn, "streamer-linked", key: @test_key)
+
+      # 2. When account is unlinked (linked_accounts is empty or provider missing) -> 401 unauthorized
+      prod_unlinked = %{prod_with_link | "linked_accounts" => %{}}
+      Application.put_env(:chat_overlay, :profiles, [prod_unlinked])
+
+      assert {:error, :unauthorized} =
+               Session.authorize(conn, "streamer-linked", key: @test_key)
+
+      # 3. When user_id changed -> 401 unauthorized
+      prod_changed_user =
+        put_in(prod_with_link, ["linked_accounts", "twitch", "user_id"], "99999")
+
+      Application.put_env(:chat_overlay, :profiles, [prod_changed_user])
+
+      assert {:error, :unauthorized} =
+               Session.authorize(conn, "streamer-linked", key: @test_key)
+
+      # 4. When account_version changed -> 401 unauthorized
+      prod_changed_version =
+        put_in(prod_with_link, ["linked_accounts", "twitch", "account_version"], 2)
+
+      Application.put_env(:chat_overlay, :profiles, [prod_changed_version])
+
+      assert {:error, :unauthorized} =
+               Session.authorize(conn, "streamer-linked", key: @test_key)
+    end
   end
 end

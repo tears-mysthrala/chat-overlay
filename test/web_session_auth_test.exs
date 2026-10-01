@@ -13,6 +13,7 @@ defmodule ChatOverlay.WebSessionAuthTest do
     original_client = Application.get_env(:chat_overlay, :oauth_http_client)
 
     System.put_env("CHAT_TWITCH_TOKEN", "mock_token")
+    System.put_env("CHAT_YOUTUBE_TOKEN", "mock_token")
 
     on_exit(fn ->
       Application.put_env(:chat_overlay, :profiles, original_profiles)
@@ -29,6 +30,9 @@ defmodule ChatOverlay.WebSessionAuthTest do
       "sources" => [
         %{"platform" => "twitch", "channel" => "streamer", "mode" => "demo"}
       ],
+      "linked_accounts" => %{
+        "twitch" => %{"user_id" => "998877", "username" => "streamer", "account_version" => 1}
+      },
       "can_upload" => true,
       "storage_quota_bytes" => 10_485_760,
       "storage_used_bytes" => 0
@@ -39,6 +43,9 @@ defmodule ChatOverlay.WebSessionAuthTest do
       "sources" => [
         %{"platform" => "twitch", "channel" => "streamer2", "mode" => "demo"}
       ],
+      "linked_accounts" => %{
+        "twitch" => %{"user_id" => "1002", "username" => "streamer2", "account_version" => 1}
+      },
       "can_upload" => true,
       "storage_quota_bytes" => 10_485_760,
       "storage_used_bytes" => 0
@@ -86,7 +93,22 @@ defmodule ChatOverlay.WebSessionAuthTest do
   end
 
   defp session_cookie_header(handle) do
-    {:ok, token} = Session.create_token(%{"handle" => handle, "provider" => "twitch"})
+    profile = ChatOverlay.Config.profile(handle)
+    linked = profile && (profile["linked_accounts"] || %{})["twitch"]
+
+    payload =
+      if linked do
+        %{
+          "handle" => handle,
+          "provider" => "twitch",
+          "user_id" => linked["user_id"],
+          "account_version" => linked["account_version"] || 1
+        }
+      else
+        %{"handle" => handle, "provider" => "direct"}
+      end
+
+    {:ok, token} = Session.create_token(payload)
     {"cookie", "#{Session.cookie_name()}=#{token}"}
   end
 
@@ -510,6 +532,233 @@ defmodule ChatOverlay.WebSessionAuthTest do
     # Must redirect with error=identity_mismatch and NOT issue session cookie
     {_, location} = List.keyfind(headers, "location", 0)
     assert location =~ "error=identity_mismatch"
+
+    set_cookies =
+      headers
+      |> Enum.filter(fn {k, _} -> k == "set-cookie" end)
+      |> Enum.map(&elem(&1, 1))
+
+    session_cookie =
+      Enum.find(set_cookies, fn c -> String.starts_with?(c, "#{Session.cookie_name()}=") end)
+
+    assert session_cookie == nil
+  end
+
+  test "POST /api/profiles/:handle/unlink/:provider revokes session and clears cookie", %{
+    port: port
+  } do
+    origin = {"origin", "http://localhost:#{port}"}
+    cookie_streamer = session_cookie_header("streamer")
+
+    # 1. Active session can access auth me
+    {200, _, me_body1} = request(port, "GET", "/api/auth/me", [cookie_streamer])
+    assert {:ok, me_data1} = JSON.decode(me_body1)
+    assert me_data1["authenticated"] == true
+
+    # 2. Unlink Twitch
+    {200, unlink_headers, unlink_body} =
+      request(port, "POST", "/api/profiles/streamer/unlink/twitch", [origin, cookie_streamer])
+
+    assert {:ok, unlink_data} = JSON.decode(unlink_body)
+    assert unlink_data["ok"] == true
+    assert unlink_data["unlinked"] == "twitch"
+
+    # Verifies Set-Cookie max-age=0 was sent
+    set_cookies =
+      unlink_headers
+      |> Enum.filter(fn {k, _} -> k == "set-cookie" end)
+      |> Enum.map(&elem(&1, 1))
+
+    deleted_cookie =
+      Enum.find(set_cookies, fn c ->
+        String.starts_with?(c, "#{Session.cookie_name()}=") and c =~ "max-age=0"
+      end)
+
+    assert deleted_cookie != nil
+
+    # 3. Subsequent request with the unlinked cookie is rejected as unauthenticated
+    {200, _, me_body2} = request(port, "GET", "/api/auth/me", [cookie_streamer])
+    assert {:ok, me_data2} = JSON.decode(me_body2)
+    assert me_data2["authenticated"] == false
+  end
+
+  test "remote initial login allows OAuth authorize with capability token and links on callback",
+       %{
+         port: port
+       } do
+    mock_client = fn
+      :post, "https://id.twitch.tv/oauth2/token", _headers, _body ->
+        {:ok, 200,
+         %{
+           "access_token" => "mock_token_initial",
+           "refresh_token" => "mock_refresh_initial",
+           "expires_in" => 3600
+         }}
+
+      :get, "https://api.twitch.tv/helix/users", _headers, _body ->
+        {:ok, 200,
+         %{
+           "data" => [
+             %{
+               "id" => "888888",
+               "login" => "remotestreamer",
+               "display_name" => "RemoteStreamer"
+             }
+           ]
+         }}
+    end
+
+    Application.put_env(:chat_overlay, :oauth_http_client, mock_client)
+
+    on_exit(fn ->
+      Application.delete_env(:chat_overlay, :oauth_http_client)
+    end)
+
+    cap_token = ChatOverlay.Crypto.generate_capability_token()
+    token_hash = ChatOverlay.Crypto.hash_token(cap_token)
+
+    p_remote = %{
+      "handle" => "streamer-remote",
+      "sources" => [
+        %{
+          "platform" => "twitch",
+          "channel" => "888888",
+          "user_id" => "888888",
+          "client_id" => "mock_client",
+          "credential_env" => "CHAT_TWITCH_TOKEN"
+        }
+      ],
+      "capability_token_hash" => token_hash,
+      "can_upload" => true,
+      "storage_quota_bytes" => 10_485_760,
+      "storage_used_bytes" => 0
+    }
+
+    current_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    Application.put_env(:chat_overlay, :profiles, [p_remote | current_profiles])
+
+    # 1. Unauthenticated request without token -> 401
+    {401, _, unauth_body} =
+      request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer-remote")
+
+    assert {:ok, unauth_data} = JSON.decode(unauth_body)
+    assert unauth_data["ok"] == false
+    assert unauth_data["error"] =~ "token de capacidad"
+
+    # 2. Remote creator provides capability token via query param -> 200 with OAuth URL
+    {200, _, ok_body} =
+      request(
+        port,
+        "GET",
+        "/api/oauth/authorize/twitch?handle=streamer-remote&token=#{cap_token}"
+      )
+
+    assert {:ok, ok_data} = JSON.decode(ok_body)
+    assert ok_data["ok"] == true
+    assert is_binary(ok_data["url"])
+
+    uri = URI.parse(ok_data["url"])
+    query_params = URI.decode_query(uri.query)
+    state = query_params["state"]
+    assert {:ok, state_payload} = OAuth.verify_state(state)
+    assert state_payload["auth_proof"] == "capability_token"
+
+    # 3. Remote creator completes OAuth callback -> succeeds, establishes link, sets session cookie
+    callback_path =
+      "/oauth/callback/twitch?code=auth_code_remote&state=#{URI.encode_www_form(state)}"
+
+    {302, headers, _} = request(port, "GET", callback_path)
+    {_, location} = List.keyfind(headers, "location", 0)
+    assert location =~ "/?handle=streamer-remote&linked=twitch"
+
+    set_cookies =
+      headers
+      |> Enum.filter(fn {k, _} -> k == "set-cookie" end)
+      |> Enum.map(&elem(&1, 1))
+
+    session_cookie =
+      Enum.find(set_cookies, fn c -> String.starts_with?(c, "#{Session.cookie_name()}=") end)
+
+    assert session_cookie != nil
+    cookie_header = {"cookie", session_cookie |> String.split(";") |> hd()}
+
+    # 4. Profile now has linked account, session works
+    {200, _, me_body} = request(port, "GET", "/api/auth/me", [cookie_header])
+    assert {:ok, me_data} = JSON.decode(me_body)
+    assert me_data["authenticated"] == true
+    assert me_data["handle"] == "streamer-remote"
+    assert me_data["provider"] == "twitch"
+    assert me_data["user_id"] == "888888"
+
+    # 5. Subsequent OAuth login for this linked account succeeds WITHOUT token or session
+    {200, _, login_body} =
+      request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer-remote")
+
+    assert {:ok, login_data} = JSON.decode(login_body)
+    assert login_data["ok"] == true
+  end
+
+  test "OAuth callback rejects claim when profile lacks prior identifiers and OAuth state lacks proof",
+       %{
+         port: port
+       } do
+    mock_client = fn
+      :post, "https://id.twitch.tv/oauth2/token", _headers, _body ->
+        {:ok, 200,
+         %{
+           "access_token" => "mock_token_unauthorized",
+           "refresh_token" => "mock_refresh_unauthorized",
+           "expires_in" => 3600
+         }}
+
+      :get, "https://api.twitch.tv/helix/users", _headers, _body ->
+        {:ok, 200,
+         %{
+           "data" => [
+             %{
+               "id" => "777777",
+               "login" => "claimant",
+               "display_name" => "Claimant"
+             }
+           ]
+         }}
+    end
+
+    Application.put_env(:chat_overlay, :oauth_http_client, mock_client)
+
+    on_exit(fn ->
+      Application.delete_env(:chat_overlay, :oauth_http_client)
+    end)
+
+    p_unlinked = %{
+      "handle" => "streamer-unlinked",
+      "sources" => [
+        %{
+          "platform" => "youtube",
+          "channel" => "unlinkedchannel",
+          "live_chat_id" => "live_chat_1",
+          "client_id" => "mock_client",
+          "credential_env" => "CHAT_YOUTUBE_TOKEN"
+        }
+      ],
+      "can_upload" => true,
+      "storage_quota_bytes" => 10_485_760,
+      "storage_used_bytes" => 0
+    }
+
+    current_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    Application.put_env(:chat_overlay, :profiles, [p_unlinked | current_profiles])
+
+    state = OAuth.generate_state("streamer-unlinked", "twitch", "test_verifier_claimant")
+
+    callback_path =
+      "/oauth/callback/twitch?code=auth_code_claimant&state=#{URI.encode_www_form(state)}"
+
+    {302, headers, _} = request(port, "GET", callback_path)
+
+    # Must redirect with error=unauthorized_profile_claim and NOT issue cookie
+    {_, location} = List.keyfind(headers, "location", 0)
+    assert location =~ "error=unauthorized_profile_claim"
 
     set_cookies =
       headers

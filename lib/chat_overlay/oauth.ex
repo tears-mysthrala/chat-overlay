@@ -118,7 +118,13 @@ defmodule ChatOverlay.OAuth do
         case client_id(provider_str) do
           cid when is_binary(cid) and byte_size(cid) > 0 ->
             pkce = Crypto.generate_pkce()
-            state = generate_state(handle, provider_str, pkce.verifier)
+
+            extra =
+              if opts[:auth_proof],
+                do: %{"auth_proof" => to_string(opts[:auth_proof])},
+                else: %{}
+
+            state = generate_state(handle, provider_str, pkce.verifier, extra)
 
             params =
               %{
@@ -146,17 +152,21 @@ defmodule ChatOverlay.OAuth do
 
   @doc """
   Generates an encrypted state string containing handle, provider, PKCE verifier,
-  timestamp and random nonce.
+  timestamp and random nonce, with optional extra claims (such as auth_proof).
   """
-  @spec generate_state(String.t(), String.t(), String.t()) :: String.t()
-  def generate_state(handle, provider, verifier) do
-    payload = %{
-      "handle" => handle,
-      "provider" => to_string(provider),
-      "verifier" => verifier,
-      "ts" => System.system_time(:second),
-      "nonce" => Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
-    }
+  @spec generate_state(String.t(), String.t(), String.t(), map()) :: String.t()
+  def generate_state(handle, provider, verifier, extra \\ %{}) do
+    payload =
+      Map.merge(
+        %{
+          "handle" => handle,
+          "provider" => to_string(provider),
+          "verifier" => verifier,
+          "ts" => System.system_time(:second),
+          "nonce" => Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+        },
+        extra
+      )
 
     json = JSON.encode(payload)
     {:ok, encrypted_state} = Crypto.encrypt_aead(json, encryption_key(), "oauth_state")
@@ -225,7 +235,8 @@ defmodule ChatOverlay.OAuth do
            provider: provider_str,
            username: user_info.username,
            user_id: user_info.user_id,
-           tokens: tokens
+           tokens: tokens,
+           auth_proof: state_data["auth_proof"]
          }}
       end
     end
