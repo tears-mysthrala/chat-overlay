@@ -189,4 +189,64 @@ defmodule ChatOverlay.OAuthTest do
                )
     end
   end
+
+  describe "validate_encryption_key/1" do
+    test "allows default key or no key in non-production environments" do
+      assert :ok = OAuth.validate_encryption_key(env: :test, key: nil)
+
+      assert :ok =
+               OAuth.validate_encryption_key(
+                 env: :dev,
+                 key: "chat_overlay_secret_key_32_bytes!"
+               )
+    end
+
+    test "rejects short key in non-production environments" do
+      assert {:error, :encryption_key_too_short} =
+               OAuth.validate_encryption_key(env: :test, key: "short_key")
+    end
+
+    test "requires explicit key in production" do
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: nil)
+
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: "")
+
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: 12345)
+
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(env: :prod, key: :not_a_binary)
+    end
+
+    test "rejects default development key in production" do
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(
+                 env: :prod,
+                 key: "chat_overlay_secret_key_32_bytes!"
+               )
+    end
+
+    test "enforces production validation when release is active" do
+      assert {:error, :missing_production_encryption_key} =
+               OAuth.validate_encryption_key(
+                 release: true,
+                 key: "chat_overlay_secret_key_32_bytes!"
+               )
+    end
+
+    test "rejects key shorter than 32 bytes in production" do
+      assert {:error, :encryption_key_too_short} =
+               OAuth.validate_encryption_key(env: :prod, key: "only_24_bytes_key_here!")
+    end
+
+    test "accepts valid 32-byte key in production" do
+      assert :ok =
+               OAuth.validate_encryption_key(
+                 env: :prod,
+                 key: "production_secret_key_32_bytes_ok!"
+               )
+    end
+  end
 end

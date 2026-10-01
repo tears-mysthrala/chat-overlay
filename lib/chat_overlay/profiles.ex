@@ -737,6 +737,7 @@ defmodule ChatOverlay.Profiles do
           persist_profiles(valid_profiles)
           invalidate_tokens(handle, "twitch")
           invalidate_tokens(handle, "youtube")
+          ChatOverlay.Stream.disconnect_viewers(handle)
           :ok
         end
     end
@@ -755,8 +756,12 @@ defmodule ChatOverlay.Profiles do
         updated_profile = Map.put(existing, "capability_token_hash", hash)
 
         case do_save_profile(updated_profile, replace: true) do
-          {:ok, saved} -> {:ok, token, saved}
-          error -> error
+          {:ok, saved} ->
+            ChatOverlay.Stream.disconnect_viewers(handle)
+            {:ok, token, saved}
+
+          error ->
+            error
         end
     end
   end
