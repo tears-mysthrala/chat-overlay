@@ -1,5 +1,5 @@
 import Config
-config :chat_overlay, http: false
+config :chat_overlay, http: false, env: :test
 
 config :chat_overlay,
   grace_ms: 30,

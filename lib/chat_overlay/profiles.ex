@@ -12,7 +12,18 @@ defmodule ChatOverlay.Profiles do
     GenServer.start_link(__MODULE__, opts, name: opts[:name] || __MODULE__)
   end
 
-  def init(_opts), do: {:ok, %{}}
+  def init(_opts) do
+    if :ets.info(:chat_overlay_revoked_sessions) == :undefined do
+      :ets.new(:chat_overlay_revoked_sessions, [
+        :named_table,
+        :set,
+        :public,
+        read_concurrency: true
+      ])
+    end
+
+    {:ok, %{}}
+  end
 
   def handle_call(action, _from, state) do
     result = execute_action(action)
@@ -726,7 +737,7 @@ defmodule ChatOverlay.Profiles do
 
         with {:ok, valid_profiles} <- Config.validate(remaining_profiles) do
           Application.put_env(:chat_overlay, :profiles, valid_profiles)
-          ChatOverlay.Stream.disconnect_viewers(handle)
+          ChatOverlay.Stream.disconnect_viewers(handle, :profile_deleted)
 
           if Process.whereis(ChatOverlay.Stores) do
             _ = Supervisor.terminate_child(ChatOverlay.Stores, {:store, handle})
@@ -757,7 +768,7 @@ defmodule ChatOverlay.Profiles do
 
         case do_save_profile(updated_profile, replace: true) do
           {:ok, saved} ->
-            ChatOverlay.Stream.disconnect_viewers(handle)
+            ChatOverlay.Stream.disconnect_viewers(handle, :token_revoked)
             {:ok, token, saved}
 
           error ->

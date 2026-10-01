@@ -62,6 +62,55 @@ defmodule ChatOverlay.Session do
   end
 
   @doc """
+  Revokes a session token so it cannot be used again across any device or client.
+  """
+  @spec revoke_token(String.t()) :: :ok
+  def revoke_token(token) when is_binary(token) do
+    ensure_revocation_table()
+    hash = :crypto.hash(:sha256, token)
+    :ets.insert(:chat_overlay_revoked_sessions, {hash, System.system_time(:second)})
+    :ok
+  end
+
+  def revoke_token(_), do: :ok
+
+  @doc """
+  Checks if a session token has been revoked.
+  """
+  @spec revoked?(String.t()) :: boolean()
+  def revoked?(token) when is_binary(token) do
+    case :ets.info(:chat_overlay_revoked_sessions) do
+      :undefined ->
+        false
+
+      _ ->
+        hash = :crypto.hash(:sha256, token)
+        :ets.member(:chat_overlay_revoked_sessions, hash)
+    end
+  end
+
+  def revoked?(_), do: false
+
+  defp ensure_revocation_table do
+    case :ets.info(:chat_overlay_revoked_sessions) do
+      :undefined ->
+        try do
+          :ets.new(:chat_overlay_revoked_sessions, [
+            :named_table,
+            :set,
+            :public,
+            read_concurrency: true
+          ])
+        catch
+          _, _ -> :ok
+        end
+
+      _ ->
+        :ok
+    end
+  end
+
+  @doc """
   Verifies and decrypts a session token. Validates integrity tag, AAD domain separation,
   and expiration timestamp.
   """
@@ -69,32 +118,37 @@ defmodule ChatOverlay.Session do
           {:ok, map()}
           | {:error,
              :session_expired
+             | :revoked
              | :invalid_session_payload
              | :invalid_or_tampered_token
              | :invalid_token}
   def verify_token(token, opts \\ [])
 
   def verify_token("v1:" <> _ = token, opts) do
-    key = Keyword.get_lazy(opts, :key, &encryption_key/0)
-    now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
+    if revoked?(token) do
+      {:error, :revoked}
+    else
+      key = Keyword.get_lazy(opts, :key, &encryption_key/0)
+      now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
 
-    case Crypto.decrypt_aead(token, key, @session_aad) do
-      {:ok, json} ->
-        case JSON.decode(json) do
-          {:ok, %{"handle" => handle, "expires_at" => expires_at} = session}
-          when is_binary(handle) and byte_size(handle) > 0 and is_integer(expires_at) ->
-            if expires_at > now do
-              {:ok, session}
-            else
-              {:error, :session_expired}
-            end
+      case Crypto.decrypt_aead(token, key, @session_aad) do
+        {:ok, json} ->
+          case JSON.decode(json) do
+            {:ok, %{"handle" => handle, "expires_at" => expires_at} = session}
+            when is_binary(handle) and byte_size(handle) > 0 and is_integer(expires_at) ->
+              if expires_at > now do
+                {:ok, session}
+              else
+                {:error, :session_expired}
+              end
 
-          _ ->
-            {:error, :invalid_session_payload}
-        end
+            _ ->
+              {:error, :invalid_session_payload}
+          end
 
-      {:error, _reason} ->
-        {:error, :invalid_or_tampered_token}
+        {:error, _reason} ->
+          {:error, :invalid_or_tampered_token}
+      end
     end
   end
 
@@ -146,10 +200,20 @@ defmodule ChatOverlay.Session do
   end
 
   @doc """
-  Clears the session cookie by setting `max-age=0` and expired date.
+  Clears the session cookie by setting `max-age=0` and invalidates the session token in the revocation table.
   """
   @spec delete_session(Plug.Conn.t(), keyword()) :: Plug.Conn.t()
   def delete_session(%Plug.Conn{} = conn, opts \\ []) do
+    conn = Plug.Conn.fetch_cookies(conn)
+
+    case conn.cookies[@cookie_name] do
+      token when is_binary(token) and byte_size(token) > 0 ->
+        revoke_token(token)
+
+      _ ->
+        :ok
+    end
+
     secure =
       Keyword.get_lazy(opts, :secure, fn ->
         conn.scheme == :https or
@@ -178,9 +242,18 @@ defmodule ChatOverlay.Session do
   end
 
   @doc """
-  Checks if a handle corresponds to a demo profile.
+  Checks if a handle or profile map corresponds to a demo profile.
   """
-  @spec demo_profile?(String.t()) :: boolean()
+  @spec demo_profile?(String.t() | map()) :: boolean()
+  def demo_profile?(%{"sources" => sources} = profile) when is_map(profile) do
+    profile["handle"] == "demo" or
+      (is_list(sources) and sources != [] and Enum.all?(sources, &(&1["mode"] == "demo")))
+  end
+
+  def demo_profile?(profile) when is_map(profile) do
+    profile["handle"] == "demo" or demo_profile?(profile["handle"])
+  end
+
   def demo_profile?(handle) when is_binary(handle) do
     handle == "demo" or
       case ChatOverlay.Config.profile(handle) do
@@ -189,7 +262,7 @@ defmodule ChatOverlay.Session do
 
         profile ->
           sources = profile["sources"] || []
-          sources != [] and Enum.all?(sources, &(&1["mode"] == "demo"))
+          is_list(sources) and sources != [] and Enum.all?(sources, &(&1["mode"] == "demo"))
       end
   end
 
@@ -200,6 +273,7 @@ defmodule ChatOverlay.Session do
 
   Rules:
   1. If an active session is present, caller must match `handle` (SEC-14 strict authorization).
+     Validates profile existence and linked account identity.
      Cross-profile access returns `{:error, :forbidden}`.
   2. If no session is present:
      - Local loopback connections under demo mode or querying unconfigured handles
@@ -213,10 +287,37 @@ defmodule ChatOverlay.Session do
   def authorize(%Plug.Conn{} = conn, handle, opts) when is_binary(handle) do
     case fetch_session(conn, opts) do
       {:ok, session} ->
-        if session["handle"] == handle do
-          :ok
-        else
-          {:error, :forbidden}
+        session_handle = session["handle"]
+
+        cond do
+          session_handle != handle ->
+            {:error, :forbidden}
+
+          is_nil(ChatOverlay.Config.profile(handle)) ->
+            {:error, :unauthorized}
+
+          true ->
+            profile = ChatOverlay.Config.profile(handle)
+            provider = session["provider"]
+
+            if provider && profile["linked_accounts"] && profile["linked_accounts"][provider] do
+              linked = profile["linked_accounts"][provider]
+
+              cond do
+                session["user_id"] &&
+                    to_string(linked["user_id"]) != to_string(session["user_id"]) ->
+                  {:error, :unauthorized}
+
+                session["account_version"] &&
+                    (linked["account_version"] || 1) != session["account_version"] ->
+                  {:error, :unauthorized}
+
+                true ->
+                  :ok
+              end
+            else
+              :ok
+            end
         end
 
       {:error, _reason} ->
@@ -272,7 +373,7 @@ defmodule ChatOverlay.Session do
   @doc """
   Scopes a list of profiles according to the caller's authorization.
   - If authenticated: returns only profiles belonging to the session handle (SEC-12, SEC-14).
-  - If unauthenticated on loopback: returns all profiles (zero-friction dev/demo).
+  - If unauthenticated on loopback: returns only demo profiles (zero-friction dev/demo).
   - If unauthenticated on remote network: returns `{:error, :unauthorized}`.
   """
   @spec scope_profiles(Plug.Conn.t(), [map()], keyword()) ::
@@ -285,7 +386,7 @@ defmodule ChatOverlay.Session do
 
       {:error, _reason} ->
         if loopback?(conn) do
-          {:ok, profiles}
+          {:ok, Enum.filter(profiles, &demo_profile?/1)}
         else
           {:error, :unauthorized}
         end

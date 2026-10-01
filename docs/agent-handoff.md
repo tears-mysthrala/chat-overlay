@@ -125,11 +125,11 @@
       - Interfaz de usuario en Panel de Creador (`priv/static/app.js`, `priv/static/app.css`): badge de estado amarillo «Reautenticación requerida», aviso explícito y botón «Reconectar» para Twitch y YouTube.
       - 150/150 tests PASS en ExUnit (incluyendo regresiones exhaustivas de carreras entre vinculaciones concurrentes, fallo de disco, respuestas malformadas, revocación e invalidación de caché).
 
-12. **Pendientes de Fase F2 para Unidades Separadas (Backlog)**:
-    - Autenticación y autorización del Panel de Creador.
-    - Clave de cifrado OAuth obligatoria (fallo en arranque si no está configurada).
-    - Desconexión y cierre forzado de visores SSE preexistentes ante revocación de capability token.
-    - Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2.
+12. **Estado del Backlog de Endurecimiento Fase F2**:
+    - [x] Clave de cifrado OAuth obligatoria en producción (SEC-15) — completada en Issue #28 / PR #29.
+    - [x] Desconexión activa y cierre forzado de visores SSE ante revocación de capability token (SEC-09) — completada en Issue #28 / PR #29.
+    - [x] Autenticación de sesión en Panel de Creador y autorización por perfil (SEC-12, SEC-14, ADR-0003) — completada en Issue #30 / PR #31.
+    - [ ] Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2 (SEC-05, SEC-17) — pendiente para Unidad siguiente.
 
 ## CI hardening — issue #27, same branch and PR #26
 

@@ -411,4 +411,114 @@ defmodule ChatOverlay.WebSessionAuthTest do
     assert session["provider"] == "twitch"
     assert session["user_id"] == "998877"
   end
+
+  test "GET /api/profiles without session on loopback only exposes demo profiles", %{port: port} do
+    {200, _, body} = request(port, "GET", "/api/profiles", [])
+    assert {:ok, data} = JSON.decode(body)
+    handles = Enum.map(data["profiles"], & &1["handle"])
+    assert "streamer" in handles
+    assert "streamer2" in handles
+    refute "streamer-prod" in handles
+  end
+
+  test "GET /api/oauth/authorize/:provider enforces profile authorization", %{port: port} do
+    cookie_streamer = session_cookie_header("streamer")
+    cookie_prod = session_cookie_header("streamer-prod")
+
+    # 1. Unauthenticated request to authorize non-demo profile -> 401
+    {401, _, unauth_body} =
+      request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer-prod")
+
+    assert {:ok, unauth_data} = JSON.decode(unauth_body)
+    assert unauth_data["ok"] == false
+
+    # 2. Authenticated as different user -> 403 Forbidden
+    {403, _, forbidden_body} =
+      request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer-prod", [cookie_streamer])
+
+    assert {:ok, forbidden_data} = JSON.decode(forbidden_body)
+    assert forbidden_data["ok"] == false
+
+    # 3. Authenticated as profile owner -> 200 OK with url
+    {200, _, ok_body} =
+      request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer-prod", [cookie_prod])
+
+    assert {:ok, ok_data} = JSON.decode(ok_body)
+    assert ok_data["ok"] == true
+    assert is_binary(ok_data["url"])
+  end
+
+  test "POST /api/auth/logout revokes the token preventing reuse across sessions", %{port: port} do
+    origin = {"origin", "http://localhost:#{port}"}
+    {:ok, token} = Session.create_token(%{"handle" => "streamer"})
+    cookie_header = {"cookie", "#{Session.cookie_name()}=#{token}"}
+
+    # Verify active session
+    {200, _, me_body1} = request(port, "GET", "/api/auth/me", [cookie_header])
+    assert {:ok, me_data1} = JSON.decode(me_body1)
+    assert me_data1["authenticated"] == true
+
+    # Logout
+    {200, _, logout_body} = request(port, "POST", "/api/auth/logout", [origin, cookie_header])
+    assert {:ok, logout_data} = JSON.decode(logout_body)
+    assert logout_data["ok"] == true
+
+    # Re-using the same token header is now rejected as unauthenticated (revoked)
+    {200, _, me_body2} = request(port, "GET", "/api/auth/me", [cookie_header])
+    assert {:ok, me_data2} = JSON.decode(me_body2)
+    assert me_data2["authenticated"] == false
+  end
+
+  test "OAuth callback rejects identity mismatch for established profile owner", %{port: port} do
+    # Configure mock OAuth client returning mismatched user_id (not 12345)
+    mock_client = fn
+      :post, "https://id.twitch.tv/oauth2/token", _headers, _body ->
+        {:ok, 200,
+         %{
+           "access_token" => "mock_twitch_token_attacker",
+           "refresh_token" => "mock_twitch_refresh_attacker",
+           "expires_in" => 3600
+         }}
+
+      :get, "https://api.twitch.tv/helix/users", _headers, _body ->
+        {:ok, 200,
+         %{
+           "data" => [
+             %{
+               "id" => "999999",
+               "login" => "attacker",
+               "display_name" => "Attacker"
+             }
+           ]
+         }}
+    end
+
+    Application.put_env(:chat_overlay, :oauth_http_client, mock_client)
+
+    on_exit(fn ->
+      Application.delete_env(:chat_overlay, :oauth_http_client)
+    end)
+
+    # State requested for streamer-prod (whose configured user_id is 12345)
+    state = OAuth.generate_state("streamer-prod", "twitch", "test_verifier_attacker")
+
+    callback_path =
+      "/oauth/callback/twitch?code=auth_code_attacker&state=#{URI.encode_www_form(state)}"
+
+    {302, headers, _} = request(port, "GET", callback_path)
+
+    # Must redirect with error=identity_mismatch and NOT issue session cookie
+    {_, location} = List.keyfind(headers, "location", 0)
+    assert location =~ "error=identity_mismatch"
+
+    set_cookies =
+      headers
+      |> Enum.filter(fn {k, _} -> k == "set-cookie" end)
+      |> Enum.map(&elem(&1, 1))
+
+    session_cookie =
+      Enum.find(set_cookies, fn c -> String.starts_with?(c, "#{Session.cookie_name()}=") end)
+
+    assert session_cookie == nil
+  end
 end

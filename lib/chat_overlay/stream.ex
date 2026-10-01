@@ -22,9 +22,10 @@ defmodule ChatOverlay.Stream do
         case Admission.acquire(handle) do
           :ok ->
             try do
-              if is_overlay and Process.whereis(ChatOverlay.SSERegistry) do
+              if Process.whereis(ChatOverlay.SSERegistry) do
                 flush_stale_revocations()
-                Registry.register(ChatOverlay.SSERegistry, handle, token)
+                reg_meta = if is_overlay, do: {:overlay, token}, else: :reader
+                Registry.register(ChatOverlay.SSERegistry, handle, reg_meta)
               end
 
               if is_overlay and
@@ -52,7 +53,7 @@ defmodule ChatOverlay.Stream do
                 poll(conn, handle, cursor, is_overlay, token, System.monotonic_time(:millisecond))
               end
             after
-              if is_overlay and Process.whereis(ChatOverlay.SSERegistry) do
+              if Process.whereis(ChatOverlay.SSERegistry) do
                 Registry.unregister(ChatOverlay.SSERegistry, handle)
               end
 
@@ -69,14 +70,35 @@ defmodule ChatOverlay.Stream do
   end
 
   @doc """
-  Actively disconnects all open SSE overlay viewers for a profile handle.
-  Used when capability tokens are regenerated or profiles are deleted (SEC-09).
+  Actively disconnects SSE viewers for a profile handle.
+  - `:token_revoked`: disconnects overlay viewers whose capability token changed (SEC-09).
+  - `:profile_deleted`: disconnects all viewers (overlay and reader) when profile is deleted.
   """
-  def disconnect_viewers(handle) when is_binary(handle) do
+  def disconnect_viewers(handle, reason \\ :token_revoked)
+
+  def disconnect_viewers(handle, reason) when is_binary(handle) do
     if Process.whereis(ChatOverlay.SSERegistry) do
       Registry.dispatch(ChatOverlay.SSERegistry, handle, fn entries ->
-        for {pid, _token} <- entries do
-          send(pid, {:capability_token_revoked, handle})
+        for {pid, reg_meta} <- entries do
+          case {reason, reg_meta} do
+            {:token_revoked, {:overlay, _token}} ->
+              send(pid, {:capability_token_revoked, handle})
+
+            {:token_revoked, _raw_token} when not is_atom(reg_meta) ->
+              send(pid, {:capability_token_revoked, handle})
+
+            {:profile_deleted, {:overlay, _token}} ->
+              send(pid, {:capability_token_revoked, handle})
+
+            {:profile_deleted, _raw_token} when not is_atom(reg_meta) ->
+              send(pid, {:capability_token_revoked, handle})
+
+            {:profile_deleted, :reader} ->
+              send(pid, {:profile_deleted, handle})
+
+            _ ->
+              :ok
+          end
         end
       end)
     else
@@ -84,12 +106,13 @@ defmodule ChatOverlay.Stream do
     end
   end
 
-  def disconnect_viewers(_), do: :ok
+  def disconnect_viewers(_, _), do: :ok
 
   defp flush_stale_revocations do
     receive do
       {:capability_token_revoked, _} -> flush_stale_revocations()
       :capability_token_revoked -> flush_stale_revocations()
+      {:profile_deleted, _} -> flush_stale_revocations()
     after
       0 -> :ok
     end
@@ -101,81 +124,154 @@ defmodule ChatOverlay.Stream do
         Store.read(Store.name(handle), cursor)
       catch
         :exit, _ ->
-          %{cursor: cursor, events: []}
+          if is_nil(Config.profile(handle)) do
+            if is_overlay, do: :capability_revoked, else: :profile_deleted
+          else
+            %{cursor: cursor, events: []}
+          end
       end
 
-    now = System.monotonic_time(:millisecond)
-    current_platforms = platforms_for(handle, is_overlay)
+    cond do
+      result == :capability_revoked ->
+        _ =
+          Plug.Conn.chunk(
+            conn,
+            "event: error\ndata: " <>
+              ChatOverlay.JSON.encode(%{
+                "error" => "unauthorized",
+                "message" => "Capability token revoked"
+              }) <>
+              "\n\n"
+          )
 
-    data =
-      cond do
-        result.events != [] ->
-          [
-            "id: ",
-            result.cursor,
-            "\nevent: batch\ndata: ",
-            ChatOverlay.JSON.encode(%{
-              "events" => filter_events(result.events, current_platforms)
-            }),
-            "\n\n"
-          ]
-
-        now - last >= 15_000 ->
-          ": heartbeat\n\n"
-
-        true ->
-          nil
-      end
-
-    response = if data, do: Plug.Conn.chunk(conn, data), else: {:ok, conn}
-
-    case response do
-      {:ok, conn} ->
-        receive do
-          {:tcp_closed, _} ->
-            conn
-
-          {:tcp_error, _, _} ->
-            conn
-
-          {:capability_token_revoked, ^handle} ->
-            _ =
-              Plug.Conn.chunk(
-                conn,
-                "event: error\ndata: " <>
-                  ChatOverlay.JSON.encode(%{
-                    "error" => "unauthorized",
-                    "message" => "Capability token revoked"
-                  }) <>
-                  "\n\n"
-              )
-
-            conn
-
-          {:capability_token_revoked, _other_handle} ->
-            # Discard stale revocation from previous request on keep-alive connection
-            poll(conn, handle, result.cursor, is_overlay, token, if(data, do: now, else: last))
-
-          :capability_token_revoked ->
-            _ =
-              Plug.Conn.chunk(
-                conn,
-                "event: error\ndata: " <>
-                  ChatOverlay.JSON.encode(%{
-                    "error" => "unauthorized",
-                    "message" => "Capability token revoked"
-                  }) <>
-                  "\n\n"
-              )
-
-            conn
-        after
-          50 ->
-            poll(conn, handle, result.cursor, is_overlay, token, if(data, do: now, else: last))
-        end
-
-      {:error, _} ->
         conn
+
+      result == :profile_deleted ->
+        _ =
+          Plug.Conn.chunk(
+            conn,
+            "event: error\ndata: " <>
+              ChatOverlay.JSON.encode(%{
+                "error" => "not_found",
+                "message" => "Profile deleted"
+              }) <>
+              "\n\n"
+          )
+
+        conn
+
+      true ->
+        now = System.monotonic_time(:millisecond)
+        current_platforms = platforms_for(handle, is_overlay)
+
+        data =
+          cond do
+            result.events != [] ->
+              [
+                "id: ",
+                result.cursor,
+                "\nevent: batch\ndata: ",
+                ChatOverlay.JSON.encode(%{
+                  "events" => filter_events(result.events, current_platforms)
+                }),
+                "\n\n"
+              ]
+
+            now - last >= 15_000 ->
+              ": heartbeat\n\n"
+
+            true ->
+              nil
+          end
+
+        response = if data, do: Plug.Conn.chunk(conn, data), else: {:ok, conn}
+
+        case response do
+          {:ok, conn} ->
+            receive do
+              {:tcp_closed, _} ->
+                conn
+
+              {:tcp_error, _, _} ->
+                conn
+
+              {:capability_token_revoked, ^handle} ->
+                _ =
+                  Plug.Conn.chunk(
+                    conn,
+                    "event: error\ndata: " <>
+                      ChatOverlay.JSON.encode(%{
+                        "error" => "unauthorized",
+                        "message" => "Capability token revoked"
+                      }) <>
+                      "\n\n"
+                  )
+
+                conn
+
+              {:capability_token_revoked, _other_handle} ->
+                # Discard stale revocation from previous request on keep-alive connection
+                poll(
+                  conn,
+                  handle,
+                  result.cursor,
+                  is_overlay,
+                  token,
+                  if(data, do: now, else: last)
+                )
+
+              :capability_token_revoked ->
+                _ =
+                  Plug.Conn.chunk(
+                    conn,
+                    "event: error\ndata: " <>
+                      ChatOverlay.JSON.encode(%{
+                        "error" => "unauthorized",
+                        "message" => "Capability token revoked"
+                      }) <>
+                      "\n\n"
+                  )
+
+                conn
+
+              {:profile_deleted, ^handle} ->
+                _ =
+                  Plug.Conn.chunk(
+                    conn,
+                    "event: error\ndata: " <>
+                      ChatOverlay.JSON.encode(%{
+                        "error" => "not_found",
+                        "message" => "Profile deleted"
+                      }) <>
+                      "\n\n"
+                  )
+
+                conn
+
+              {:profile_deleted, _other_handle} ->
+                poll(
+                  conn,
+                  handle,
+                  result.cursor,
+                  is_overlay,
+                  token,
+                  if(data, do: now, else: last)
+                )
+            after
+              50 ->
+                poll(
+                  conn,
+                  handle,
+                  result.cursor,
+                  is_overlay,
+                  token,
+                  if(data, do: now, else: last)
+                )
+            end
+
+          {:error, _} ->
+            conn
+        end
     end
   end
 

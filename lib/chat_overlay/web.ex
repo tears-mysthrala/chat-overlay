@@ -986,6 +986,22 @@ defmodule ChatOverlay.Web do
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Proveedor no soportado"})
         )
 
+      match?({:error, :forbidden}, Session.authorize(conn, handle)) ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "No autorizado para este perfil"})
+        )
+
+      match?({:error, :unauthorized}, Session.authorize(conn, handle)) ->
+        reply(
+          conn,
+          401,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Autenticación requerida"})
+        )
+
       true ->
         redirect_uri = build_redirect_uri(conn, provider)
 
@@ -1057,34 +1073,67 @@ defmodule ChatOverlay.Web do
 
         case ChatOverlay.OAuth.handle_callback(provider, code, state, redirect_uri) do
           {:ok, result} ->
-            account_data = %{
-              username: result.username,
-              user_id: result.user_id
-            }
+            profile = Config.profile(result.handle)
 
-            case ChatOverlay.Profiles.link_account(
-                   result.handle,
-                   result.provider,
-                   account_data,
-                   result.tokens
-                 ) do
-              {:ok, _} ->
-                session_data = %{
-                  "handle" => result.handle,
-                  "provider" => result.provider,
-                  "user_id" => result.user_id,
-                  "username" => result.username
+            if is_nil(profile) do
+              redirect(conn, "/?error=profile_not_found")
+            else
+              existing_linked = (profile["linked_accounts"] || %{})[result.provider]
+              existing_user_id = existing_linked && existing_linked["user_id"]
+
+              source = Enum.find(profile["sources"] || [], &(&1["platform"] == result.provider))
+              source_user_id = source && source["user_id"]
+
+              identity_mismatch? =
+                cond do
+                  existing_user_id ->
+                    to_string(existing_user_id) != to_string(result.user_id)
+
+                  source_user_id && source["mode"] != "demo" ->
+                    to_string(source_user_id) != to_string(result.user_id)
+
+                  true ->
+                    false
+                end
+
+              if identity_mismatch? do
+                redirect(conn, "/?handle=#{result.handle}&error=identity_mismatch")
+              else
+                account_data = %{
+                  username: result.username,
+                  user_id: result.user_id
                 }
 
-                conn
-                |> Session.put_session(session_data)
-                |> redirect("/?handle=#{result.handle}&linked=#{result.provider}")
+                case ChatOverlay.Profiles.link_account(
+                       result.handle,
+                       result.provider,
+                       account_data,
+                       result.tokens
+                     ) do
+                  {:ok, updated_profile} ->
+                    linked_info = (updated_profile["linked_accounts"] || %{})[result.provider]
+                    account_version = (linked_info && linked_info["account_version"]) || 1
 
-              {:error, {err_type, _}} when err_type in [:persist_failed, :directory_not_found] ->
-                redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
+                    session_data = %{
+                      "handle" => result.handle,
+                      "provider" => result.provider,
+                      "user_id" => result.user_id,
+                      "username" => result.username,
+                      "account_version" => account_version
+                    }
 
-              {:error, _reason} ->
-                redirect(conn, "/?handle=#{result.handle}&error=link_failed")
+                    conn
+                    |> Session.put_session(session_data)
+                    |> redirect("/?handle=#{result.handle}&linked=#{result.provider}")
+
+                  {:error, {err_type, _}}
+                  when err_type in [:persist_failed, :directory_not_found] ->
+                    redirect(conn, "/?handle=#{result.handle}&error=storage_unwritable")
+
+                  {:error, _reason} ->
+                    redirect(conn, "/?handle=#{result.handle}&error=link_failed")
+                end
+              end
             end
 
           {:error, _reason} ->

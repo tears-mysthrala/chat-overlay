@@ -256,8 +256,18 @@ defmodule ChatOverlay.SessionTest do
 
     test "scope_profiles/3 isolates profiles by session handle" do
       profiles = [
-        %{"handle" => "streamer-prod"},
-        %{"handle" => "streamer-demo"}
+        %{
+          "handle" => "streamer-prod",
+          "sources" => [
+            %{"platform" => "twitch", "channel" => "streamer-prod", "mode" => "prod"}
+          ]
+        },
+        %{
+          "handle" => "streamer-demo",
+          "sources" => [
+            %{"platform" => "twitch", "channel" => "streamer-demo", "mode" => "demo"}
+          ]
+        }
       ]
 
       # Authenticated as streamer-prod -> only sees streamer-prod
@@ -271,14 +281,36 @@ defmodule ChatOverlay.SessionTest do
       assert length(scoped) == 1
       assert hd(scoped)["handle"] == "streamer-prod"
 
-      # Unauthenticated loopback -> sees all profiles
+      # Unauthenticated loopback -> sees only demo profiles
       conn_loopback = conn(:get, "/api/profiles")
-      assert {:ok, all} = Session.scope_profiles(conn_loopback, profiles)
-      assert length(all) == 2
+      assert {:ok, demo_only} = Session.scope_profiles(conn_loopback, profiles)
+      assert length(demo_only) == 1
+      assert hd(demo_only)["handle"] == "streamer-demo"
 
       # Unauthenticated remote -> 401
       conn_remote = %{conn(:get, "/api/profiles") | remote_ip: {198, 51, 100, 1}}
       assert {:error, :unauthorized} = Session.scope_profiles(conn_remote, profiles)
+    end
+
+    test "revoke_token/1 invalidates active session tokens" do
+      {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+      assert {:ok, _} = Session.verify_token(token, key: @test_key)
+
+      assert :ok = Session.revoke_token(token)
+      assert Session.revoked?(token)
+      assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
+    end
+
+    test "delete_session/2 automatically revokes the session token" do
+      {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+
+      conn =
+        conn(:post, "/api/auth/logout")
+        |> put_req_header("cookie", "chat_overlay_session=#{token}")
+
+      _conn = Session.delete_session(conn)
+      assert Session.revoked?(token)
+      assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
   end
 end
