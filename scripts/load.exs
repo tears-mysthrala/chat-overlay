@@ -69,6 +69,10 @@ defmodule LoadReader do
         loop(conn, ref, rest, metrics)
 
       :stop ->
+        if buffer != "" and String.contains?(buffer, "data: ") do
+          measure(buffer, metrics)
+        end
+
         ChatOverlay.TestClient.close(conn)
 
       {:client_down, ^conn, _, _, _} ->
@@ -168,7 +172,21 @@ emit = fn emit, n ->
 end
 
 emitted = emit.(emit, 0)
-Process.sleep(100)
+expected = emitted * 10
+drain_deadline = System.monotonic_time(:millisecond) + 10_000
+
+drain = fn drain ->
+  samples = :ets.lookup_element(metrics, :samples, 2)
+
+  if samples < expected and System.monotonic_time(:millisecond) < drain_deadline do
+    Process.sleep(25)
+    drain.(drain)
+  else
+    :ok
+  end
+end
+
+drain.(drain)
 monitors = Enum.map(readers, &{&1, Process.monitor(&1)})
 Enum.each(readers, &send(&1, :stop))
 

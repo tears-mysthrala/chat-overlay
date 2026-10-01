@@ -118,7 +118,13 @@ defmodule ChatOverlay.OAuth do
         case client_id(provider_str) do
           cid when is_binary(cid) and byte_size(cid) > 0 ->
             pkce = Crypto.generate_pkce()
-            state = generate_state(handle, provider_str, pkce.verifier)
+
+            extra =
+              if opts[:auth_proof],
+                do: %{"auth_proof" => to_string(opts[:auth_proof])},
+                else: %{}
+
+            state = generate_state(handle, provider_str, pkce.verifier, extra)
 
             params =
               %{
@@ -146,17 +152,21 @@ defmodule ChatOverlay.OAuth do
 
   @doc """
   Generates an encrypted state string containing handle, provider, PKCE verifier,
-  timestamp and random nonce.
+  timestamp and random nonce, with optional extra claims (such as auth_proof).
   """
-  @spec generate_state(String.t(), String.t(), String.t()) :: String.t()
-  def generate_state(handle, provider, verifier) do
-    payload = %{
-      "handle" => handle,
-      "provider" => to_string(provider),
-      "verifier" => verifier,
-      "ts" => System.system_time(:second),
-      "nonce" => Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
-    }
+  @spec generate_state(String.t(), String.t(), String.t(), map()) :: String.t()
+  def generate_state(handle, provider, verifier, extra \\ %{}) do
+    payload =
+      Map.merge(
+        %{
+          "handle" => handle,
+          "provider" => to_string(provider),
+          "verifier" => verifier,
+          "ts" => System.system_time(:second),
+          "nonce" => Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)
+        },
+        extra
+      )
 
     json = JSON.encode(payload)
     {:ok, encrypted_state} = Crypto.encrypt_aead(json, encryption_key(), "oauth_state")
@@ -225,7 +235,8 @@ defmodule ChatOverlay.OAuth do
            provider: provider_str,
            username: user_info.username,
            user_id: user_info.user_id,
-           tokens: tokens
+           tokens: tokens,
+           auth_proof: state_data["auth_proof"]
          }}
       end
     end
@@ -234,7 +245,7 @@ defmodule ChatOverlay.OAuth do
   # Token exchange implementation
 
   defp exchange_token(provider, code, verifier, redirect_uri, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = mock_http_client(opts) do
       mock_client.(:post, config.token_url, [], %{
         code: code,
         verifier: verifier,
@@ -440,7 +451,7 @@ defmodule ChatOverlay.OAuth do
   # User info implementation
 
   defp fetch_user_info("twitch", access_token, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = mock_http_client(opts) do
       case mock_client.(:get, config.user_url, [], "") do
         {:ok, 200, %{"data" => [first | _]}} ->
           {:ok,
@@ -479,7 +490,7 @@ defmodule ChatOverlay.OAuth do
   end
 
   defp fetch_user_info("youtube", access_token, config, opts) do
-    if mock_client = opts[:http_client] do
+    if mock_client = mock_http_client(opts) do
       case mock_client.(:get, config.user_url, [], "") do
         {:ok, 200, info} ->
           {:ok,
@@ -510,6 +521,19 @@ defmodule ChatOverlay.OAuth do
         _ ->
           {:error, :user_info_failed}
       end
+    end
+  end
+
+  defp mock_http_client(opts) do
+    cond do
+      is_function(opts[:http_client]) ->
+        opts[:http_client]
+
+      Application.get_env(:chat_overlay, :env) == :test ->
+        Application.get_env(:chat_overlay, :oauth_http_client)
+
+      true ->
+        nil
     end
   end
 

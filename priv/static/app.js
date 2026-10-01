@@ -794,7 +794,10 @@
         const p = getSelectedProfile();
         if (!p) return;
         try {
-          const res = await fetch(`/api/oauth/authorize/twitch?handle=${encodeURIComponent(p.handle)}`);
+          const urlParams = new URLSearchParams(location.search);
+          const token = urlParams.get("token") || sessionStorage.getItem(`obs_token_${p.handle}`);
+          const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
+          const res = await fetch(`/api/oauth/authorize/twitch?handle=${encodeURIComponent(p.handle)}${tokenQuery}`);
           const data = await res.json();
           if (data.ok && data.url) {
             location.assign(data.url);
@@ -835,7 +838,10 @@
         const p = getSelectedProfile();
         if (!p) return;
         try {
-          const res = await fetch(`/api/oauth/authorize/youtube?handle=${encodeURIComponent(p.handle)}`);
+          const urlParams = new URLSearchParams(location.search);
+          const token = urlParams.get("token") || sessionStorage.getItem(`obs_token_${p.handle}`);
+          const tokenQuery = token ? `&token=${encodeURIComponent(token)}` : "";
+          const res = await fetch(`/api/oauth/authorize/youtube?handle=${encodeURIComponent(p.handle)}${tokenQuery}`);
           const data = await res.json();
           if (data.ok && data.url) {
             location.assign(data.url);
@@ -877,9 +883,47 @@
       showOAuthFeedback(`¡Cuenta de ${prov.toUpperCase()} vinculada exitosamente!`, "success");
     } else if (dashboardParams.has("error")) {
       const err = dashboardParams.get("error");
-      showOAuthFeedback(`Aviso de autorización: ${err}`, "error");
+      const msgMap = {
+        identity_mismatch: "La cuenta autenticada no coincide con el titular del canal.",
+        unauthorized_profile_claim: "Reclamación no autorizada: titularidad no acreditada.",
+        oauth_failed: "Error durante el proceso de autenticación OAuth.",
+        profile_not_found: "Perfil no encontrado para completar la vinculación."
+      };
+      showOAuthFeedback(msgMap[err] || `Aviso de autorización: ${err}`, "error");
     }
 
+    async function loadSession() {
+      const banner = document.getElementById("session-banner");
+      const statusText = document.getElementById("session-status-text");
+      const logoutBtn = document.getElementById("session-logout-btn");
+      if (!banner || !statusText || !logoutBtn) return;
+
+      try {
+        const res = await fetch("/api/auth/me");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.ok && data.authenticated) {
+          statusText.textContent = `Sesión activa: ${data.handle} (${data.provider})`;
+          banner.hidden = false;
+          logoutBtn.addEventListener("click", async () => {
+            logoutBtn.disabled = true;
+            try {
+              await fetch("/api/auth/logout", {
+                method: "POST",
+                headers: { "content-type": "application/json" }
+              });
+              location.reload();
+            } catch {
+              logoutBtn.disabled = false;
+            }
+          });
+        }
+      } catch {
+        // Mode offline or without session
+      }
+    }
+
+    loadSession();
     loadProfiles();
   }
 

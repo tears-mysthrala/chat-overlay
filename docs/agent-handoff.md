@@ -125,11 +125,11 @@
       - Interfaz de usuario en Panel de Creador (`priv/static/app.js`, `priv/static/app.css`): badge de estado amarillo «Reautenticación requerida», aviso explícito y botón «Reconectar» para Twitch y YouTube.
       - 150/150 tests PASS en ExUnit (incluyendo regresiones exhaustivas de carreras entre vinculaciones concurrentes, fallo de disco, respuestas malformadas, revocación e invalidación de caché).
 
-12. **Pendientes de Fase F2 para Unidades Separadas (Backlog)**:
-    - Autenticación y autorización del Panel de Creador.
-    - Clave de cifrado OAuth obligatoria (fallo en arranque si no está configurada).
-    - Desconexión y cierre forzado de visores SSE preexistentes ante revocación de capability token.
-    - Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2.
+12. **Estado del Backlog de Endurecimiento Fase F2**:
+    - [x] Clave de cifrado OAuth obligatoria en producción (SEC-15) — completada en Issue #28 / PR #29.
+    - [x] Desconexión activa y cierre forzado de visores SSE ante revocación de capability token (SEC-09) — completada en Issue #28 / PR #29.
+    - [x] Autenticación de sesión en Panel de Creador y autorización por perfil (SEC-12, SEC-14, ADR-0003) — completada en Issue #30 / PR #31.
+    - [ ] Aplicación efectiva de permisos y cuotas de subida en Cloudflare R2 (SEC-05, SEC-17) — pendiente para Unidad siguiente.
 
 ## CI hardening — issue #27, same branch and PR #26
 
@@ -213,3 +213,50 @@ Local verification:
    - `test/oauth_test.exs`: pruebas exhaustivas de validación de clave de cifrado para entornos test, dev, prod y release, comprobando tipos no binarios, longitud insuficiente, clave por defecto y clave válida.
    - Suite completa ExUnit: **163/163 pruebas PASS** en doble pasada (semilla 0 y 424242, 0 fallos, 0 skips, 0 exclusiones).
    - Verificaciones de formato, static checks (`python3 scripts/security_static.py`), escaneo de secretos (`python3 scripts/scan_secrets.py`), trazabilidad (`python3 scripts/check_traceability.py`) y smoke test de release (`python3 scripts/smoke_image.py`) con resultado 100% PASS.
+
+## Autenticación de sesión en Panel de Creador y autorización por perfil — issue #30
+
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/30
+- Rama: `feat/30-dashboard-session-auth`
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/30-dashboard-session-auth`
+
+### Alcance e Implementación:
+1. **Gestión de Sesiones Seguras (`ChatOverlay.Session`) (SEC-12, SEC-14, ADR-0003)**:
+   - Emisión de cookies de sesión `chat_overlay_session` con cifrado simétrico autenticado AEAD (AES-256-GCM) utilizando `ChatOverlay.Crypto.encrypt_aead/3` y `decrypt_aead/3` con la clave de cifrado del sistema (`ChatOverlay.OAuth.encryption_key/0`).
+   - Separación estricta de dominios criptográficos (AAD): el AAD se fija a `"chat_overlay_session"` evitando confusiones o sustituciones de tokens (ej. parámetros state de OAuth con AAD `"oauth_state"`).
+   - Atributos de seguridad de cookie: `HttpOnly: true`, `SameSite=Lax`, `Path: "/"`, `Max-Age: 604_800` (7 días) y `Secure` condicionado a conexiones HTTPS o cabecera de proxy reverso (`x-forwarded-proto: https`).
+   - Verificación de timestamps: comprobación de expiración (`expires_at`) e integridad en cada petición.
+   - Endpoint de estado de sesión: `GET /api/auth/me` (y alias `GET /api/session`) que devuelve el estado de autenticación y metadatos de sesión (handle, proveedor, user_id, timestamps).
+   - Endpoint de cierre de sesión: `POST /api/auth/logout` protegido contra CSRF (verificación de origen) que purga la cookie con `max-age=0`.
+2. **Emisión de Sesión en Callback OAuth (`ChatOverlay.Web.oauth_callback/2`)**:
+   - Al completar exitosamente el intercambio OAuth 2.0 PKCE con Twitch/Google e indexar la vinculación de cuenta, se genera la cookie de sesión del creador en `conn` antes de redirigir al panel (`/?handle=...&linked=...`).
+3. **Control de Acceso Estricto por Perfil y Aislamiento (SEC-12, SEC-14)**:
+   - `GET /api/profiles`: alcance acotado (`Session.scope_profiles/2`). Un creador autenticado únicamente recibe su propio perfil en la respuesta JSON, garantizando aislamiento total entre creadores. En accesos remotos no autenticados, responde 401 Unauthorized.
+   - Endpoints protegidos en `ChatOverlay.Web`:
+     - `POST /api/profiles/:handle/token/regenerate`
+     - `POST /api/profiles/:handle/media`
+     - `POST /api/profiles/:handle/unlink/:provider`
+     - `POST /api/profiles/:handle/sync-youtube`
+     - `POST /api/media/presign`
+     - `DELETE /api/profiles/:handle`
+     - `POST /api/profiles` (creación de perfiles)
+   - Respuestas estándar: 401 Unauthorized si falta sesión o credenciales en contexto no-demo, 403 Forbidden si un creador autenticado intenta mutar o acceder a un perfil ajeno (tampering / suplantación cross-profile).
+4. **Modo Demo y Loopback de Fricción Cero**:
+   - Acceso no autenticado permitido exclusivamente para conexiones locales loopback (`127.0.0.1` o `::1`) bajo perfiles con fuentes demo (`mode: "demo"`) o `config/demo.json`, garantizando compatibilidad total con el quick start y las pruebas automáticas.
+5. **Panel de Creador y Frontend (`priv/static/index.html`, `app.js`, `app.css`)**:
+   - Añadido banner visual de sesión en el panel que informa del handle y proveedor activo si existe sesión, junto con el botón «Cerrar sesión» con llamada a `/api/auth/logout`.
+   - Soporte para adjuntar token de capacidad en el inicio de vinculación remota.
+   - Mapeo de errores explícitos para rechazo de titularidad no autorizada (`unauthorized_profile_claim`).
+   - Modificación 100% segura usando `.textContent` y manipulación DOM sin violar directivas de sink HTML en `security_static.py`.
+6. **Resolución de Bloqueantes de Revisión (PR #31)**:
+   - **Bloqueante 1 (Sesión tras desvinculación)**: `Session.authorize/3` valida que la cuenta vinculada exista en el perfil y que coincidan `user_id` y `account_version`. La ausencia del vínculo invalida la sesión devolviendo `{:error, :unauthorized}`. `POST /api/profiles/:handle/unlink/:provider` revoca el token en ETS y expira la cookie.
+   - **Bloqueante 2 (Primer inicio remoto)**: `api_oauth_authorize/2` permite iniciar el flujo OAuth a creadores remotos acreditando su `capability_token` (vía `?token=` o cabecera `Authorization: Bearer <token>`) o vinculación previa. El método de prueba (`auth_proof`) se cifra en el parámetro AEAD `state`.
+   - **Bloqueante 3 (Comprobación de titularidad en callback)**: `oauth_callback/2` comprueba la titularidad cuando no existen identificadores previos en el perfil, exigiendo `auth_proof in ["session", "capability_token"]` (o modo demo). Intentos no autorizados se rechazan con `error=unauthorized_profile_claim`.
+   - **Estabilidad de Carga Sintética**: `scripts/load.exs` incorpora drenaje activo con timeout de seguridad (10s) para asegurar la recolección del 100% de muestras en runners de CI compartidos antes de parar lectores.
+7. **Regresiones y Verificación**:
+   - `test/session_test.exs`: 16 pruebas unitarias verificando ciclo de vida, expiración, anti-tampering, flags de cookie (`HttpOnly`, `SameSite=Lax`, `Secure`), separación de AAD, invalidación tras desvincular y scoping.
+   - `test/web_session_auth_test.exs`: 19 pruebas de integración HTTP sobre Bandit verificando `GET /api/auth/me`, `POST /api/auth/logout`, aislamiento en `GET /api/profiles`, rechazo 401/403, emisión de cookie en OAuth callback, inicio con token de capacidad y rechazo de reclamación no autorizada.
+   - Suite completa ExUnit: **198/198 pruebas PASS** en doble pasada (semilla 0 serial y semilla 424242 concurrente, 0 fallos, 0 skips, 0 exclusiones).
+   - Verificaciones automáticas completas: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `docker build --target validation`, `docker run` con `--network none`, test de carga sintética `scripts/load.exs 30` (30.000/30.000 muestras entregadas, p95 49-50 ms, 0 errores) y release smoke test `python3 scripts/smoke_image.py`.
+   - GitHub Actions CI (PR #31, Run `36852264248`): **100% PASS** (`source-and-tests` ✓, `image-security` ✓, `quality-gate` ✓).
+

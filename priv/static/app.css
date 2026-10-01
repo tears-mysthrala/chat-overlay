@@ -200,3 +200,32 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
   background: #be123c;
 }
 
+.session-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  padding: 10px 16px;
+  margin: 16px 0 24px 0;
+  backdrop-filter: blur(8px);
+}
+
+.session-user-icon {
+  font-size: 16px;
+}
+
+.session-status-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #93c5fd;
+  flex: 1;
+}
+
+.btn-secondary.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
