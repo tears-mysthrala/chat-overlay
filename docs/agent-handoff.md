@@ -245,9 +245,18 @@ Local verification:
    - Acceso no autenticado permitido exclusivamente para conexiones locales loopback (`127.0.0.1` o `::1`) bajo perfiles con fuentes demo (`mode: "demo"`) o `config/demo.json`, garantizando compatibilidad total con el quick start y las pruebas automáticas.
 5. **Panel de Creador y Frontend (`priv/static/index.html`, `app.js`, `app.css`)**:
    - Añadido banner visual de sesión en el panel que informa del handle y proveedor activo si existe sesión, junto con el botón «Cerrar sesión» con llamada a `/api/auth/logout`.
+   - Soporte para adjuntar token de capacidad en el inicio de vinculación remota.
+   - Mapeo de errores explícitos para rechazo de titularidad no autorizada (`unauthorized_profile_claim`).
    - Modificación 100% segura usando `.textContent` y manipulación DOM sin violar directivas de sink HTML en `security_static.py`.
-6. **Regresiones y Verificación**:
-   - `test/session_test.exs`: 16 pruebas unitarias verificando ciclo de vida, expiración, anti-tampering, flags de cookie (`HttpOnly`, `SameSite=Lax`, `Secure`), separación de AAD, y lógica de autorización/scoping.
-   - `test/web_session_auth_test.exs`: 9 pruebas de integración HTTP sobre Bandit verificando `GET /api/auth/me`, `POST /api/auth/logout`, aislamiento en `GET /api/profiles`, rechazo 401 sin sesión, rechazo 403 entre perfiles distintos, y emisión de cookie en OAuth callback.
-   - Suite completa ExUnit: **188/188 pruebas PASS** en doble pasada (semilla 0 serial y semilla 424242 concurrente, 0 fallos, 0 skips, 0 exclusiones).
-   - Verificaciones automáticas completas: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `docker build --target validation`, `docker run` con `--network none`, test de carga sintética `scripts/load.exs` y release smoke test `python3 scripts/smoke_image.py`.
+6. **Resolución de Bloqueantes de Revisión (PR #31)**:
+   - **Bloqueante 1 (Sesión tras desvinculación)**: `Session.authorize/3` valida que la cuenta vinculada exista en el perfil y que coincidan `user_id` y `account_version`. La ausencia del vínculo invalida la sesión devolviendo `{:error, :unauthorized}`. `POST /api/profiles/:handle/unlink/:provider` revoca el token en ETS y expira la cookie.
+   - **Bloqueante 2 (Primer inicio remoto)**: `api_oauth_authorize/2` permite iniciar el flujo OAuth a creadores remotos acreditando su `capability_token` (vía `?token=` o cabecera `Authorization: Bearer <token>`) o vinculación previa. El método de prueba (`auth_proof`) se cifra en el parámetro AEAD `state`.
+   - **Bloqueante 3 (Comprobación de titularidad en callback)**: `oauth_callback/2` comprueba la titularidad cuando no existen identificadores previos en el perfil, exigiendo `auth_proof in ["session", "capability_token"]` (o modo demo). Intentos no autorizados se rechazan con `error=unauthorized_profile_claim`.
+   - **Estabilidad de Carga Sintética**: `scripts/load.exs` incorpora drenaje activo con timeout de seguridad (10s) para asegurar la recolección del 100% de muestras en runners de CI compartidos antes de parar lectores.
+7. **Regresiones y Verificación**:
+   - `test/session_test.exs`: 16 pruebas unitarias verificando ciclo de vida, expiración, anti-tampering, flags de cookie (`HttpOnly`, `SameSite=Lax`, `Secure`), separación de AAD, invalidación tras desvincular y scoping.
+   - `test/web_session_auth_test.exs`: 19 pruebas de integración HTTP sobre Bandit verificando `GET /api/auth/me`, `POST /api/auth/logout`, aislamiento en `GET /api/profiles`, rechazo 401/403, emisión de cookie en OAuth callback, inicio con token de capacidad y rechazo de reclamación no autorizada.
+   - Suite completa ExUnit: **198/198 pruebas PASS** en doble pasada (semilla 0 serial y semilla 424242 concurrente, 0 fallos, 0 skips, 0 exclusiones).
+   - Verificaciones automáticas completas: `mix format --check-formatted`, `mix compile --warnings-as-errors`, `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `docker build --target validation`, `docker run` con `--network none`, test de carga sintética `scripts/load.exs 30` (30.000/30.000 muestras entregadas, p95 49-50 ms, 0 errores) y release smoke test `python3 scripts/smoke_image.py`.
+   - GitHub Actions CI (PR #31, Run `36852264248`): **100% PASS** (`source-and-tests` ✓, `image-security` ✓, `quality-gate` ✓).
+
