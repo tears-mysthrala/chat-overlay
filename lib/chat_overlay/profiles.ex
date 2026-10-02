@@ -650,24 +650,8 @@ defmodule ChatOverlay.Profiles do
             sync_profile_supervisors(final_profile, clean_handle, removed_sources, valid_profiles)
             {:ok, final_profile}
 
-          {:error, reason} = err ->
-            require Logger
-            Logger.warning("No se pudo persistir el perfil en disco: #{inspect(reason)}")
-
-            if opts[:require_persistence] do
-              err
-            else
-              Application.put_env(:chat_overlay, :profiles, valid_profiles)
-
-              sync_profile_supervisors(
-                final_profile,
-                clean_handle,
-                removed_sources,
-                valid_profiles
-              )
-
-              {:ok, final_profile}
-            end
+          {:error, _} = error ->
+            error
         end
 
       error ->
@@ -735,7 +719,8 @@ defmodule ChatOverlay.Profiles do
       profile_to_delete ->
         remaining_profiles = Enum.reject(current_profiles, &(&1["handle"] == handle))
 
-        with {:ok, valid_profiles} <- Config.validate(remaining_profiles) do
+        with {:ok, valid_profiles} <- Config.validate(remaining_profiles),
+             :ok <- persist_profiles(valid_profiles) do
           Application.put_env(:chat_overlay, :profiles, valid_profiles)
           ChatOverlay.Stream.disconnect_viewers(handle, :profile_deleted)
 
@@ -746,7 +731,6 @@ defmodule ChatOverlay.Profiles do
 
           cleanup_removed_sources(profile_to_delete["sources"] || [], valid_profiles)
 
-          persist_profiles(valid_profiles)
           invalidate_tokens(handle, "twitch")
           invalidate_tokens(handle, "youtube")
           :ok
@@ -1016,7 +1000,23 @@ defmodule ChatOverlay.Profiles do
             updated_linked = Map.put(existing_linked, provider_str, updated_account)
             updated_profile = Map.put(existing, "linked_accounts", updated_linked)
 
-            case do_save_profile(updated_profile, replace: true, require_persistence: false) do
+            result = do_save_profile(updated_profile, replace: true)
+
+            # Revoked/rotated upstream credentials must remain unusable even when disk is
+            # unavailable. This explicit safety state is not a successful durable write.
+            if match?({:error, _}, result) do
+              profiles =
+                Enum.map(current_profiles, fn p ->
+                  if p["handle"] == handle, do: updated_profile, else: p
+                end)
+
+              Application.put_env(:chat_overlay, :profiles, profiles)
+
+              if Keyword.get(opts, :invalidate_cache, true),
+                do: invalidate_tokens(handle, provider_str)
+            end
+
+            case result do
               {:ok, _} = res ->
                 if Keyword.get(opts, :invalidate_cache, true) do
                   invalidate_tokens(handle, provider_str)
@@ -1216,38 +1216,6 @@ defmodule ChatOverlay.Profiles do
         System.get_env("CHAT_CONFIG") ||
         "config/local-profiles.json"
 
-    doc = %{"profiles" => profiles}
-
-    case ChatOverlay.JSON.encode(doc) do
-      json when is_binary(json) ->
-        dir = Path.dirname(path)
-
-        if File.dir?(dir) do
-          tmp = Path.join(dir, ".profiles-#{:erlang.unique_integer([:positive])}.tmp")
-
-          case File.write(tmp, json) do
-            :ok ->
-              case File.rename(tmp, path) do
-                :ok ->
-                  :ok
-
-                {:error, reason} ->
-                  _ = File.rm(tmp)
-                  {:error, {:persist_failed, reason}}
-              end
-
-            {:error, reason} ->
-              {:error, {:persist_failed, reason}}
-          end
-        else
-          {:error, {:directory_not_found, dir}}
-        end
-
-      error ->
-        {:error, {:json_encode_failed, error}}
-    end
-  rescue
-    e ->
-      {:error, {:persist_failed, e}}
+    ChatOverlay.ProfileStorage.write(path, profiles)
   end
 end
