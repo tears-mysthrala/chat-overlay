@@ -2,7 +2,8 @@ import Config
 
 if config_env() != :test do
   if path = System.get_env("CHAT_CONFIG") do
-    config :chat_overlay, profiles: ChatOverlay.Config.load!(path)
+    document = ChatOverlay.Config.load_document!(path)
+    config :chat_overlay, profiles: document["profiles"], media_objects: document["media_objects"]
   end
 
   port = System.get_env("CHAT_PORT", "4100") |> String.to_integer()

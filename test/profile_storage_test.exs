@@ -30,6 +30,8 @@ defmodule ChatOverlay.ProfileStorageTest do
     assert :ok = ProfileStorage.write(path, [])
     assert File.read!(target) == "keep"
     assert File.lstat!(path).type == :regular
-    assert File.read!(path) == ~s({"profiles":[]})
+
+    assert ChatOverlay.JSON.decode(File.read!(path)) ==
+             {:ok, %{"profiles" => [], "media_objects" => []}}
   end
 end

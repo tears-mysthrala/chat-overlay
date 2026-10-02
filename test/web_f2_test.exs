@@ -9,9 +9,25 @@ defmodule ChatOverlay.WebF2Test do
   end
 
   setup do
+    original_client = Application.get_env(:chat_overlay, :media_http_client)
+
+    Application.put_env(:chat_overlay, :media_http_client, fn "HEAD", url ->
+      object = Enum.find(Profiles.media_objects(), &String.contains?(url, &1["key"]))
+
+      {:ok, 200,
+       [{"content-length", to_string(object["size"])}, {"content-type", object["mime"]}], ""}
+    end)
+
     original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    original_objects = Application.get_env(:chat_overlay, :media_objects, [])
+    Application.put_env(:chat_overlay, :media_objects, [])
 
     on_exit(fn ->
+      if original_client,
+        do: Application.put_env(:chat_overlay, :media_http_client, original_client),
+        else: Application.delete_env(:chat_overlay, :media_http_client)
+
+      Application.put_env(:chat_overlay, :media_objects, original_objects)
       Application.put_env(:chat_overlay, :profiles, original_profiles)
     end)
 
@@ -142,8 +158,112 @@ defmodule ChatOverlay.WebF2Test do
     assert String.starts_with?(data["upload_url"], "https://")
     assert String.contains?(data["upload_url"], "X-Amz-Signature=")
     assert String.contains?(data["upload_url"], "X-Amz-Credential=")
-    assert String.starts_with?(data["key"], "audio/")
+    assert String.starts_with?(data["key"], "streamer/audio/")
     assert String.contains?(data["public_url"], data["key"])
+  end
+
+  test "upload permission and object binding reject unauthorized or mismatched media", %{
+    port: port
+  } do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
+
+    payload = %{
+      "handle" => "streamer",
+      "filename" => "sound.mp3",
+      "content_type" => "audio/mpeg",
+      "size" => 100
+    }
+
+    {200, _, body} = request(port, "POST", "/api/media/presign", headers, JSON.encode(payload))
+    {:ok, signed} = JSON.decode(body)
+    assert URI.decode(signed["upload_url"]) =~ "content-length;content-type;host"
+
+    item = %{
+      "source" => "r2",
+      "url" => signed["public_url"],
+      "key" => signed["key"],
+      "size" => 100,
+      "upload_token" => signed["upload_token"]
+    }
+
+    for {handle, slot, candidate} <- [
+          {"streamer2", "alert_sound", item},
+          {"streamer", "alert_image", item},
+          {"streamer", "alert_sound", Map.put(item, "url", "https://evil.example/sound.mp3")},
+          {"streamer", "alert_sound", Map.delete(item, "upload_token")}
+        ] do
+      {422, _, _} =
+        request(
+          port,
+          "POST",
+          "/api/profiles/#{handle}/media",
+          headers,
+          JSON.encode(%{slot => candidate})
+        )
+    end
+
+    Application.put_env(
+      :chat_overlay,
+      :profiles,
+      Enum.map(ChatOverlay.Config.profiles(), fn p ->
+        if p["handle"] == "streamer", do: Map.put(p, "can_upload", false), else: p
+      end)
+    )
+
+    {422, _, _} = request(port, "POST", "/api/media/presign", headers, JSON.encode(payload))
+
+    {422, _, _} =
+      request(
+        port,
+        "POST",
+        "/api/profiles/streamer/media",
+        headers,
+        JSON.encode(%{"alert_sound" => item})
+      )
+
+    assert (ChatOverlay.Config.profile("streamer")["media"] || %{}) == %{}
+  end
+
+  test "association rejects missing or mismatched stored objects", %{port: port} do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
+
+    {200, _, body} =
+      request(
+        port,
+        "POST",
+        "/api/media/presign",
+        headers,
+        JSON.encode(%{
+          "handle" => "streamer",
+          "filename" => "sound.mp3",
+          "content_type" => "audio/mpeg",
+          "size" => 100
+        })
+      )
+
+    {:ok, signed} = JSON.decode(body)
+
+    payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "source" => "r2",
+          "url" => signed["public_url"],
+          "key" => signed["key"],
+          "upload_token" => signed["upload_token"]
+        }
+      })
+
+    for response <- [
+          {:ok, 404, [], ""},
+          {:ok, 200, [{"content-length", "999"}, {"content-type", "audio/mpeg"}], ""},
+          {:ok, 200, [{"content-length", "100"}, {"content-type", "image/png"}], ""},
+          {:error, :upstream_timeout}
+        ] do
+      Application.put_env(:chat_overlay, :media_http_client, fn "HEAD", _ -> response end)
+      {422, _, _} = request(port, "POST", "/api/profiles/streamer/media", headers, payload)
+      assert (ChatOverlay.Config.profile("streamer")["media"] || %{}) == %{}
+      assert [%{"state" => "pending"}] = Profiles.media_objects()
+    end
   end
 
   test "media presign rejects SVG files strictly for security (SEC-05)", %{port: port} do
@@ -201,7 +321,7 @@ defmodule ChatOverlay.WebF2Test do
         },
         "alert_image" => %{
           "url" => "https://8.8.8.8/alerts/badge.webp",
-          "source" => "r2"
+          "source" => "external"
         }
       })
 
@@ -227,6 +347,146 @@ defmodule ChatOverlay.WebF2Test do
 
     assert {:ok, %{"ok" => false, "error" => err}} = JSON.decode(inv_body)
     assert err =~ "HTTPS" or err =~ "no soportada" or err =~ "no permitido"
+  end
+
+  test "media presign returns upload_token and size, and update enforces quota fail-closed", %{
+    port: port
+  } do
+    headers = [
+      {"origin", "http://localhost:#{port}"},
+      {"content-type", "application/json"}
+    ]
+
+    # 1. Presign returns upload_token and size
+    presign_payload =
+      JSON.encode(%{
+        "handle" => "streamer",
+        "filename" => "chime.mp3",
+        "content_type" => "audio/mpeg",
+        "size" => 100_000
+      })
+
+    {200, _, presign_body} = request(port, "POST", "/api/media/presign", headers, presign_payload)
+    assert {:ok, presign_data} = JSON.decode(presign_body)
+    assert presign_data["ok"] == true
+    assert presign_data["size"] == 100_000
+    assert is_binary(presign_data["upload_token"])
+
+    # 2. Update media with valid upload_token computes storage_used_bytes
+    update_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign_data["public_url"],
+          "source" => "r2",
+          "key" => presign_data["key"],
+          "size" => 100_000,
+          "upload_token" => presign_data["upload_token"]
+        }
+      })
+
+    {200, _, update_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, update_payload)
+
+    assert {:ok, update_data} = JSON.decode(update_body)
+    assert update_data["ok"] == true
+    assert update_data["storage_used_bytes"] == 100_000
+    assert update_data["storage_pending_bytes"] == 0
+    refute Map.has_key?(update_data, "cleanup_urls")
+
+    # 3. Replacing media keeps the old object charged until server cleanup.
+    presign2_payload =
+      JSON.encode(%{
+        "handle" => "streamer",
+        "filename" => "new_chime.wav",
+        "content_type" => "audio/wav",
+        "size" => 150_000
+      })
+
+    {200, _, presign2_body} =
+      request(port, "POST", "/api/media/presign", headers, presign2_payload)
+
+    assert {:ok, presign2_data} = JSON.decode(presign2_body)
+
+    update2_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign2_data["public_url"],
+          "source" => "r2",
+          "key" => presign2_data["key"],
+          "size" => 150_000,
+          "upload_token" => presign2_data["upload_token"]
+        }
+      })
+
+    {200, _, update2_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, update2_payload)
+
+    assert {:ok, update2_data} = JSON.decode(update2_body)
+    assert update2_data["ok"] == true
+    assert update2_data["storage_used_bytes"] == 150_000
+    assert update2_data["storage_pending_bytes"] == 100_000
+    refute Map.has_key?(update2_data, "cleanup_urls")
+
+    assert Enum.any?(
+             Profiles.media_objects(),
+             &(&1["key"] == presign_data["key"] and &1["state"] == "retired")
+           )
+
+    # 4. Reject tampered upload_token (422)
+    tampered_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign2_data["public_url"],
+          "source" => "r2",
+          "key" => presign2_data["key"],
+          "upload_token" => "tampered.token.signature"
+        }
+      })
+
+    {422, _, tampered_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, tampered_payload)
+
+    assert {:ok, tampered_data} = JSON.decode(tampered_body)
+    assert tampered_data["ok"] == false
+    assert tampered_data["error"] =~ "Token de subida multimedia inválido"
+
+    # 5. Reject payload exceeding quota (422)
+    oversized_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => "https://media.example.com/audio/huge.mp3",
+          "source" => "r2",
+          "key" => "audio/huge.mp3",
+          "size" => 15_000_000
+        }
+      })
+
+    {422, _, over_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, oversized_payload)
+
+    assert {:ok, over_data} = JSON.decode(over_body)
+    assert over_data["ok"] == false
+    assert over_data["error"] =~ "Token de subida multimedia inválido"
+  end
+
+  test "DELETE /api/profiles/:handle retains reserved objects for server cleanup", %{port: port} do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
+
+    {:ok, upload} =
+      ChatOverlay.Media.validate_upload_request(
+        %{"filename" => "badge.png", "content_type" => "image/png", "size" => 50_000},
+        0
+      )
+
+    {:ok, object} = Profiles.reserve_media_upload("streamer", upload)
+    {200, _, body} = request(port, "DELETE", "/api/profiles/streamer", headers)
+    assert {:ok, %{"ok" => true} = data} = JSON.decode(body)
+    refute Map.has_key?(data, "cleanup_urls")
+
+    assert Enum.any?(
+             Profiles.media_objects(),
+             &(&1["key"] == object["key"] and &1["state"] == "retired")
+           )
   end
 
   test "SSE stream enforces capability token when view=overlay", %{port: port} do
