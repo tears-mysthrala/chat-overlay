@@ -696,6 +696,15 @@ defmodule ChatOverlay.Web do
   defp format_error(:missing_target_or_sources),
     do: "Debes especificar un canal o URL a resolver."
 
+  defp format_error({:directory_not_found, _}),
+    do: "No se pudo guardar el cambio. Revisa el almacenamiento."
+
+  defp format_error({:persist_failed, _}),
+    do: "No se pudo guardar el cambio. Revisa el almacenamiento."
+
+  defp format_error(:profile_document_too_large),
+    do: "La configuración supera el tamaño permitido."
+
   defp format_error(other), do: "Error: #{inspect(other)}"
 
   defp extract_token_from_conn(conn) do
