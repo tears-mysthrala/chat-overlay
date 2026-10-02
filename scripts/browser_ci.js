@@ -63,9 +63,11 @@ const deadline = setTimeout(() => {
           page.waitForEvent("domcontentloaded"),
           page.locator("#session-logout-btn").click()
         ]);
+        stage = `${viewport.width}:logged-out-checks`;
         const logout = await page.evaluate(checks, "logged-out");
-        if (pageErrors || cspViolations || externalRequests) throw new Error("browser isolation or runtime failure");
         evidence.scenarios.push({ viewport, login, checks: result, logout, pageErrors, cspViolations, externalRequests });
+        stage = `${viewport.width}:runtime-and-isolation`;
+        if (pageErrors || cspViolations || externalRequests) throw new Error("browser isolation or runtime failure");
       } finally {
         await context.close();
       }
