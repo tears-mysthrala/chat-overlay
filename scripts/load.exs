@@ -1,4 +1,6 @@
 Code.require_file("../test/support/http_client.ex", __DIR__)
+Code.require_file("load_metrics.exs", __DIR__)
+alias ChatOverlay.LoadMetrics
 # Synthetic, bounded HTTP/SSE exercise; never contacts a platform.
 # MIX_ENV=test mix run --no-start scripts/load.exs [seconds]
 seconds =
@@ -29,7 +31,7 @@ Application.put_env(:chat_overlay, :grace_ms, 30)
 {:ok, _} = Application.ensure_all_started(:chat_overlay)
 port = ChatOverlay.HTTP.port()
 metrics = :ets.new(:load_metrics, [:public, :set, write_concurrency: true])
-:ets.insert(metrics, [{:samples, 0}, {:errors, 0}, {:reconnects, 0}, {:max_us, 0}])
+:ets.insert(metrics, [{:samples, 0}, {:errors, 0}])
 
 defmodule LoadReader do
   def start(parent, port, handle, metrics) do
@@ -97,14 +99,7 @@ defmodule LoadReader do
             %{"event" => "message", "upstream_id" => "load:" <> sent} ->
               {start, ""} = Integer.parse(sent)
               us = System.monotonic_time(:microsecond) - start
-              :ets.update_counter(metrics, :samples, 1)
-
-              :ets.update_counter(
-                metrics,
-                {:bucket_ms, div(us, 1000)},
-                {2, 1},
-                {{:bucket_ms, div(us, 1000)}, 0}
-              )
+              LoadMetrics.record_latency(metrics, us)
 
             _ ->
               :ok
@@ -135,13 +130,21 @@ end
 
 memory_before = :erlang.memory(:total)
 start = System.monotonic_time(:millisecond)
+started_at = DateTime.to_iso8601(DateTime.utc_now())
+LoadMetrics.snapshot(metrics, 0, 0)
 finish = start + seconds * 1000
 text = String.duplicate("x", 512)
 
-emit = fn emit, n ->
+emit = fn emit, n, last_sample_slot ->
   now = System.monotonic_time(:millisecond)
 
   if now < finish do
+    sample_slot = div(now - start, 60_000)
+
+    if sample_slot > last_sample_slot do
+      LoadMetrics.snapshot(metrics, sample_slot, now - start)
+    end
+
     profile = Enum.at(profiles, rem(n, 10))
     source = Enum.at(profile["sources"], rem(div(n, 10), 3))
     id = "load:#{System.monotonic_time(:microsecond)}"
@@ -165,13 +168,13 @@ emit = fn emit, n ->
     # 200/s for the first 10 seconds, then 50/s; demo adds a small declared overhead.
     due = start + if(n + 1 < 2000, do: (n + 1) * 5, else: 10_000 + (n + 1 - 2000) * 20)
     Process.sleep(max(0, due - System.monotonic_time(:millisecond)))
-    emit.(emit, n + 1)
+    emit.(emit, n + 1, sample_slot)
   else
     n
   end
 end
 
-emitted = emit.(emit, 0)
+emitted = emit.(emit, 0, 0)
 expected = emitted * 10
 drain_deadline = System.monotonic_time(:millisecond) + 10_000
 
@@ -198,25 +201,17 @@ Enum.each(monitors, fn {reader, monitor} ->
   end
 end)
 
-buckets =
-  :ets.tab2list(metrics)
-  |> Enum.flat_map(fn
-    {{:bucket_ms, ms}, count} -> [{ms, count}]
-    _ -> []
-  end)
-  |> Enum.sort()
-
 samples = :ets.lookup_element(metrics, :samples, 2)
-
-{p95, _} =
-  Enum.reduce_while(buckets, {0, 0}, fn {ms, count}, {_, total} ->
-    if total + count >= samples * 0.95,
-      do: {:halt, {ms, total + count}},
-      else: {:cont, {ms, total + count}}
-  end)
+p95 = LoadMetrics.p95(metrics)
+LoadMetrics.snapshot(metrics, :final, System.monotonic_time(:millisecond) - start)
+resource_samples = LoadMetrics.resource_samples(metrics)
 
 report = %{
   duration_seconds: seconds,
+  actual_elapsed_ms: System.monotonic_time(:millisecond) - start,
+  started_at_utc: started_at,
+  finished_at_utc: DateTime.to_iso8601(DateTime.utc_now()),
+  source_commit: System.get_env("LOAD_SOURCE_COMMIT"),
   profiles: 10,
   sources: 30,
   readers: 100,
@@ -227,6 +222,11 @@ report = %{
   p95_local_to_sse_ms: p95,
   memory_before_bytes: memory_before,
   memory_after_bytes: :erlang.memory(:total),
+  resource_sample_interval_seconds: 60,
+  resource_samples: resource_samples,
+  memory_peak_sampled_bytes: Enum.max(Enum.map(resource_samples, & &1.memory_total_bytes)),
+  latency_bucket_upper_bound_ms: 1_000,
+  latency_buckets_rounding: "ceiling; >=1000ms accumulated in final bucket",
   elixir: System.version(),
   otp: List.to_string(:erlang.system_info(:otp_release)),
   schedulers: :erlang.system_info(:schedulers_online),
@@ -235,4 +235,6 @@ report = %{
 }
 
 IO.puts(JSON.encode!(report))
-if samples != emitted * 10 or report.errors != 0 or p95 >= 100, do: System.halt(1)
+
+if samples != emitted * 10 or report.errors != 0 or is_nil(p95) or p95 >= 100,
+  do: System.halt(1)
