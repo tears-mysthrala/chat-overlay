@@ -77,3 +77,9 @@ ExUnit utiliza fixtures sintéticas, transporte HTTP local, mock de WebSocket y 
 - **Validación en OBS Studio 32.2.2 (DEV-13 / SEC-07)**: ejecutada contra OBS Studio 32.2.2 real en Linux (Wayland) mediante OBS WebSocket v5 (`ws://127.0.0.1:4455`). En F1 (`scripts/test_obs_validation.py`) se verificó la transparencia y reconexión de fuentes. En F2 (`scripts/test_obs_f2.py`) se verificó el ciclo completo de seguridad: rechazo 401 de accesos sin token, admisión 200 con streaming SSE con capability token, revocación en caliente en tiempo real al regenerar tokens y restauración inmediata de servicio, con estricto cumplimiento de CSP mediante hash SHA-256 para el CSS de OBS.
 - **Módulo multimedia R2 (SEC-05 / SEC-15)**: generación de URLs prefirmadas SigV4 ejecutada íntegramente en Erlang/OTP nativo (`ChatOverlay.Media.generate_presigned_put_url/5`). Cero paso de bytes por el servidor backend. Cuotas de almacenamiento por perfil enforceadas en memoria y persistidas. Bloqueo determinista de subidas `.svg` para neutralizar vectores XSS en CEF.
 - **Diferimiento de Kick**: por directriz del operador Kalista en el issue #15, el conector de Kick se difiere formalmente para evitar la deuda técnica derivada de los frecuentes breaking changes de su API de desarrolladores (4-5 alteraciones en el último año) y de la fricción operativa de su portal de desarrollo. La entrega queda consolidada y certificada sobre Twitch, YouTube y OBS Studio.
+
+## Mapeo ASVS actual (#42)
+
+La [selección ASVS 5.0.0](asvs-f2.md) contrasta IDs y niveles con una revisión fija
+del repositorio oficial. Mantiene estados parciales, no validados y pendientes;
+no constituye evaluación L2 completa ni autorización de publicación.
