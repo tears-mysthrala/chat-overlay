@@ -2,7 +2,7 @@
 
 Overlay unificado para Twitch y YouTube (Kick formalmente diferido por inestabilidad upstream), con vista transparente para OBS, panel de creador, capability tokens y módulo de alertas multimedia en Cloudflare R2. Construido sobre Elixir/OTP, Bandit, Mint y frontend estático; sin frameworks pesados, bots de escritura ni servicios de IA.
 
-**Estado:** Fases F1 y F2 completadas y validadas en vivo en OBS Studio 32.2.2 y plataformas reales (Twitch y YouTube). Cierre de Fase F2 consolidado en issue [#21](https://github.com/tears-mysthrala/chat-overlay/issues/21). Consulta [verificación](docs/verification.md), [operación](docs/operations.md) y [plataformas](docs/platforms.md).
+**Estado:** F2 en cierre de deuda técnica (issues [#32–#55](https://github.com/tears-mysthrala/chat-overlay/issues/55)). El cierre histórico de [#21](https://github.com/tears-mysthrala/chat-overlay/issues/21) documenta su candidata de entonces; no acredita los cambios posteriores ni los requisitos pendientes de aislamiento y cuarentena. Ver [estado y evidencia actual](docs/verification.md), [operación](docs/operations.md) y [plataformas](docs/platforms.md).
 
 ## Probar con mensajes sintéticos
 

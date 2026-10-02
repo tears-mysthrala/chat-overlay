@@ -1,6 +1,38 @@
-# Verificación F2 — Cierre de fase (issue #21)
+# Verificación F2 — evidencia por candidata
 
-Estado: **Fases F1 y F2 completadas y verificadas.** Panel de Creador, Capability Tokens opacos con revocación en caliente, módulo multimedia Cloudflare R2 con SigV4 nativo Erlang/OTP y Zero Server Footprint, cifrado AEAD AES-256-GCM, prohibición estricta de `.svg` contra XSS en CEF y validación en vivo en OBS Studio 32.2.2 consolidados en issues #17, #19 y #21 (PRs #18 y #20).
+Estado al 02-10-2026: **deuda F2 en curso; no cierre completo ni autorización de
+publicación**. El cierre de #21 se conserva debajo como evidencia histórica.
+Sus 110 pruebas y OBS 32.2.2 no se atribuyen a los cambios posteriores.
+
+## Evidencia actual
+
+| Candidata | Comando / prueba | Resultado observado | Límite |
+| --- | --- | --- | --- |
+| #56, `86e0d0a` | `mix check`, pre-push, CI run 36986799200 | 211 pruebas; gates remotos verdes | Atomicidad JSON; no equivalencia RLS |
+| #57, `f85882b` | `mix check`, `node --check priv/static/app.js`, pre-push | 234 pruebas, build/smoke/auditoría local pasan | R2 simulado; CI verificar en PR; sin OBS actualizado |
+| #40, `3ba84d3` | `mix check`, `test/recovery_test.exs` | 240 pruebas; copia/rotación/restauración sintéticas | No instancia real ni corte eléctrico |
+| #33, `aae4519` | carga sintética acotada y evidencia de memoria | Candidata separada; consultar PR #33 | No integrada en esta pila ni ensayo 4/24 h |
+
+El número de pruebas identifica una ejecución y revisión concretas, no un umbral
+fijo de calidad. Consultar GitHub para el estado remoto de cada PR antes de merge.
+No se atribuye una revisión CodeRabbit completa a un resultado limitado por cuota.
+
+| Requisito/deuda | Evidencia disponible | Estado pendiente |
+| --- | --- | --- |
+| Persistir antes de confirmar | `profile_persistence_test.exs`, `profile_storage_test.exs` | Revisión #56; SEC-13 sigue en #51 |
+| Cuota y limpieza | `media_ledger_test.exs`, `web_f2_test.exs` | #57; conciliación/reautenticación/vista operativa #48 |
+| Recuperación y clave | `recovery_test.exs`, [runbook](recovery.md) | Revisión #40 y aprobación antes de operación real |
+| Aislamiento de almacenamiento SEC-13 | [ADR 0004](adr/0004-f2-profile-persistence.md) | JSON **no acredita** RLS; propuesta ADR 0005 pendiente |
+| Formato real SEC-17 | [límites multimedia](media-storage.md) | #49: cuarentena/decoder/salida ligada a hash pendientes |
+| ASVS y pruebas negativas | Regresiones existentes; mapa parcial histórico | #42: IDs oficiales/evidencia y revisión de riesgo residual |
+| Navegador y OBS | Evidencia histórica #19/#21 | #43: candidata actual, navegador y OBS por separado |
+| Publicación | [índice #55](https://github.com/tears-mysthrala/chat-overlay/issues/55) | #4 y gates técnicos/humanos; sin autorización de merge/despliegue |
+
+## Evidencia histórica — cierre #21 (30-09-2026)
+
+Lo siguiente conserva los resultados declarados para aquella entrega; no se ha
+repetido en esta revisión ni se extiende a código posterior. Las afirmaciones de
+multimedia se limitan a extensión/MIME declarados: no prueban formato real.
 
 ## 1. Evidencias de entrega de Fase F2 (issue #21)
 

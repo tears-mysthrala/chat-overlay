@@ -137,9 +137,15 @@ defmodule ChatOverlay.ProfilesTest do
     assert [{source_pid, _}] = Registry.lookup(ChatOverlay.Registry, {:source, key})
     assert Process.alive?(source_pid)
 
+    store_ref = Process.monitor(store_pid)
+    source_ref = Process.monitor(source_pid)
     assert :ok = Profiles.delete("live-streamer")
-    assert Registry.lookup(ChatOverlay.Registry, {:store, "live-streamer"}) == []
-    assert Registry.lookup(ChatOverlay.Registry, {:source, key}) == []
+    assert_receive {:DOWN, ^store_ref, :process, ^store_pid, _}, 1000
+    assert_receive {:DOWN, ^source_ref, :process, ^source_pid, _}, 1000
+    # Registry processes their own monitor notifications asynchronously. Deletion
+    # must stop both children; removing their registry entries may follow later.
+    assert_registry_removed({:store, "live-streamer"})
+    assert_registry_removed({:source, key})
   end
 
   test "create_or_update fails on invalid handles" do
@@ -265,5 +271,17 @@ defmodule ChatOverlay.ProfilesTest do
     assert :ok = ChatOverlay.Store.ingest(store_name, yt_event)
 
     assert :ok = Profiles.delete("streamer-linked-preservation")
+  end
+
+  defp assert_registry_removed(key, attempts \\ 100)
+
+  defp assert_registry_removed(key, 0),
+    do: assert(Registry.lookup(ChatOverlay.Registry, key) == [])
+
+  defp assert_registry_removed(key, attempts) do
+    if Registry.lookup(ChatOverlay.Registry, key) != [] do
+      Process.sleep(10)
+      assert_registry_removed(key, attempts - 1)
+    end
   end
 end

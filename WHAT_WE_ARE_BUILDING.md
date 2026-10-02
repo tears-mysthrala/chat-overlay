@@ -1,9 +1,9 @@
 # WHAT_WE_ARE_BUILDING
 
-**Proyecto:** `chat-overlay` · **Responsable del producto y aprobación final:** Kalista  
-**Versión del documento:** 1.3 · **Fecha de referencia:** 2026-09-30  
-**Estado:** Fases F0, F1 y F2 completadas y consolidadas. Cierre formal de Fase F2 consolidado en issue #21 tras validación en vivo en OBS Studio 32.2.2 (issue #19, PR #20).  
-**Fase autorizada vigente:** Fase F2 consolidada. Próximo paso: vinculación interactiva OAuth de cuentas de plataformas como base para Fase F3. F3–F4 requieren autorización explícita de Kalista. Esta autorización no incluye despliegue a producción.
+**Proyecto:** `chat-overlay` · **Responsable del producto y aprobación final:** Kalista
+**Versión del documento:** 1.3 · **Fecha de referencia:** 2026-09-30
+**Estado:** F0/F1 con entregas históricas; F2 en cierre de deuda técnica. El cierre de #21 se conserva como evidencia de aquella candidata, no como acreditación de todos los controles actuales. Ver #55 y `docs/verification.md`.
+**Fase autorizada vigente:** F2, incluida la deuda cuya finalización pidió Kalista el 02-10-2026. OAuth/sesiones/refresh forman parte de la base existente. F3–F4, nuevas dependencias/arquitectura y publicación requieren las aprobaciones específicas indicadas en este contrato; no hay autorización de despliegue.
 
 ## 0. Lectura y reglas de decisión
 
@@ -47,7 +47,7 @@ Revisar fuentes y licencias antes de reutilizar; registrar commit de origen y ca
 | --- | --- | --- |
 | F0: fundamento | Trazabilidad, esqueleto mínimo, CI, amenaza inicial, contrato de eventos y una prueba técnica limitada de conectores. | PR revisable, ejecución local reproducible y riesgos concretos identificados. No es un lanzamiento público. |
 | F1: overlay | Lectores autónomos de Twitch y YouTube, normalización, SSE, vista OBS, estados, borrados y recuperación. Kick diferido por inestabilidad de API. | **Completado y verificado (issue #15).** Pruebas funcionales, de seguridad, de carga sintética (p95 49 ms) y validación en vivo en OBS Studio 32.2.2. |
-| F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. Módulo multimedia (Cloudflare R2 + URLs externas). | **Completado y verificado (issues #17, #19, #21).** Capability tokens de 32 bytes con revocación en caliente, R2 SigV4 nativo Zero Server Footprint, cifrado AEAD AES-256-GCM, bloqueo estricto de `.svg`, panel de creador y validación en vivo en OBS Studio 32.2.2 con CSP estricta. Ver [verificación](docs/verification.md). El flujo interactivo OAuth de vinculación de cuentas de plataformas se desarrollará como base inmediata para la Fase F3. |
+| F2: creador | Perfiles privados, acceso, permisos, vinculación de cuentas y almacenamiento persistente. Módulo multimedia (Cloudflare R2 + URLs externas). | **Deuda en curso (#32, #40–#43, #48–#51; índice #55).** Cierre histórico #21 y OBS #19/PR #20 conservados. OAuth, sesiones y renovación tienen regresiones automatizadas; aislamiento SEC-13 y cuarentena SEC-17 no acreditados. Ver [verificación](docs/verification.md). |
 | F3: bot | Comandos, reglas y acciones autorizadas por plataforma, custodia de tokens y límites compartidos. | Autorización específica; separación lectura/escritura y pruebas de credenciales, permisos e idempotencia. |
 | F4: contenido ampliado | Subidas o personalización avanzada; runners solo cuando una función lo necesite. | Caso de uso aprobado y amenaza adicional evaluada. No implica autorizar scripts arbitrarios. |
 

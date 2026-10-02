@@ -1,5 +1,9 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> Estado actual 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.
+> Las secciones iniciales son historial. Consultar las entradas fechadas al final
+> y `docs/verification.md`; SEC-13/SEC-17 no están acreditados.
+
 - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/17
 - Rama: `feat/17-creator-auth-r2-media`
 - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/17-creator-auth-r2-media`
@@ -338,3 +342,17 @@ Local verification:
   efectos en cookies/OAuth/tickets, capabilities OBS y rollback sin resucitar datos.
 - Pruebas solo sintéticas. No existe autorización para rotar claves reales,
   detener/desplegar producción ni hacer merge.
+
+## 2026-10-02 — reconciliación documental (#41)
+
+- Rama `docs/41-f2-evidence`, worktree `../chat-overlay-worktrees/41-f2-evidence`.
+- README, contrato, AGENTS, arquitectura, amenazas, operación, plataformas,
+  cumplimiento y verificación distinguen cierre histórico #21 y candidatas nuevas.
+- ADR 0005 propone PostgreSQL/RLS/Postgrex y cuarentena con FFmpeg aislado.
+  Aprobación solicitada al operador en esta sesión; no interpretar silencio como aprobación.
+- Esta documentación no debilita requisitos ni declara F3/F4, merge o producción autorizados.
+
+- El pre-push de #41 detectó una carrera en la prueba de baja de Registry (#42):
+  `Profiles.delete` espera terminar hijos, pero Registry procesa sus notificaciones
+  DOWN de forma asíncrona. La prueba ahora monitoriza muerte de ambos PIDs y exige
+  retirar ambas entradas con un límite de 1 s; no se salta ninguna aserción.
