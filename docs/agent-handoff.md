@@ -326,3 +326,15 @@ Local verification:
   #48 mantiene conciliación heredada, reautenticación y visibilidad de borrados pendientes.
 - El documento incorpora `media_objects`; conservar backup e inventario para rollback.
   No desplegar ni hacer merge sin autorización humana.
+
+## 2026-10-02 — recuperación offline (#40)
+
+- Rama/worktree `feat/40-key-recovery` / `../chat-overlay-worktrees/40-key-recovery`,
+  apilado sobre #32 para conservar también `media_objects` en recuperación.
+- `ChatOverlay.Recovery` y `scripts/recovery.exs`: copia completamente cifrada,
+  restauración a un archivo nuevo y rotación completa de credenciales con AAD por perfil.
+  Sin arranque de servicios en CLI, sin mutación de claves o entorno y sin overwrite.
+- `docs/recovery.md` describe custodia, identificador de clave, corte coordinado,
+  efectos en cookies/OAuth/tickets, capabilities OBS y rollback sin resucitar datos.
+- Pruebas solo sintéticas. No existe autorización para rotar claves reales,
+  detener/desplegar producción ni hacer merge.
