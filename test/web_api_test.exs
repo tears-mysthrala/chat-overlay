@@ -78,13 +78,15 @@ defmodule ChatOverlay.WebAPITest do
     assert [{store_pid, _}] = Registry.lookup(ChatOverlay.Registry, {:store, "dynamic-streamer"})
     assert Process.alive?(store_pid)
 
-    # Deleting the profile
+    # Deleting the profile; Registry observes process termination asynchronously.
+    store_monitor = Process.monitor(store_pid)
     del_conn = conn(:delete, "/api/profiles/dynamic-streamer") |> Web.call([])
     assert del_conn.status == 200
     assert {:ok, %{"ok" => true}} = JSON.decode(del_conn.resp_body)
 
     assert Config.profile("dynamic-streamer") == nil
-    assert Registry.lookup(ChatOverlay.Registry, {:store, "dynamic-streamer"}) == []
+    assert_receive {:DOWN, ^store_monitor, :process, ^store_pid, _}
+    assert_registry_removed({:store, "dynamic-streamer"}, 100)
   end
 
   test "POST /api/profiles rejects invalid content-type with 415" do
@@ -173,5 +175,15 @@ defmodule ChatOverlay.WebAPITest do
     assert resp_no_yt["ok"] == false
     assert resp_no_yt["error"] =~ "No se encontró ningún canal de YouTube vinculado"
     ChatOverlay.Profiles.delete("streamer-no-yt")
+  end
+
+  defp assert_registry_removed(key, 0),
+    do: assert(Registry.lookup(ChatOverlay.Registry, key) == [])
+
+  defp assert_registry_removed(key, attempts) do
+    if Registry.lookup(ChatOverlay.Registry, key) != [] do
+      Process.sleep(10)
+      assert_registry_removed(key, attempts - 1)
+    end
   end
 end
