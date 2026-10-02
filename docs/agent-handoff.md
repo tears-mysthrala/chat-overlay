@@ -351,3 +351,8 @@ Local verification:
 - ADR 0005 propone PostgreSQL/RLS/Postgrex y cuarentena con FFmpeg aislado.
   Aprobación solicitada al operador en esta sesión; no interpretar silencio como aprobación.
 - Esta documentación no debilita requisitos ni declara F3/F4, merge o producción autorizados.
+
+- El pre-push de #41 detectó una carrera en la prueba de baja de Registry (#42):
+  `Profiles.delete` espera terminar hijos, pero Registry procesa sus notificaciones
+  DOWN de forma asíncrona. La prueba ahora monitoriza muerte de ambos PIDs y exige
+  retirar ambas entradas con un límite de 1 s; no se salta ninguna aserción.
