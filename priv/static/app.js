@@ -85,6 +85,14 @@
 
     const saveAlertsBtn = document.getElementById("save-alerts-btn");
     const saveAlertsFeedback = document.getElementById("save-alerts-feedback");
+    const storageQuotaBar = document.getElementById("storage-quota-bar");
+    const storageQuotaText = document.getElementById("storage-quota-text");
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return "0 KB";
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
 
     // Platform Accounts (OAuth 2.0 PKCE)
     const twitchStatusBadge = document.getElementById("twitch-status-badge");
@@ -125,6 +133,19 @@
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=••••••••••••••••••••••••••••••••`;
       } else {
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}`;
+      }
+
+      // Populate storage quota
+      const usedBytes = p.storage_used_bytes || 0;
+      const quotaBytes = p.storage_quota_bytes || 10485760;
+      const percent = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
+
+      if (storageQuotaBar) {
+        storageQuotaBar.style.width = `${percent}%`;
+        storageQuotaBar.className = "quota-bar" + (percent > 90 ? " danger" : (percent > 70 ? " warning" : ""));
+      }
+      if (storageQuotaText) {
+        storageQuotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${percent}%)`;
       }
 
       // Populate media
@@ -507,7 +528,13 @@
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de audio a R2");
             }
-            soundResult = { url: presignData.public_url, source: "r2" };
+            soundResult = {
+              url: presignData.public_url,
+              source: "r2",
+              key: presignData.key,
+              size: presignData.size || file.size,
+              upload_token: presignData.upload_token
+            };
           } else if (audioUrlInput && audioUrlInput.value.trim()) {
             soundResult = { url: audioUrlInput.value.trim(), source: "external" };
           } else {
@@ -545,7 +572,13 @@
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de imagen a R2");
             }
-            imageResult = { url: presignData.public_url, source: "r2" };
+            imageResult = {
+              url: presignData.public_url,
+              source: "r2",
+              key: presignData.key,
+              size: presignData.size || file.size,
+              upload_token: presignData.upload_token
+            };
           } else if (imageUrlInput && imageUrlInput.value.trim()) {
             imageResult = { url: imageUrlInput.value.trim(), source: "external" };
           } else {
@@ -564,6 +597,11 @@
           });
           const data = await res.json();
           if (res.ok && data.ok) {
+            if (data.cleanup_urls && Array.isArray(data.cleanup_urls)) {
+              for (const delUrl of data.cleanup_urls) {
+                fetch(delUrl, { method: "DELETE" }).catch(() => {});
+              }
+            }
             if (saveAlertsFeedback) {
               saveAlertsFeedback.className = "feedback-msg success";
               saveAlertsFeedback.textContent = "¡Alertas multimedia guardadas con éxito!";
@@ -677,6 +715,11 @@
             const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "DELETE" });
             const data = await res.json();
             if (data.ok) {
+              if (data.cleanup_urls && Array.isArray(data.cleanup_urls)) {
+                for (const delUrl of data.cleanup_urls) {
+                  fetch(delUrl, { method: "DELETE" }).catch(() => {});
+                }
+              }
               await loadProfiles();
             } else {
               alert(data.error || "No se pudo eliminar el perfil");

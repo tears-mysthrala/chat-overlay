@@ -41,7 +41,8 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
-  defp execute_action({:delete, handle}), do: do_delete(handle)
+  defp execute_action({:delete, handle}), do: do_delete(handle, [])
+  defp execute_action({:delete, handle, opts}), do: do_delete(handle, opts)
 
   defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}),
     do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
@@ -56,7 +57,10 @@ defmodule ChatOverlay.Profiles do
     do: do_regenerate_capability_token(handle)
 
   defp execute_action({:update_media, handle, media_attrs}),
-    do: do_update_media(handle, media_attrs)
+    do: do_update_media(handle, media_attrs, [])
+
+  defp execute_action({:update_media, handle, media_attrs, opts}),
+    do: do_update_media(handle, media_attrs, opts)
 
   defp execute_action({:update_upload_quota, handle, delta}),
     do: do_update_upload_quota(handle, delta)
@@ -144,11 +148,14 @@ defmodule ChatOverlay.Profiles do
   def verify_capability_token(_, _), do: {:error, :unauthorized}
 
   @doc "Updates the media settings (alert audio/images) for a profile."
-  def update_media(handle, media_attrs) when is_binary(handle) and is_map(media_attrs) do
-    call_serialized({:update_media, handle, media_attrs})
+  def update_media(handle, media_attrs, opts \\ [])
+
+  def update_media(handle, media_attrs, opts)
+      when is_binary(handle) and is_map(media_attrs) and is_list(opts) do
+    call_serialized({:update_media, handle, media_attrs, opts})
   end
 
-  def update_media(_, _), do: {:error, :invalid_params}
+  def update_media(_, _, _), do: {:error, :invalid_params}
 
   @doc "Updates the storage_used_bytes for a profile by a delta amount."
   def update_upload_quota(handle, bytes_used_delta)
@@ -587,11 +594,13 @@ defmodule ChatOverlay.Profiles do
   defp maybe_put_linked_youtube(profile, _), do: profile
 
   @doc "Deletes a profile in runtime, stopping supervisors and removing unused sources."
-  def delete(handle) when is_binary(handle) do
-    call_serialized({:delete, handle})
+  def delete(handle, opts \\ [])
+
+  def delete(handle, opts) when is_binary(handle) and is_list(opts) do
+    call_serialized({:delete, handle, opts})
   end
 
-  def delete(_), do: {:error, :invalid_handle}
+  def delete(_, _), do: {:error, :invalid_handle}
 
   defp do_save_profile(profile, opts) do
     clean_handle = profile["handle"]
@@ -725,7 +734,7 @@ defmodule ChatOverlay.Profiles do
     cleanup_removed_sources(removed_sources, valid_profiles)
   end
 
-  defp do_delete(handle) do
+  defp do_delete(handle, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -749,7 +758,26 @@ defmodule ChatOverlay.Profiles do
           persist_profiles(valid_profiles)
           invalidate_tokens(handle, "twitch")
           invalidate_tokens(handle, "youtube")
-          :ok
+
+          if opts[:with_removed_keys] do
+            media = profile_to_delete["media"] || %{}
+
+            r2_keys =
+              Enum.flat_map(["alert_sound", "alert_image"], fn k ->
+                item = media[k]
+
+                if is_map(item) and item["source"] == "r2" and is_binary(item["key"]) and
+                     byte_size(item["key"]) > 0 do
+                  [item["key"]]
+                else
+                  []
+                end
+              end)
+
+            {:ok, r2_keys}
+          else
+            :ok
+          end
         end
     end
   end
@@ -777,7 +805,7 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp do_update_media(handle, media_attrs) do
+  defp do_update_media(handle, media_attrs, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -797,8 +825,67 @@ defmodule ChatOverlay.Profiles do
             end
           end)
 
-        updated_profile = Map.put(existing, "media", cleaned_media)
-        do_save_profile(updated_profile, replace: true)
+        # Detect orphaned/replaced R2 keys
+        removed_r2_keys =
+          Enum.reduce(["alert_sound", "alert_image"], [], fn key, acc ->
+            old_item = current_media[key]
+            new_item = cleaned_media[key]
+
+            old_key =
+              if is_map(old_item) and old_item["source"] == "r2" and
+                   is_binary(old_item["key"]) and byte_size(old_item["key"]) > 0 do
+                old_item["key"]
+              else
+                nil
+              end
+
+            new_key =
+              if is_map(new_item) and new_item["source"] == "r2" and
+                   is_binary(new_item["key"]) and byte_size(new_item["key"]) > 0 do
+                new_item["key"]
+              else
+                nil
+              end
+
+            if old_key && old_key != new_key do
+              [old_key | acc]
+            else
+              acc
+            end
+          end)
+
+        # Calculate new storage used across active R2 media
+        new_storage_used =
+          Enum.reduce(cleaned_media, 0, fn {_k, v}, sum ->
+            if is_map(v) and v["source"] == "r2" do
+              sum + max(0, v["size"] || 0)
+            else
+              sum
+            end
+          end)
+
+        quota = existing["storage_quota_bytes"] || ChatOverlay.Media.default_quota()
+
+        if new_storage_used > quota do
+          {:error, :quota_exceeded}
+        else
+          updated_profile =
+            existing
+            |> Map.put("media", cleaned_media)
+            |> Map.put("storage_used_bytes", new_storage_used)
+
+          case do_save_profile(updated_profile, replace: true) do
+            {:ok, saved} ->
+              if opts[:with_removed_keys] do
+                {:ok, saved, Enum.reverse(removed_r2_keys)}
+              else
+                {:ok, saved}
+              end
+
+            error ->
+              error
+          end
+        end
     end
   end
 

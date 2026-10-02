@@ -229,6 +229,152 @@ defmodule ChatOverlay.WebF2Test do
     assert err =~ "HTTPS" or err =~ "no soportada" or err =~ "no permitido"
   end
 
+  test "media presign returns upload_token and size, and update enforces quota fail-closed", %{
+    port: port
+  } do
+    headers = [
+      {"origin", "http://localhost:#{port}"},
+      {"content-type", "application/json"}
+    ]
+
+    # 1. Presign returns upload_token and size
+    presign_payload =
+      JSON.encode(%{
+        "handle" => "streamer",
+        "filename" => "chime.mp3",
+        "content_type" => "audio/mpeg",
+        "size" => 100_000
+      })
+
+    {200, _, presign_body} = request(port, "POST", "/api/media/presign", headers, presign_payload)
+    assert {:ok, presign_data} = JSON.decode(presign_body)
+    assert presign_data["ok"] == true
+    assert presign_data["size"] == 100_000
+    assert is_binary(presign_data["upload_token"])
+
+    # 2. Update media with valid upload_token computes storage_used_bytes
+    update_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign_data["public_url"],
+          "source" => "r2",
+          "key" => presign_data["key"],
+          "size" => 100_000,
+          "upload_token" => presign_data["upload_token"]
+        }
+      })
+
+    {200, _, update_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, update_payload)
+
+    assert {:ok, update_data} = JSON.decode(update_body)
+    assert update_data["ok"] == true
+    assert update_data["storage_used_bytes"] == 100_000
+    assert update_data["cleanup_urls"] == []
+
+    # 3. Replacing with new R2 media frees old file and generates cleanup_urls (SigV4 DELETE)
+    presign2_payload =
+      JSON.encode(%{
+        "handle" => "streamer",
+        "filename" => "new_chime.wav",
+        "content_type" => "audio/wav",
+        "size" => 150_000
+      })
+
+    {200, _, presign2_body} =
+      request(port, "POST", "/api/media/presign", headers, presign2_payload)
+
+    assert {:ok, presign2_data} = JSON.decode(presign2_body)
+
+    update2_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign2_data["public_url"],
+          "source" => "r2",
+          "key" => presign2_data["key"],
+          "size" => 150_000,
+          "upload_token" => presign2_data["upload_token"]
+        }
+      })
+
+    {200, _, update2_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, update2_payload)
+
+    assert {:ok, update2_data} = JSON.decode(update2_body)
+    assert update2_data["ok"] == true
+    assert update2_data["storage_used_bytes"] == 150_000
+    # Old key is included in cleanup_urls
+    assert length(update2_data["cleanup_urls"]) == 1
+    cleanup_url = hd(update2_data["cleanup_urls"])
+    assert String.contains?(cleanup_url, presign_data["key"])
+    assert String.contains?(cleanup_url, "X-Amz-Signature=")
+
+    # 4. Reject tampered upload_token (422)
+    tampered_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => presign2_data["public_url"],
+          "source" => "r2",
+          "key" => presign2_data["key"],
+          "upload_token" => "tampered.token.signature"
+        }
+      })
+
+    {422, _, tampered_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, tampered_payload)
+
+    assert {:ok, tampered_data} = JSON.decode(tampered_body)
+    assert tampered_data["ok"] == false
+    assert tampered_data["error"] =~ "Token de subida multimedia inválido"
+
+    # 5. Reject payload exceeding quota (422)
+    oversized_payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "url" => "https://media.example.com/audio/huge.mp3",
+          "source" => "r2",
+          "key" => "audio/huge.mp3",
+          "size" => 15_000_000
+        }
+      })
+
+    {422, _, over_body} =
+      request(port, "POST", "/api/profiles/streamer/media", headers, oversized_payload)
+
+    assert {:ok, over_data} = JSON.decode(over_body)
+    assert over_data["ok"] == false
+    assert over_data["error"] =~ "superado la cuota" or over_data["error"] =~ "máximo permitido"
+  end
+
+  test "DELETE /api/profiles/:handle returns cleanup_urls for active R2 files", %{port: port} do
+    headers = [
+      {"origin", "http://localhost:#{port}"},
+      {"content-type", "application/json"}
+    ]
+
+    # Create profile with R2 media
+    {:ok, _} =
+      Profiles.create_or_update(%{
+        "handle" => "streamer-with-r2",
+        "sources" => [%{"platform" => "twitch", "channel" => "user-r2", "mode" => "demo"}]
+      })
+
+    Profiles.update_media("streamer-with-r2", %{
+      "alert_image" => %{
+        "url" => "https://media.example.com/image/badge.png",
+        "source" => "r2",
+        "key" => "image/badge.png",
+        "size" => 50_000
+      }
+    })
+
+    {200, _, del_body} = request(port, "DELETE", "/api/profiles/streamer-with-r2", headers)
+    assert {:ok, del_data} = JSON.decode(del_body)
+    assert del_data["ok"] == true
+    assert length(del_data["cleanup_urls"]) == 1
+    assert String.contains?(hd(del_data["cleanup_urls"]), "image/badge.png")
+  end
+
   test "SSE stream enforces capability token when view=overlay", %{port: port} do
     # Regenerate token for streamer
     assert {:ok, token, _} = Profiles.regenerate_capability_token("streamer")

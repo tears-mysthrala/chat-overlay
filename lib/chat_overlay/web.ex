@@ -584,7 +584,25 @@ defmodule ChatOverlay.Web do
   end
 
   defp api_delete_profile(conn, handle) do
-    case ChatOverlay.Profiles.delete(handle) do
+    case ChatOverlay.Profiles.delete(handle, with_removed_keys: true) do
+      {:ok, removed_keys} ->
+        cleanup_urls =
+          removed_keys
+          |> Enum.map(fn k ->
+            case ChatOverlay.Media.presigned_delete_url(k) do
+              {:ok, res} -> res.delete_url
+              _ -> nil
+            end
+          end)
+          |> Enum.reject(&is_nil/1)
+
+        reply(
+          conn,
+          200,
+          "application/json",
+          ChatOverlay.JSON.encode(%{"ok" => true, "cleanup_urls" => cleanup_urls})
+        )
+
       :ok ->
         reply(conn, 200, "application/json", ChatOverlay.JSON.encode(%{"ok" => true}))
 
@@ -749,48 +767,39 @@ defmodule ChatOverlay.Web do
 
                 profile ->
                   used = profile["storage_used_bytes"] || 0
-                  quota = profile["storage_quota_bytes"] || 10_485_760
+                  quota = profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()
 
-                  case ChatOverlay.Media.validate_upload_request(params, used, quota) do
+                  # Account for replacement of existing media in the same category
+                  filename = params["filename"] || params[:filename] || ""
+
+                  category_key =
+                    case Path.extname(filename) |> String.downcase() do
+                      ext when ext in [".mp3", ".ogg", ".wav", ".webm"] -> "alert_sound"
+                      ext when ext in [".webp", ".png", ".gif"] -> "alert_image"
+                      _ -> nil
+                    end
+
+                  existing_size =
+                    if category_key do
+                      item = (profile["media"] || %{})[category_key]
+                      if is_map(item) and item["source"] == "r2", do: item["size"] || 0, else: 0
+                    else
+                      0
+                    end
+
+                  effective_used = max(0, used - existing_size)
+
+                  case ChatOverlay.Media.validate_upload_request(params, effective_used, quota) do
                     {:ok, validated} ->
-                      r2_config = %{
-                        endpoint:
-                          System.get_env("R2_ENDPOINT") ||
-                            Application.get_env(
-                              :chat_overlay,
-                              :r2_endpoint,
-                              "https://r2.example.com"
-                            ),
-                        bucket:
-                          System.get_env("R2_BUCKET") ||
-                            Application.get_env(:chat_overlay, :r2_bucket, "chat-overlay-media"),
-                        access_key_id:
-                          System.get_env("R2_ACCESS_KEY_ID") ||
-                            Application.get_env(
-                              :chat_overlay,
-                              :r2_access_key_id,
-                              "mock_access_key"
-                            ),
-                        secret_access_key:
-                          System.get_env("R2_SECRET_ACCESS_KEY") ||
-                            Application.get_env(
-                              :chat_overlay,
-                              :r2_secret_access_key,
-                              "mock_secret_key"
-                            ),
-                        public_cdn_base:
-                          System.get_env("R2_PUBLIC_CDN") ||
-                            Application.get_env(
-                              :chat_overlay,
-                              :r2_public_cdn,
-                              "https://media.chat-overlay.example.com"
-                            )
-                      }
+                      r2_config = ChatOverlay.Media.r2_config()
 
                       case ChatOverlay.Media.generate_presigned_put(
                              Map.merge(r2_config, %{
                                key: validated.key,
-                               content_type: validated.mime
+                               content_type: validated.mime,
+                               handle: handle,
+                               size: validated.size,
+                               category: validated.category
                              })
                            ) do
                         {:ok, presigned} ->
@@ -798,8 +807,16 @@ defmodule ChatOverlay.Web do
                             "ok" => true,
                             "upload_url" => presigned.upload_url,
                             "public_url" => presigned.public_url,
-                            "key" => presigned.key
+                            "key" => presigned.key,
+                            "size" => validated.size
                           }
+
+                          resp =
+                            if presigned[:upload_token] do
+                              Map.put(resp, "upload_token", presigned.upload_token)
+                            else
+                              resp
+                            end
 
                           reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
 
@@ -882,9 +899,30 @@ defmodule ChatOverlay.Web do
                 )
 
               _profile ->
-                with :ok <- validate_media_params(media_params),
-                     {:ok, updated} <- ChatOverlay.Profiles.update_media(handle, media_params) do
-                  resp = %{"ok" => true, "media" => updated["media"]}
+                with {:ok, sanitized_params} <- validate_media_params(media_params, handle),
+                     {:ok, updated, removed_keys} <-
+                       ChatOverlay.Profiles.update_media(handle, sanitized_params,
+                         with_removed_keys: true
+                       ) do
+                  cleanup_urls =
+                    removed_keys
+                    |> Enum.map(fn k ->
+                      case ChatOverlay.Media.presigned_delete_url(k) do
+                        {:ok, res} -> res.delete_url
+                        _ -> nil
+                      end
+                    end)
+                    |> Enum.reject(&is_nil/1)
+
+                  resp = %{
+                    "ok" => true,
+                    "media" => updated["media"],
+                    "storage_used_bytes" => updated["storage_used_bytes"] || 0,
+                    "storage_quota_bytes" =>
+                      updated["storage_quota_bytes"] || ChatOverlay.Media.default_quota(),
+                    "cleanup_urls" => cleanup_urls
+                  }
+
                   reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
                 else
                   {:error, reason} ->
@@ -919,28 +957,79 @@ defmodule ChatOverlay.Web do
     end
   end
 
-  defp validate_media_params(params) when is_map(params) do
-    Enum.reduce_while(params, :ok, fn
-      {"alert_sound", %{"url" => url, "source" => "external"}}, :ok
+  defp validate_media_params(params, handle) when is_map(params) do
+    Enum.reduce_while(params, {:ok, %{}}, fn
+      {"alert_sound", %{"url" => url, "source" => "external"} = item}, {:ok, acc}
       when is_binary(url) and url != "" ->
         case ChatOverlay.Media.validate_external_url(url, :audio) do
-          {:ok, _} -> {:cont, :ok}
+          {:ok, _} -> {:cont, {:ok, Map.put(acc, "alert_sound", item)}}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
-      {"alert_image", %{"url" => url, "source" => "external"}}, :ok
+      {"alert_image", %{"url" => url, "source" => "external"} = item}, {:ok, acc}
       when is_binary(url) and url != "" ->
         case ChatOverlay.Media.validate_external_url(url, :image) do
-          {:ok, _} -> {:cont, :ok}
+          {:ok, _} -> {:cont, {:ok, Map.put(acc, "alert_image", item)}}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
-      {key, _}, :ok when key in ["alert_sound", "alert_image"] ->
-        {:cont, :ok}
+      {"alert_sound", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
+      when is_binary(url) and url != "" ->
+        case validate_r2_media_item(item, handle, :audio) do
+          {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_sound", verified_item)}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
 
-      {other, _}, :ok ->
+      {"alert_image", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
+      when is_binary(url) and url != "" ->
+        case validate_r2_media_item(item, handle, :image) do
+          {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_image", verified_item)}}
+          {:error, reason} -> {:halt, {:error, reason}}
+        end
+
+      {key, item}, {:ok, acc} when key in ["alert_sound", "alert_image"] ->
+        {:cont, {:ok, Map.put(acc, key, item)}}
+
+      {other, _}, _acc ->
         {:halt, {:error, {:unknown_media_key, other}}}
     end)
+  end
+
+  defp validate_r2_media_item(item, handle, category) do
+    url = item["url"]
+    upload_token = item["upload_token"]
+    key = item["key"]
+    raw_size = item["size"]
+
+    cond do
+      not is_binary(url) or not String.starts_with?(url, "https://") ->
+        {:error, :invalid_url}
+
+      String.contains?(String.downcase(url), ".svg") ->
+        {:error, :svg_prohibited_for_security}
+
+      is_binary(upload_token) and is_binary(key) ->
+        case ChatOverlay.Media.verify_upload_token(upload_token, handle, key) do
+          {:ok, %{size: verified_size}} ->
+            {:ok, Map.put(item, "size", verified_size)}
+
+          {:error, _} ->
+            {:error, :invalid_upload_token}
+        end
+
+      is_integer(raw_size) and raw_size >= 0 ->
+        if raw_size <= ChatOverlay.Media.max_bytes(category) do
+          {:ok, item}
+        else
+          {:error, :file_too_large}
+        end
+
+      is_nil(raw_size) ->
+        {:ok, Map.put(item, "size", 0)}
+
+      true ->
+        {:error, :invalid_media_size}
+    end
   end
 
   defp format_media_error(:svg_prohibited_for_security),
@@ -957,6 +1046,12 @@ defmodule ChatOverlay.Web do
 
   defp format_media_error(:quota_exceeded),
     do: "Se ha superado la cuota de almacenamiento disponible para este perfil."
+
+  defp format_media_error(:invalid_upload_token),
+    do: "Token de subida multimedia inválido o manipulado."
+
+  defp format_media_error(:invalid_media_size),
+    do: "Tamaño de archivo multimedia inválido."
 
   defp format_media_error(:invalid_content_type),
     do: "Tipo de archivo o formato no permitido."
