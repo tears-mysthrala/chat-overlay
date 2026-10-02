@@ -98,3 +98,14 @@ sí llegó a OBS, pero no logró inicializar CEF. No se considera validación OB
 - Ampliar E2E a caducidad/reautenticación, reconexión sin duplicados, inicialización
   remota real y cuotas con el validador aprobado #49; no confundir fixtures con proveedor.
 - Repetir después de integrar PostgreSQL/RLS y cuarentena. #43 permanece abierto.
+
+### Corrección de arranque CI
+
+La primera ejecución de #61 falló antes del navegador: Docker no publica puertos
+de una red `--internal`. Se reprodujo localmente: servidor disponible dentro del
+contenedor y por su IP de bridge, pero `NetworkSettings.Ports` sin publicación.
+El runner mantiene la red interna y usa un proxy TCP local exclusivo a
+`127.0.0.1:4143` hacia la IP inspeccionada de esa fixture. Tiene límite de conexiones
+y timeout, respeta backpressure y termina con el ensayo. No concede salida al
+contenedor ni acepta un destino de usuario. La repetición CI debe acreditar el
+navegador; validar este proxy por HTTP no se presenta como Playwright ejecutado.
