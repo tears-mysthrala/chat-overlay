@@ -109,3 +109,9 @@ El runner mantiene la red interna y usa un proxy TCP local exclusivo a
 y timeout, respeta backpressure y termina con el ensayo. No concede salida al
 contenedor ni acepta un destino de usuario. La repetición CI debe acreditar el
 navegador; validar este proxy por HTTP no se presenta como Playwright ejecutado.
+
+La ejecución siguiente llegó al navegador. La inspección detectó el estilo inline
+`width: 0%` de la barra de cuota, rechazado por `style-src-attr` bajo la CSP actual.
+Se reprodujo el rechazo en T3 y se trasladó el valor inicial a la hoja CSS externa;
+no se amplió la CSP. El runner conserva ahora contadores de errores, CSP y destinos
+externos incluso en fallo, sin guardar URLs/cookies/capabilities.

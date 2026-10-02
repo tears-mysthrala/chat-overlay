@@ -49,7 +49,7 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 .quota-title { font-weight:650; color:var(--ink) }
 .quota-usage-text { font-size:13px; color:var(--muted); font-variant-numeric:tabular-nums }
 .quota-bar-wrapper { width:100%; height:8px; background:rgba(0,0,0,.3); border-radius:4px; overflow:hidden; border:1px solid var(--line) }
-.quota-bar { height:100%; background:var(--accent); border-radius:4px; transition:width .3s ease, background .3s ease }
+.quota-bar { width:0; height:100%; background:var(--accent); border-radius:4px; transition:width .3s ease, background .3s ease }
 .quota-bar.warning { background:#facc15 }
 .quota-bar.danger { background:#f43f5e }
 
