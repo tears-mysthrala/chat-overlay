@@ -10,3 +10,4 @@ config/local*
 erl_crash.dump
 __pycache__/
 *.pyc
+node_modules/

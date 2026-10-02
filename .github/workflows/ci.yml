@@ -26,6 +26,9 @@ jobs:
         run: |
           python3 scripts/security_static.py
           node --check priv/static/app.js
+          node --check scripts/browser_checks.js
+          node --check scripts/browser_ci.js
+          bash -n scripts/ci_browser.sh
       - name: Scan repository source for secrets
         run: python3 scripts/scan_secrets.py
       - name: Build validation image, audit Hex and check licenses
@@ -38,6 +41,15 @@ jobs:
       - name: Reject skipped, excluded, empty or incomplete test results
         if: ${{ always() && steps.exunit.outcome != 'skipped' }}
         run: python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json
+      - name: Install pinned browser test tooling (development only)
+        timeout-minutes: 5
+        run: |
+          node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
+          npm ci --ignore-scripts --no-fund
+          npx --no-install playwright install --with-deps chromium
+      - name: Browser desktop and mobile, isolated synthetic fixture
+        timeout-minutes: 5
+        run: bash scripts/ci_browser.sh
       - name: Synthetic load (no platform access)
         run: |
           set -o pipefail
@@ -49,6 +61,7 @@ jobs:
           path: |
             output/tests/*.json
             output/load.json
+            output/browser/result.json
             output/secrets/gitleaks.json
           retention-days: 14
   image-security:
