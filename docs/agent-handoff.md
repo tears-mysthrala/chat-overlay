@@ -264,6 +264,7 @@ Local verification:
 
 ## Evidencia para carga sostenida — issue #4 (2026-10-02)
 
+- PR: https://github.com/tears-mysthrala/chat-overlay/pull/33 (lista para revisión; CI/revisión humana pendientes al redactar).
 - Issue: https://github.com/tears-mysthrala/chat-overlay/issues/4 (entrega parcial, Refs #4).
 - Rama: `test/4-soak-evidence`.
 - Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/4-soak-evidence`.
@@ -281,12 +282,16 @@ Local verification:
   confirma cero fallos, skips y exclusiones. Cinco tests Python del validador PASS.
 - Carga de 65 segundos, sin red y con los mismos límites: **4.750 eventos,
   47.500/47.500 muestras, cero errores, p95 50 ms**, duración real 65.043 ms.
+  Host x86_64, AMD Ryzen 3 7320U (8 CPUs lógicas); contenedor limitado a 2 CPU.
   Muestras a 0/60.001/65.043 ms: memoria BEAM 455.999.776/484.691.128/82.122.664 bytes,
   procesos 530/530/330. La última muestra es tras parar lectores; este descenso
   no demuestra estabilidad sostenida. Informes locales en `output/tests/` y
   `output/load-65.json` (no versionados). Imagen validada:
   `sha256:d2d8d4f44d972f65d4ddf4b00fbbec13dbd85e206fedc6257642c7b38b66f068`.
 - Trazabilidad, secretos, estática, tests Python y `git diff --check`: PASS.
+  Hook pre-push completo PASS (incluye una tercera pasada de 203 tests); sin excepción.
+  Primer intento bloqueado por selección accidental de Elixir 1.20.2 en PATH;
+  corregido el entorno del comando a 1.20.4 sin cambiar configuración global.
 - Límites: no se han ejecutado 4/24 horas, recuperación de workers ni nueva prueba
   en OBS/upstream; no hay nueva auditoría del artefacto de release, cuyo código
   permanece igual. No se evalúan aquí cumplimiento legal ni condiciones upstream.
