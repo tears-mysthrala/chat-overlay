@@ -313,3 +313,16 @@ Local verification:
 - Próximo: integrar esta base con #32 y continuar recuperación de claves (#40),
   ciclo de vida/validación multimedia (#48/#49), controles/documentación (#41/#42)
   y pruebas web/OBS (#43). No se ha aprobado merge ni despliegue.
+
+## 2026-10-02 — #32, continuación autorizada del worktree
+
+- Rama `feat/32-media-storage-quotas`, worktree `../chat-overlay-worktrees/32-media-storage-quotas`.
+- Se conservaron los cambios heredados en `0e0e1ca` y se integró localmente #51
+  (`470348d`); PR base de persistencia: #56. La PR de cuotas debe apilarse sobre ella.
+- Reservas persistentes y serializadas, claves por perfil, tickets temporales,
+  firma de longitud/MIME, verificación HEAD con fixtures, cuota pendiente y limpieza
+  supervisada con reintentos. DELETE ya no depende del navegador.
+- Ver `docs/media-storage.md`: SEC-17/#49 no está cumplido, no hay prueba R2 real;
+  #48 mantiene conciliación heredada, reautenticación y visibilidad de borrados pendientes.
+- El documento incorpora `media_objects`; conservar backup e inventario para rollback.
+  No desplegar ni hacer merge sin autorización humana.

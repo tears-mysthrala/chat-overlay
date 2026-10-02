@@ -2,13 +2,16 @@ defmodule ChatOverlay.Config do
   @moduledoc "Operator-only JSON configuration. Unknown options fail closed. No secrets in errors."
   alias ChatOverlay.Event
 
-  def load!(path) do
+  def load!(path), do: load_document!(path)["profiles"]
+
+  def load_document!(path) do
     with {:ok, %{size: size}} when size <= 65_536 <- File.stat(path),
          {:ok, body} <- File.read(path),
          {:ok, %{"profiles" => profiles} = doc} <- ChatOverlay.JSON.decode(body),
-         true <- map_size(doc) == 1,
-         {:ok, result} <- validate(profiles) do
-      result
+         true <- Enum.all?(Map.keys(doc), &(&1 in ["profiles", "media_objects"])),
+         {:ok, _} <- validate(profiles),
+         true <- ChatOverlay.MediaLedger.valid?(Map.get(doc, "media_objects", [])) do
+      Map.put_new(doc, "media_objects", [])
     else
       _ -> raise "Invalid overlay configuration (content redacted)"
     end

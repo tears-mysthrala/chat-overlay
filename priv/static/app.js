@@ -136,7 +136,8 @@
       }
 
       // Populate storage quota
-      const usedBytes = p.storage_used_bytes || 0;
+      const pendingBytes = p.storage_pending_bytes || 0;
+      const usedBytes = (p.storage_used_bytes || 0) + pendingBytes;
       const quotaBytes = p.storage_quota_bytes || 10485760;
       const percent = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
 
@@ -145,7 +146,7 @@
         storageQuotaBar.className = "quota-bar" + (percent > 90 ? " danger" : (percent > 70 ? " warning" : ""));
       }
       if (storageQuotaText) {
-        storageQuotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${percent}%)`;
+        storageQuotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${percent}%) · pendientes de subida o limpieza: ${formatBytes(pendingBytes)}`;
       }
 
       // Populate media
@@ -523,7 +524,7 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": file.type || "audio/mpeg" }
+              headers: { "Content-Type": presignData.content_type }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de audio a R2");
@@ -535,6 +536,8 @@
               size: presignData.size || file.size,
               upload_token: presignData.upload_token
             };
+          } else if (audioTypeUpload && audioTypeUpload.checked && p.media && p.media.alert_sound) {
+            soundResult = p.media.alert_sound;
           } else if (audioUrlInput && audioUrlInput.value.trim()) {
             soundResult = { url: audioUrlInput.value.trim(), source: "external" };
           } else {
@@ -567,7 +570,7 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": file.type || "image/png" }
+              headers: { "Content-Type": presignData.content_type }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de imagen a R2");
@@ -579,6 +582,8 @@
               size: presignData.size || file.size,
               upload_token: presignData.upload_token
             };
+          } else if (imageTypeUpload && imageTypeUpload.checked && p.media && p.media.alert_image) {
+            imageResult = p.media.alert_image;
           } else if (imageUrlInput && imageUrlInput.value.trim()) {
             imageResult = { url: imageUrlInput.value.trim(), source: "external" };
           } else {
@@ -597,11 +602,6 @@
           });
           const data = await res.json();
           if (res.ok && data.ok) {
-            if (data.cleanup_urls && Array.isArray(data.cleanup_urls)) {
-              for (const delUrl of data.cleanup_urls) {
-                fetch(delUrl, { method: "DELETE" }).catch(() => {});
-              }
-            }
             if (saveAlertsFeedback) {
               saveAlertsFeedback.className = "feedback-msg success";
               saveAlertsFeedback.textContent = "¡Alertas multimedia guardadas con éxito!";
@@ -715,11 +715,6 @@
             const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "DELETE" });
             const data = await res.json();
             if (data.ok) {
-              if (data.cleanup_urls && Array.isArray(data.cleanup_urls)) {
-                for (const delUrl of data.cleanup_urls) {
-                  fetch(delUrl, { method: "DELETE" }).catch(() => {});
-                }
-              }
               await loadProfiles();
             } else {
               alert(data.error || "No se pudo eliminar el perfil");

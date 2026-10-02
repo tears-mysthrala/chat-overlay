@@ -4,8 +4,11 @@ defmodule ChatOverlay.ProfilesF2Test do
 
   setup do
     original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    original_objects = Application.get_env(:chat_overlay, :media_objects, [])
+    Application.put_env(:chat_overlay, :media_objects, [])
 
     on_exit(fn ->
+      Application.put_env(:chat_overlay, :media_objects, original_objects)
       Application.put_env(:chat_overlay, :profiles, original_profiles)
     end)
 
@@ -189,7 +192,7 @@ defmodule ChatOverlay.ProfilesF2Test do
     assert "audio/alert2.mp3" in removed_keys3
   end
 
-  test "Profiles.delete/2 with with_removed_keys returns active R2 keys for cleanup" do
+  test "deletion preserves untracked legacy R2 references pending reconciliation" do
     Profiles.update_media("f2test", %{
       "alert_sound" => %{
         "url" => "https://cdn.example.com/audio/del_alert.mp3",
@@ -199,8 +202,10 @@ defmodule ChatOverlay.ProfilesF2Test do
       }
     })
 
-    assert {:ok, removed_keys} = Profiles.delete("f2test", with_removed_keys: true)
-    assert "audio/del_alert.mp3" in removed_keys
+    assert {:error, :media_inventory_required} =
+             Profiles.delete("f2test", with_removed_keys: true)
+
+    assert Profiles.get("f2test")["media"]["alert_sound"]["key"] == "audio/del_alert.mp3"
 
     # Nonexistent handle returns 404/not_found
     assert {:error, :not_found} = Profiles.delete("nonexistent_profile", with_removed_keys: true)

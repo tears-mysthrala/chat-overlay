@@ -9,9 +9,25 @@ defmodule ChatOverlay.WebF2Test do
   end
 
   setup do
+    original_client = Application.get_env(:chat_overlay, :media_http_client)
+
+    Application.put_env(:chat_overlay, :media_http_client, fn "HEAD", url ->
+      object = Enum.find(Profiles.media_objects(), &String.contains?(url, &1["key"]))
+
+      {:ok, 200,
+       [{"content-length", to_string(object["size"])}, {"content-type", object["mime"]}], ""}
+    end)
+
     original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    original_objects = Application.get_env(:chat_overlay, :media_objects, [])
+    Application.put_env(:chat_overlay, :media_objects, [])
 
     on_exit(fn ->
+      if original_client,
+        do: Application.put_env(:chat_overlay, :media_http_client, original_client),
+        else: Application.delete_env(:chat_overlay, :media_http_client)
+
+      Application.put_env(:chat_overlay, :media_objects, original_objects)
       Application.put_env(:chat_overlay, :profiles, original_profiles)
     end)
 
@@ -142,8 +158,112 @@ defmodule ChatOverlay.WebF2Test do
     assert String.starts_with?(data["upload_url"], "https://")
     assert String.contains?(data["upload_url"], "X-Amz-Signature=")
     assert String.contains?(data["upload_url"], "X-Amz-Credential=")
-    assert String.starts_with?(data["key"], "audio/")
+    assert String.starts_with?(data["key"], "streamer/audio/")
     assert String.contains?(data["public_url"], data["key"])
+  end
+
+  test "upload permission and object binding reject unauthorized or mismatched media", %{
+    port: port
+  } do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
+
+    payload = %{
+      "handle" => "streamer",
+      "filename" => "sound.mp3",
+      "content_type" => "audio/mpeg",
+      "size" => 100
+    }
+
+    {200, _, body} = request(port, "POST", "/api/media/presign", headers, JSON.encode(payload))
+    {:ok, signed} = JSON.decode(body)
+    assert URI.decode(signed["upload_url"]) =~ "content-length;content-type;host"
+
+    item = %{
+      "source" => "r2",
+      "url" => signed["public_url"],
+      "key" => signed["key"],
+      "size" => 100,
+      "upload_token" => signed["upload_token"]
+    }
+
+    for {handle, slot, candidate} <- [
+          {"streamer2", "alert_sound", item},
+          {"streamer", "alert_image", item},
+          {"streamer", "alert_sound", Map.put(item, "url", "https://evil.example/sound.mp3")},
+          {"streamer", "alert_sound", Map.delete(item, "upload_token")}
+        ] do
+      {422, _, _} =
+        request(
+          port,
+          "POST",
+          "/api/profiles/#{handle}/media",
+          headers,
+          JSON.encode(%{slot => candidate})
+        )
+    end
+
+    Application.put_env(
+      :chat_overlay,
+      :profiles,
+      Enum.map(ChatOverlay.Config.profiles(), fn p ->
+        if p["handle"] == "streamer", do: Map.put(p, "can_upload", false), else: p
+      end)
+    )
+
+    {422, _, _} = request(port, "POST", "/api/media/presign", headers, JSON.encode(payload))
+
+    {422, _, _} =
+      request(
+        port,
+        "POST",
+        "/api/profiles/streamer/media",
+        headers,
+        JSON.encode(%{"alert_sound" => item})
+      )
+
+    assert (ChatOverlay.Config.profile("streamer")["media"] || %{}) == %{}
+  end
+
+  test "association rejects missing or mismatched stored objects", %{port: port} do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
+
+    {200, _, body} =
+      request(
+        port,
+        "POST",
+        "/api/media/presign",
+        headers,
+        JSON.encode(%{
+          "handle" => "streamer",
+          "filename" => "sound.mp3",
+          "content_type" => "audio/mpeg",
+          "size" => 100
+        })
+      )
+
+    {:ok, signed} = JSON.decode(body)
+
+    payload =
+      JSON.encode(%{
+        "alert_sound" => %{
+          "source" => "r2",
+          "url" => signed["public_url"],
+          "key" => signed["key"],
+          "upload_token" => signed["upload_token"]
+        }
+      })
+
+    for response <- [
+          {:ok, 404, [], ""},
+          {:ok, 200, [{"content-length", "999"}, {"content-type", "audio/mpeg"}], ""},
+          {:ok, 200, [{"content-length", "100"}, {"content-type", "image/png"}], ""},
+          {:error, :upstream_timeout}
+        ] do
+      Application.put_env(:chat_overlay, :media_http_client, fn "HEAD", _ -> response end)
+      {422, _, _} = request(port, "POST", "/api/profiles/streamer/media", headers, payload)
+      assert (ChatOverlay.Config.profile("streamer")["media"] || %{}) == %{}
+      assert [%{"state" => "pending"}] = Profiles.media_objects()
+    end
   end
 
   test "media presign rejects SVG files strictly for security (SEC-05)", %{port: port} do
@@ -201,7 +321,7 @@ defmodule ChatOverlay.WebF2Test do
         },
         "alert_image" => %{
           "url" => "https://8.8.8.8/alerts/badge.webp",
-          "source" => "r2"
+          "source" => "external"
         }
       })
 
@@ -270,9 +390,10 @@ defmodule ChatOverlay.WebF2Test do
     assert {:ok, update_data} = JSON.decode(update_body)
     assert update_data["ok"] == true
     assert update_data["storage_used_bytes"] == 100_000
-    assert update_data["cleanup_urls"] == []
+    assert update_data["storage_pending_bytes"] == 0
+    refute Map.has_key?(update_data, "cleanup_urls")
 
-    # 3. Replacing with new R2 media frees old file and generates cleanup_urls (SigV4 DELETE)
+    # 3. Replacing media keeps the old object charged until server cleanup.
     presign2_payload =
       JSON.encode(%{
         "handle" => "streamer",
@@ -303,11 +424,13 @@ defmodule ChatOverlay.WebF2Test do
     assert {:ok, update2_data} = JSON.decode(update2_body)
     assert update2_data["ok"] == true
     assert update2_data["storage_used_bytes"] == 150_000
-    # Old key is included in cleanup_urls
-    assert length(update2_data["cleanup_urls"]) == 1
-    cleanup_url = hd(update2_data["cleanup_urls"])
-    assert String.contains?(cleanup_url, presign_data["key"])
-    assert String.contains?(cleanup_url, "X-Amz-Signature=")
+    assert update2_data["storage_pending_bytes"] == 100_000
+    refute Map.has_key?(update2_data, "cleanup_urls")
+
+    assert Enum.any?(
+             Profiles.media_objects(),
+             &(&1["key"] == presign_data["key"] and &1["state"] == "retired")
+           )
 
     # 4. Reject tampered upload_token (422)
     tampered_payload =
@@ -343,36 +466,27 @@ defmodule ChatOverlay.WebF2Test do
 
     assert {:ok, over_data} = JSON.decode(over_body)
     assert over_data["ok"] == false
-    assert over_data["error"] =~ "superado la cuota" or over_data["error"] =~ "máximo permitido"
+    assert over_data["error"] =~ "Token de subida multimedia inválido"
   end
 
-  test "DELETE /api/profiles/:handle returns cleanup_urls for active R2 files", %{port: port} do
-    headers = [
-      {"origin", "http://localhost:#{port}"},
-      {"content-type", "application/json"}
-    ]
+  test "DELETE /api/profiles/:handle retains reserved objects for server cleanup", %{port: port} do
+    headers = [{"origin", "http://localhost:#{port}"}, {"content-type", "application/json"}]
 
-    # Create profile with R2 media
-    {:ok, _} =
-      Profiles.create_or_update(%{
-        "handle" => "streamer-with-r2",
-        "sources" => [%{"platform" => "twitch", "channel" => "user-r2", "mode" => "demo"}]
-      })
+    {:ok, upload} =
+      ChatOverlay.Media.validate_upload_request(
+        %{"filename" => "badge.png", "content_type" => "image/png", "size" => 50_000},
+        0
+      )
 
-    Profiles.update_media("streamer-with-r2", %{
-      "alert_image" => %{
-        "url" => "https://media.example.com/image/badge.png",
-        "source" => "r2",
-        "key" => "image/badge.png",
-        "size" => 50_000
-      }
-    })
+    {:ok, object} = Profiles.reserve_media_upload("streamer", upload)
+    {200, _, body} = request(port, "DELETE", "/api/profiles/streamer", headers)
+    assert {:ok, %{"ok" => true} = data} = JSON.decode(body)
+    refute Map.has_key?(data, "cleanup_urls")
 
-    {200, _, del_body} = request(port, "DELETE", "/api/profiles/streamer-with-r2", headers)
-    assert {:ok, del_data} = JSON.decode(del_body)
-    assert del_data["ok"] == true
-    assert length(del_data["cleanup_urls"]) == 1
-    assert String.contains?(hd(del_data["cleanup_urls"]), "image/badge.png")
+    assert Enum.any?(
+             Profiles.media_objects(),
+             &(&1["key"] == object["key"] and &1["state"] == "retired")
+           )
   end
 
   test "SSE stream enforces capability token when view=overlay", %{port: port} do

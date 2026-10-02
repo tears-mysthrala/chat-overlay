@@ -20,3 +20,10 @@ config :chat_overlay,
   twitch_client_secret: "test_twitch_client_secret",
   google_client_id: "test_google_client_id",
   google_client_secret: "test_google_client_secret"
+
+config :chat_overlay,
+  r2_endpoint: "https://r2.example.com",
+  r2_bucket: "chat-overlay-media",
+  r2_access_key_id: "mock_access_key",
+  r2_secret_access_key: "mock_secret_key",
+  r2_public_cdn: "https://media.chat-overlay.example.com"

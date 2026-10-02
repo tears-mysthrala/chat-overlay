@@ -40,6 +40,51 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
+  def reserve_media_upload(handle, upload), do: call_serialized({:reserve_media, handle, upload})
+  def cleanup_media(key), do: call_serialized({:cleanup_media, key})
+  def media_objects, do: Application.get_env(:chat_overlay, :media_objects, [])
+
+  defp execute_action({:reserve_media, handle, upload}) do
+    with profile when is_map(profile) <- Config.profile(handle),
+         {:ok, objects, object} <-
+           ChatOverlay.MediaLedger.reserve(
+             media_objects(),
+             profile,
+             upload,
+             System.system_time(:second)
+           ),
+         :ok <- persist_profiles(Config.profiles(), objects) do
+      Application.put_env(:chat_overlay, :media_objects, objects)
+      {:ok, object}
+    else
+      nil -> {:error, :not_found}
+      error -> error
+    end
+  end
+
+  defp execute_action({:cleanup_media, key}) do
+    now = System.system_time(:second)
+    objects = media_objects()
+
+    case Enum.find(objects, &(&1["key"] == key)) do
+      nil ->
+        :ok
+
+      object ->
+        if ChatOverlay.MediaLedger.due?(object, now) do
+          remaining = Enum.reject(objects, &(&1["key"] == key))
+
+          with :ok <- ChatOverlay.Media.delete_object(key),
+               :ok <- persist_profiles(Config.profiles(), remaining) do
+            Application.put_env(:chat_overlay, :media_objects, remaining)
+            :ok
+          end
+        else
+          {:error, :object_not_retired}
+        end
+    end
+  end
+
   defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
   defp execute_action({:delete, handle}), do: do_delete(handle, [])
   defp execute_action({:delete, handle, opts}), do: do_delete(handle, opts)
@@ -97,6 +142,12 @@ defmodule ChatOverlay.Profiles do
         "can_upload" => p["can_upload"] || false,
         "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
         "storage_used_bytes" => p["storage_used_bytes"] || 0,
+        "storage_pending_bytes" =>
+          max(
+            0,
+            ChatOverlay.MediaLedger.total_bytes(media_objects(), p) -
+              (p["storage_used_bytes"] || 0)
+          ),
         "linked_accounts" => format_linked_accounts_summary(p["linked_accounts"]),
         "reader_url" => "/reader/#{p["handle"]}",
         "overlay_url" => "/overlay/#{p["handle"]}"
@@ -653,8 +704,11 @@ defmodule ChatOverlay.Profiles do
 
     case Config.validate(updated_profiles) do
       {:ok, valid_profiles} ->
-        case persist_profiles(valid_profiles) do
+        objects = Keyword.get(opts, :media_objects, media_objects())
+
+        case persist_profiles(valid_profiles, objects) do
           :ok ->
+            Application.put_env(:chat_overlay, :media_objects, objects)
             Application.put_env(:chat_overlay, :profiles, valid_profiles)
             sync_profile_supervisors(final_profile, clean_handle, removed_sources, valid_profiles)
             {:ok, final_profile}
@@ -728,8 +782,14 @@ defmodule ChatOverlay.Profiles do
       profile_to_delete ->
         remaining_profiles = Enum.reject(current_profiles, &(&1["handle"] == handle))
 
-        with {:ok, valid_profiles} <- Config.validate(remaining_profiles),
-             :ok <- persist_profiles(valid_profiles) do
+        objects = ChatOverlay.MediaLedger.retire(media_objects(), handle)
+
+        with true <-
+               ChatOverlay.MediaLedger.tracked?(media_objects(), profile_to_delete) ||
+                 {:error, :media_inventory_required},
+             {:ok, valid_profiles} <- Config.validate(remaining_profiles),
+             :ok <- persist_profiles(valid_profiles, objects) do
+          Application.put_env(:chat_overlay, :media_objects, objects)
           Application.put_env(:chat_overlay, :profiles, valid_profiles)
           ChatOverlay.Stream.disconnect_viewers(handle, :profile_deleted)
 
@@ -850,25 +910,33 @@ defmodule ChatOverlay.Profiles do
 
         quota = existing["storage_quota_bytes"] || ChatOverlay.Media.default_quota()
 
-        if new_storage_used > quota do
-          {:error, :quota_exceeded}
-        else
-          updated_profile =
-            existing
-            |> Map.put("media", cleaned_media)
-            |> Map.put("storage_used_bytes", new_storage_used)
+        cond do
+          opts[:require_reservation] == true and
+              not ChatOverlay.MediaLedger.activatable?(media_objects(), existing, cleaned_media) ->
+            {:error, :invalid_upload_token}
 
-          case do_save_profile(updated_profile, replace: true) do
-            {:ok, saved} ->
-              if opts[:with_removed_keys] do
-                {:ok, saved, Enum.reverse(removed_r2_keys)}
-              else
-                {:ok, saved}
-              end
+          new_storage_used > quota ->
+            {:error, :quota_exceeded}
 
-            error ->
-              error
-          end
+          true ->
+            updated_profile =
+              existing
+              |> Map.put("media", cleaned_media)
+              |> Map.put("storage_used_bytes", new_storage_used)
+
+            objects = ChatOverlay.MediaLedger.transition(media_objects(), handle, cleaned_media)
+
+            case do_save_profile(updated_profile, replace: true, media_objects: objects) do
+              {:ok, saved} ->
+                if opts[:with_removed_keys] do
+                  {:ok, saved, Enum.reverse(removed_r2_keys)}
+                else
+                  {:ok, saved}
+                end
+
+              error ->
+                error
+            end
         end
     end
   end
@@ -1297,12 +1365,12 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp persist_profiles(profiles) do
+  defp persist_profiles(profiles, objects) do
     path =
       Application.get_env(:chat_overlay, :profiles_path) ||
         System.get_env("CHAT_CONFIG") ||
         "config/local-profiles.json"
 
-    ChatOverlay.ProfileStorage.write(path, profiles)
+    ChatOverlay.ProfileStorage.write(path, profiles, objects || media_objects())
   end
 end

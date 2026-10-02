@@ -584,25 +584,7 @@ defmodule ChatOverlay.Web do
   end
 
   defp api_delete_profile(conn, handle) do
-    case ChatOverlay.Profiles.delete(handle, with_removed_keys: true) do
-      {:ok, removed_keys} ->
-        cleanup_urls =
-          removed_keys
-          |> Enum.map(fn k ->
-            case ChatOverlay.Media.presigned_delete_url(k) do
-              {:ok, res} -> res.delete_url
-              _ -> nil
-            end
-          end)
-          |> Enum.reject(&is_nil/1)
-
-        reply(
-          conn,
-          200,
-          "application/json",
-          ChatOverlay.JSON.encode(%{"ok" => true, "cleanup_urls" => cleanup_urls})
-        )
-
+    case ChatOverlay.Profiles.delete(handle) do
       :ok ->
         reply(conn, 200, "application/json", ChatOverlay.JSON.encode(%{"ok" => true}))
 
@@ -653,6 +635,10 @@ defmodule ChatOverlay.Web do
         :bad_origin
     end
   end
+
+  defp format_error(:media_inventory_required),
+    do:
+      "Los archivos anteriores necesitan conciliación de inventario antes de eliminar el perfil."
 
   defp format_error(:invalid_twitch_channel), do: "Nombre o URL de Twitch no válido."
   defp format_error(:user_not_found), do: "No se encontró el canal o usuario en Twitch."
@@ -775,31 +761,32 @@ defmodule ChatOverlay.Web do
                   )
 
                 profile ->
-                  used = profile["storage_used_bytes"] || 0
+                  used =
+                    ChatOverlay.MediaLedger.total_bytes(
+                      ChatOverlay.Profiles.media_objects(),
+                      profile
+                    )
+
                   quota = profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()
 
-                  # Account for replacement of existing media in the same category
-                  filename = params["filename"] || params[:filename] || ""
-
-                  category_key =
-                    case Path.extname(filename) |> String.downcase() do
-                      ext when ext in [".mp3", ".ogg", ".wav", ".webm"] -> "alert_sound"
-                      ext when ext in [".webp", ".png", ".gif"] -> "alert_image"
-                      _ -> nil
-                    end
-
-                  existing_size =
-                    if category_key do
-                      item = (profile["media"] || %{})[category_key]
-                      if is_map(item) and item["source"] == "r2", do: item["size"] || 0, else: 0
+                  validation =
+                    if profile["can_upload"] == true do
+                      ChatOverlay.Media.validate_upload_request(params, used, quota)
                     else
-                      0
+                      {:error, :uploads_not_allowed}
                     end
 
-                  effective_used = max(0, used - existing_size)
+                  reservation =
+                    with {:ok, validated} <- validation,
+                         true <-
+                           ChatOverlay.Media.configured?() || {:error, :invalid_s3_configuration},
+                         {:ok, object} <-
+                           ChatOverlay.Profiles.reserve_media_upload(handle, validated),
+                         do: {:ok, validated, object}
 
-                  case ChatOverlay.Media.validate_upload_request(params, effective_used, quota) do
-                    {:ok, validated} ->
+                  case reservation do
+                    {:ok, validated, object} ->
+                      validated = %{validated | key: object["key"]}
                       r2_config = ChatOverlay.Media.r2_config()
 
                       case ChatOverlay.Media.generate_presigned_put(
@@ -817,7 +804,8 @@ defmodule ChatOverlay.Web do
                             "upload_url" => presigned.upload_url,
                             "public_url" => presigned.public_url,
                             "key" => presigned.key,
-                            "size" => validated.size
+                            "size" => validated.size,
+                            "content_type" => validated.mime
                           }
 
                           resp =
@@ -909,27 +897,18 @@ defmodule ChatOverlay.Web do
 
               _profile ->
                 with {:ok, sanitized_params} <- validate_media_params(media_params, handle),
-                     {:ok, updated, removed_keys} <-
+                     {:ok, updated} <-
                        ChatOverlay.Profiles.update_media(handle, sanitized_params,
-                         with_removed_keys: true
+                         require_reservation: true
                        ) do
-                  cleanup_urls =
-                    removed_keys
-                    |> Enum.map(fn k ->
-                      case ChatOverlay.Media.presigned_delete_url(k) do
-                        {:ok, res} -> res.delete_url
-                        _ -> nil
-                      end
-                    end)
-                    |> Enum.reject(&is_nil/1)
-
                   resp = %{
                     "ok" => true,
                     "media" => updated["media"],
                     "storage_used_bytes" => updated["storage_used_bytes"] || 0,
                     "storage_quota_bytes" =>
                       updated["storage_quota_bytes"] || ChatOverlay.Media.default_quota(),
-                    "cleanup_urls" => cleanup_urls
+                    "storage_pending_bytes" =>
+                      ChatOverlay.Profiles.get(handle)["storage_pending_bytes"]
                   }
 
                   reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
@@ -971,15 +950,21 @@ defmodule ChatOverlay.Web do
       {"alert_sound", %{"url" => url, "source" => "external"} = item}, {:ok, acc}
       when is_binary(url) and url != "" ->
         case ChatOverlay.Media.validate_external_url(url, :audio) do
-          {:ok, _} -> {:cont, {:ok, Map.put(acc, "alert_sound", item)}}
-          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, _} ->
+            {:cont, {:ok, Map.put(acc, "alert_sound", Map.take(item, ["url", "source"]))}}
+
+          {:error, reason} ->
+            {:halt, {:error, reason}}
         end
 
       {"alert_image", %{"url" => url, "source" => "external"} = item}, {:ok, acc}
       when is_binary(url) and url != "" ->
         case ChatOverlay.Media.validate_external_url(url, :image) do
-          {:ok, _} -> {:cont, {:ok, Map.put(acc, "alert_image", item)}}
-          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, _} ->
+            {:cont, {:ok, Map.put(acc, "alert_image", Map.take(item, ["url", "source"]))}}
+
+          {:error, reason} ->
+            {:halt, {:error, reason}}
         end
 
       {"alert_sound", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
@@ -997,7 +982,11 @@ defmodule ChatOverlay.Web do
         end
 
       {key, item}, {:ok, acc} when key in ["alert_sound", "alert_image"] ->
-        {:cont, {:ok, Map.put(acc, key, item)}}
+        case item do
+          nil -> {:cont, {:ok, Map.put(acc, key, nil)}}
+          %{"url" => ""} -> {:cont, {:ok, Map.put(acc, key, nil)}}
+          _ -> {:halt, {:error, :invalid_media_item}}
+        end
 
       {other, _}, _acc ->
         {:halt, {:error, {:unknown_media_key, other}}}
@@ -1005,41 +994,51 @@ defmodule ChatOverlay.Web do
   end
 
   defp validate_r2_media_item(item, handle, category) do
-    url = item["url"]
-    upload_token = item["upload_token"]
+    profile = Config.profile(handle)
+    slot = if category == :audio, do: "alert_sound", else: "alert_image"
+    existing = (profile["media"] || %{})[slot]
+    fields = ["url", "source", "key", "size"]
     key = item["key"]
-    raw_size = item["size"]
 
     cond do
-      not is_binary(url) or not String.starts_with?(url, "https://") ->
-        {:error, :invalid_url}
+      is_nil(item["upload_token"]) and is_map(existing) and
+          Map.take(existing, fields) == Map.take(item, fields) ->
+        {:ok, Map.take(existing, fields)}
 
-      String.contains?(String.downcase(url), ".svg") ->
-        {:error, :svg_prohibited_for_security}
-
-      is_binary(upload_token) and is_binary(key) ->
-        case ChatOverlay.Media.verify_upload_token(upload_token, handle, key) do
-          {:ok, %{size: verified_size}} ->
-            {:ok, Map.put(item, "size", verified_size)}
-
-          {:error, _} ->
-            {:error, :invalid_upload_token}
-        end
-
-      is_integer(raw_size) and raw_size >= 0 ->
-        if raw_size <= ChatOverlay.Media.max_bytes(category) do
-          {:ok, item}
-        else
-          {:error, :file_too_large}
-        end
-
-      is_nil(raw_size) ->
-        {:ok, Map.put(item, "size", 0)}
+      profile["can_upload"] != true ->
+        {:error, :uploads_not_allowed}
 
       true ->
-        {:error, :invalid_media_size}
+        with true <- is_binary(key) and String.starts_with?(key, handle <> "/"),
+             {:ok, %{size: size, category: verified_category}} <-
+               ChatOverlay.Media.verify_upload_token(item["upload_token"], handle, key),
+             true <- verified_category == to_string(category),
+             true <- size <= ChatOverlay.Media.max_bytes(category),
+             object when is_map(object) <-
+               Enum.find(
+                 ChatOverlay.Profiles.media_objects(),
+                 &(&1["key"] == key and &1["handle"] == handle)
+               ),
+             true <-
+               object["state"] in ["pending", "active"] and object["size"] == size and
+                 object["category"] == verified_category,
+             {:ok, url} <- ChatOverlay.Media.public_url(key),
+             true <- item["url"] == url,
+             :ok <- ChatOverlay.Media.verify_object(object) do
+          {:ok, %{"url" => url, "source" => "r2", "key" => key, "size" => size}}
+        else
+          _ -> {:error, :invalid_upload_token}
+        end
     end
   end
+
+  defp format_media_error(:media_inventory_required),
+    do: "Los archivos anteriores necesitan conciliación de inventario antes de modificarlos."
+
+  defp format_media_error(:uploads_not_allowed),
+    do: "Este perfil no tiene permiso para subir archivos."
+
+  defp format_media_error(:invalid_media_item), do: "Configuración multimedia inválida."
 
   defp format_media_error(:svg_prohibited_for_security),
     do: "Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF de OBS)."
