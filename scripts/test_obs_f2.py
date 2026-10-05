@@ -23,7 +23,7 @@ from PIL import Image
 
 OBS_WS_URI = os.environ.get("OBS_WS_URI", "ws://127.0.0.1:4455")
 OBS_PASSWORD_FILE = os.environ.get("OBS_PASSWORD_FILE")
-OBS_PASSWORD = (Path(OBS_PASSWORD_FILE).read_text() if OBS_PASSWORD_FILE else os.environ.get("OBS_PASSWORD", ""))
+OBS_PASSWORD = (Path(OBS_PASSWORD_FILE).read_text().rstrip("\r\n") if OBS_PASSWORD_FILE else os.environ.get("OBS_PASSWORD", ""))
 SERVER_URL = os.environ.get("SERVER_URL", "http://127.0.0.1:4100")
 TEST_HANDLE = os.environ.get("TEST_HANDLE", "demo")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
