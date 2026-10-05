@@ -83,3 +83,14 @@ ExUnit utiliza fixtures sintéticas, transporte HTTP local, mock de WebSocket y 
 La [selección ASVS 5.0.0](asvs-f2.md) contrasta IDs y niveles con una revisión fija
 del repositorio oficial. Mantiene estados parciales, no validados y pendientes;
 no constituye evaluación L2 completa ni autorización de publicación.
+
+### Preparación de evidencia de carga sostenida — issue #4
+
+La herramienta `scripts/load.exs` registra memoria total de BEAM y procesos cada
+minuto, duración real e instantes UTC, y admite una etiqueta de revisión del código.
+Histograma acotado y percentiles conservadores comprobados por
+`test/load_metrics_test.exs`. Metodología y comandos reproducibles en
+[scripts/README.md](../scripts/README.md#carga-sostenida-sintética-issue-4-rel-08).
+Esta instrumentación no acredita estabilidad por sí sola. Las ejecuciones de
+cuatro y 24 horas, el análisis de su tendencia de memoria y la aprobación humana
+de publicación siguen pendientes bajo #4.

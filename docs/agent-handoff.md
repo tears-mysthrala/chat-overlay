@@ -300,7 +300,7 @@ Local verification:
    - Verificaciones automáticas 100% PASS: `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `mix format --check-formatted`.
 ## Deuda F2 — persistencia (#51)
 
-- Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`.
+- Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`; PR: #56.
 - Reproducción previa: 8 de 11 regresiones de persistencia fallan en la base 8c11e2d.
 - Corrección: escritura obligatoria antes de mutar runtime; eliminación confirma
   persistencia antes de revocar; archivo privado 0600 y reemplazo atómico dentro
@@ -384,3 +384,41 @@ Local verification:
 - Validación local del runner limitada a sintaxis/lockfile/metadatos. No se ejecutó
   Playwright local ni se sustituyó la evidencia T3. Primera ejecución real pendiente
   de CI tras PR; no cerrar #43 ni presentar Chromium como validación OBS.
+## Evidencia para carga sostenida — issue #4 (2026-10-02)
+
+- PR: https://github.com/tears-mysthrala/chat-overlay/pull/33 (lista para revisión; CI/revisión humana pendientes al redactar).
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/4 (entrega parcial, Refs #4).
+- Rama: `test/4-soak-evidence`.
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/4-soak-evidence`.
+- Base: `8c11e2d`, con las correcciones de autorización de #30/#31 ya integradas.
+- Necesidad: dos medidas de memoria (inicio/fin) no permiten revisar tendencia durante
+  las pruebas de 4/24 horas. Instrumentar la prueba existente sin cambiar producción.
+- Cambios: muestras de memoria BEAM/procesos cada minuto y al finalizar; tiempos UTC
+  y duración real; etiqueta de revisión; histograma limitado a 1.001 buckets,
+  redondeo conservador y rechazo explícito de mediciones vacías. Cinco regresiones
+  cubren percentil, límites, redondeo y muestreo. Comandos en `scripts/README.md`.
+- Verificado: `docker build --target validation -t chat-overlay:4-soak-validation .`
+  (formato y compilación sin advertencias); `scripts/ci_tests.sh` en contenedor sin red,
+  2 CPU, 1 GiB, 128 PIDs y dos schedulers: **203/203 PASS** con semillas 0 y 424242.
+  `python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json`
+  confirma cero fallos, skips y exclusiones. Cinco tests Python del validador PASS.
+- Carga de 65 segundos, sin red y con los mismos límites: **4.750 eventos,
+  47.500/47.500 muestras, cero errores, p95 50 ms**, duración real 65.043 ms.
+  Host x86_64, AMD Ryzen 3 7320U (8 CPUs lógicas); contenedor limitado a 2 CPU.
+  Muestras a 0/60.001/65.043 ms: memoria BEAM 455.999.776/484.691.128/82.122.664 bytes,
+  procesos 530/530/330. La última muestra es tras parar lectores; este descenso
+  no demuestra estabilidad sostenida. Informes locales en `output/tests/` y
+  `output/load-65.json` (no versionados). Imagen validada:
+  `sha256:d2d8d4f44d972f65d4ddf4b00fbbec13dbd85e206fedc6257642c7b38b66f068`.
+- Trazabilidad, secretos, estática, tests Python y `git diff --check`: PASS.
+  Hook pre-push completo PASS (incluye una tercera pasada de 203 tests); sin excepción.
+  Primer intento bloqueado por selección accidental de Elixir 1.20.2 en PATH;
+  corregido el entorno del comando a 1.20.4 sin cambiar configuración global.
+- Límites: no se han ejecutado 4/24 horas, recuperación de workers ni nueva prueba
+  en OBS/upstream; no hay nueva auditoría del artefacto de release, cuyo código
+  permanece igual. No se evalúan aquí cumplimiento legal ni condiciones upstream.
+- Trabajo ajeno preservado: worktree sucio `32-media-storage-quotas`, issue #32,
+  sigue en curso; no se han editado sus archivos ni compartido sus builds.
+- Siguiente paso: revisión humana y CI de esta PR; ejecutar las pruebas sostenidas
+  sobre revisión/imagen identificadas y analizar la tendencia bajo #4. No hacer
+  merge ni publicar sin autorización expresa del operador.
