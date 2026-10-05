@@ -261,6 +261,25 @@ Local verification:
    - GitHub Actions CI (PR #31, Run `36852264248`): **100% PASS** (`source-and-tests` ✓, `image-security` ✓, `quality-gate` ✓).
 
 
+## Deuda F2 — persistencia (#51)
+
+- Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`; PR: #56.
+- Reproducción previa: 8 de 11 regresiones de persistencia fallan en la base 8c11e2d.
+- Corrección: escritura obligatoria antes de mutar runtime; eliminación confirma
+  persistencia antes de revocar; archivo privado 0600 y reemplazo atómico dentro
+  de staging 0700, sincronizado y acotado a 64 KiB. Errores HTTP de almacenamiento
+  no incluyen rutas internas. El bloqueo OAuth en memoria tras fallo se preserva
+  como excepción explícita y devuelve error de escritura.
+- Verificación local: `mix check`, 211 pruebas PASS sin warnings; tests de disco,
+  concurrencia, permisos, recarga, límite de documento y symlink incluidos.
+- ADR 0004 describe controles y límites. SEC-13 no se declara satisfecho por usar
+  JSON: decisión sobre aislamiento equivalente o PostgreSQL/RLS pendiente de
+  Kalista; #51 permanece abierto hasta resolverla.
+- #32: el operador autoriza hacerse cargo de sus cambios no confirmados el
+  02-10-2026. Copia previa en `/tmp/chat-overlay-32-takeover.patch` antes de editar.
+- Próximo: integrar esta base con #32 y continuar recuperación de claves (#40),
+  ciclo de vida/validación multimedia (#48/#49), controles/documentación (#41/#42)
+  y pruebas web/OBS (#43). No se ha aprobado merge ni despliegue.
 
 ## Evidencia para carga sostenida — issue #4 (2026-10-02)
 
