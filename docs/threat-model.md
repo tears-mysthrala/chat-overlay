@@ -16,3 +16,24 @@ Activos: tokens de lectura, disponibilidad, integridad del overlay y separación
 | Administración expuesta | rutas cerradas, sin ingestión general, métodos limitados | TLS/proxy y revisión de publicación pendientes |
 
 No hay eval, átomos externos, shell de usuario, deserialización Erlang de datos de chat, HTML arbitrario, telemetría o llamadas a modelos. Los scripts de inventario procesan metadatos de build y no forman parte del servidor.
+
+## Frontera de recuperación offline — #40
+
+Activos: clave maestra, documento de perfiles, credenciales cifradas y copias.
+Solo el operador autorizado ejecuta `scripts/recovery.exs`; las rutas, archivos y
+artefactos importados requieren validación, aunque procedan de una copia local.
+La herramienta se ejecuta con `--no-start`, sin conectores ni configuración real
+de red. No establece una frontera contra un administrador del host comprometido.
+
+| Abuso | Control | Riesgo residual |
+| --- | --- | --- |
+| Clave expuesta o ruta de clave no privada | Archivo regular sin symlink, permisos POSIX privados, tamaño acotado; claves fuera de argumentos/logs | lstat/read no es una apertura inmune a carreras: directorio y host deben ser confiables; Windows ACL no validada |
+| Copia manipulada, truncada o con otra clave | AEAD, AAD de dominio/versión/key_id, límites y validación del documento y credenciales | El cifrado no impide restaurar una copia válida pero antigua |
+| Destino existente o symlink | Staging privado y publicación por hard-link sin sobrescritura | Directorio padre debe ser confiable; fsync de archivo no acredita durabilidad del directorio |
+| Restauración resucita permisos o refresh tokens | Parada previa de escritores, conciliación y reautenticación antes del cambio | La herramienta no comprueba parada ni revoca upstream; decisión del operador |
+| Rotación incompleta o mezcla de generaciones | Verificación de todas las credenciales, salida nueva, cambio coordinado de documento/clave | Cookies y OAuth pendientes se invalidan; capabilities OBS y secretos externos necesitan revocación separada |
+
+Las pruebas sintéticas de `recovery_test.exs` verifican errores, integridad y
+publicación privada; no son un ensayo de recuperación de producción ni de corte
+eléctrico. Conservar inventario multimedia al restaurar y custodiar las claves
+separadas de las copias, con retención y eliminación autorizadas.
