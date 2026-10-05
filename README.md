@@ -26,6 +26,8 @@ Abre <http://127.0.0.1:4100/> para acceder al Panel de Creador o <http://127.0.0
 
 El overlay para OBS (`/overlay/demo?token=...`) requiere un capability token válido de 32 bytes; si se omite el token, el overlay responde 401 Unauthorized con una pantalla informativa amigable.
 
+La demo copia la configuración inicial a un directorio privado en RAM. Las mutaciones del panel funcionan, pero se pierden al recrear el contenedor. Para cuentas reales, monta un directorio persistente escribible en `/state`, conserva la clave y elimina el comando de copia de la demo; no montes el archivo destino individualmente, porque la persistencia lo reemplaza mediante rename.
+
 Para detener la demo: `docker compose -p chat-overlay-demo down`.
 
 Con Elixir 1.20.4 y OTP 29.1:

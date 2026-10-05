@@ -5,7 +5,7 @@ services:
     ports:
       - "127.0.0.1:4100:4100"
     environment:
-      CHAT_CONFIG: /config/profiles.json
+      CHAT_CONFIG: /state/profiles.json
       ERL_FLAGS: "+S 2:2 +P 32768 +Q 8192"
       TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"
       TWITCH_CLIENT_SECRET: "${TWITCH_CLIENT_SECRET:-}"
@@ -13,13 +13,15 @@ services:
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
       CHAT_ENCRYPTION_KEY: "${CHAT_ENCRYPTION_KEY:?Falta CHAT_ENCRYPTION_KEY (mínimo 32 caracteres). Configúrala o genera una con: export CHAT_ENCRYPTION_KEY=$$(openssl rand -hex 32)}"
     volumes:
-      # Demo mode mounts demo.json read-only.
-      # For persistent mode with OAuth account linking and dynamic profiles, mount a writable config file or volume:
-      # - ./config/local-profiles.json:/config/profiles.json:rw
+      # Read-only seed; the demo copies it into a private ephemeral directory.
+      # Persistent installations must mount a writable directory at /state,
+      # preserve their key and seed profiles.json only on the first start.
       - ./config/demo.json:/config/profiles.json:ro
+    command: ["/bin/sh", "-ec", "umask 077; cp /config/profiles.json /state/profiles.json; exec /app/bin/chat_overlay start"]
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=16m,mode=1777
+      - /state:rw,noexec,nosuid,size=1m,mode=0700,uid=65532,gid=65532
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     pids_limit: 128
