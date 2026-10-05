@@ -2,6 +2,7 @@ defmodule ChatOverlay.LoadMetrics do
   @moduledoc "Bounded synthetic-load measurements; no chat payloads or credentials."
   @max_bucket_ms 1_000
 
+  @doc "Records latency rounded up to milliseconds, with overflow capped at the final bucket."
   def record_latency(table, microseconds) when microseconds >= 0 do
     # Use a conservative upper estimate instead of claiming sub-millisecond precision.
     bucket = min(div(microseconds + 999, 1_000), @max_bucket_ms)
@@ -9,6 +10,7 @@ defmodule ChatOverlay.LoadMetrics do
     :ets.update_counter(table, {:bucket_ms, bucket}, {2, 1}, {{:bucket_ms, bucket}, 0})
   end
 
+  @doc "Returns the 95th ranked bucket; nil for no samples, 1000 for the capped tail."
   def p95(table) do
     samples = :ets.lookup_element(table, :samples, 2)
 
@@ -32,6 +34,7 @@ defmodule ChatOverlay.LoadMetrics do
     end
   end
 
+  @doc "Replaces a sample slot with current BEAM resources and delivery counters."
   def snapshot(table, slot, elapsed_ms) do
     point = %{
       elapsed_ms: elapsed_ms,
@@ -45,6 +48,7 @@ defmodule ChatOverlay.LoadMetrics do
     point
   end
 
+  @doc "Returns bounded periodic resource samples in elapsed-time order."
   def resource_samples(table) do
     table
     |> :ets.tab2list()

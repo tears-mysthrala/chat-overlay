@@ -226,7 +226,7 @@ report = %{
   resource_samples: resource_samples,
   memory_peak_sampled_bytes: Enum.max(Enum.map(resource_samples, & &1.memory_total_bytes)),
   latency_bucket_upper_bound_ms: 1_000,
-  latency_buckets_rounding: "ceiling; >=1000ms accumulated in final bucket",
+  latency_buckets_rounding: "ceiling; >999ms accumulated in final bucket (overflow capped)",
   elixir: System.version(),
   otp: List.to_string(:erlang.system_info(:otp_release)),
   schedulers: :erlang.system_info(:schedulers_online),
