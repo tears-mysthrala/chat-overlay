@@ -174,7 +174,9 @@ for profile <- profiles do
         "author_id" => "synthetic",
         "author_display" => "Warmup",
         "text" => "Warmup"
-      }, occurred_at: DateTime.to_iso8601(DateTime.utc_now()))
+      },
+      occurred_at: DateTime.to_iso8601(DateTime.utc_now())
+    )
 
   :ok = ChatOverlay.Store.ingest(ChatOverlay.Store.name(profile["handle"]), warmup)
 end
