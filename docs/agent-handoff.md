@@ -263,7 +263,7 @@ Local verification:
 
 ## Deuda F2 — persistencia (#51)
 
-- Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`.
+- Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`; PR: #56.
 - Reproducción previa: 8 de 11 regresiones de persistencia fallan en la base 8c11e2d.
 - Corrección: escritura obligatoria antes de mutar runtime; eliminación confirma
   persistencia antes de revocar; archivo privado 0600 y reemplazo atómico dentro

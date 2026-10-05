@@ -429,15 +429,18 @@ defmodule ChatOverlay.Profiles do
                 )
 
               {:error, :no_active_stream} ->
-                call_serialized({:sync_youtube_offline, clean_handle, nil, yt_target, opts})
-                {:error, :no_active_stream}
+                case call_serialized({:sync_youtube_offline, clean_handle, nil, yt_target, opts}) do
+                  {:ok, _} -> {:error, :no_active_stream}
+                  error -> error
+                end
 
               {:error, {:no_active_stream, stable_target}} ->
-                call_serialized(
-                  {:sync_youtube_offline, clean_handle, stable_target, yt_target, opts}
-                )
-
-                {:error, :no_active_stream}
+                case call_serialized(
+                       {:sync_youtube_offline, clean_handle, stable_target, yt_target, opts}
+                     ) do
+                  {:ok, _} -> {:error, :no_active_stream}
+                  error -> error
+                end
 
               error ->
                 error
