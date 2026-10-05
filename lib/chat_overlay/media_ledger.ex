@@ -80,11 +80,12 @@ defmodule ChatOverlay.MediaLedger do
     tracked?(objects, profile) and
       Enum.all?(media, fn {slot, item} ->
         item["source"] != "r2" or item == (profile["media"] || %{})[slot] or
-          Enum.any?(objects, fn o ->
-            o["key"] == item["key"] and o["handle"] == profile["handle"] and
-              o["size"] == item["size"] and o["state"] in ["pending", "active"] and
-              o["expires_at"] > System.system_time(:second)
-          end)
+          (profile["can_upload"] == true and
+             Enum.any?(objects, fn o ->
+               o["key"] == item["key"] and o["handle"] == profile["handle"] and
+                 o["size"] == item["size"] and o["state"] in ["pending", "active"] and
+                 o["expires_at"] > System.system_time(:second)
+             end))
       end)
   end
 

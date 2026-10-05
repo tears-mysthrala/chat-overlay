@@ -216,6 +216,22 @@ defmodule ChatOverlay.MediaLedgerTest do
     assert {:error, :uploads_not_allowed} = reserve(100)
   end
 
+  test "revoking upload permission before association prevents activation" do
+    {:ok, object} = reserve(100)
+
+    Application.put_env(:chat_overlay, :profiles, [
+      Map.put(Config.profile("ledger"), "can_upload", false)
+    ])
+
+    assert {:error, :invalid_upload_token} =
+             Profiles.update_media("ledger", %{"alert_sound" => item(object)},
+               require_reservation: true
+             )
+
+    assert [%{"state" => "pending"}] = Profiles.media_objects()
+    assert (Config.profile("ledger")["media"] || %{}) == %{}
+  end
+
   test "storage transport rejects arbitrary endpoints and methods before DNS" do
     assert {:error, :destination_rejected} =
              ChatOverlay.Net.storage_request("DELETE", "https://evil.example/file")
