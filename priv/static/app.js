@@ -149,6 +149,13 @@
         storageQuotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${percent}%) · pendientes de subida o limpieza: ${formatBytes(pendingBytes)}`;
       }
 
+      const canUpload = p.can_upload === true;
+      for (const control of [audioTypeUpload, imageTypeUpload, audioFileInput, imageFileInput]) {
+        if (control) control.disabled = !canUpload;
+      }
+      const uploadPermissionNote = document.getElementById("upload-permission-note");
+      if (uploadPermissionNote) uploadPermissionNote.hidden = canUpload;
+
       // Populate media
       const media = p.media || {};
       const sound = media.alert_sound;
@@ -946,12 +953,17 @@
           logoutBtn.addEventListener("click", async () => {
             logoutBtn.disabled = true;
             try {
-              await fetch("/api/auth/logout", {
+              const response = await fetch("/api/auth/logout", {
                 method: "POST",
                 headers: { "content-type": "application/json" }
               });
+              if (!response.ok) throw new Error("logout_failed");
+              for (const key of Object.keys(sessionStorage)) {
+                if (key.startsWith("obs_token_")) sessionStorage.removeItem(key);
+              }
               location.reload();
             } catch {
+              statusText.textContent = "No se pudo cerrar la sesión. Inténtalo de nuevo.";
               logoutBtn.disabled = false;
             }
           });

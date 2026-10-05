@@ -82,3 +82,23 @@ Revisión humana debida: 2026-10-21. Responsable: Kalista; motivo y compensació
 en el ADR 0002 y en la sección de aplicabilidad anterior.
 
 SUP-05 sigue pendiente antes de distribución: firma/procedencia verificable y revisión de todas las obligaciones de licencia de la imagen. El SHA-256 identifica bytes; no autentica al publicador.
+
+## Navegador CI de F2 — #43
+
+`playwright@1.63.0` y su dependencia `playwright-core@1.63.0` quedan fijados en
+`package-lock.json` con integridad npm. Son herramientas de desarrollo Apache-2.0,
+Node >=20; no se incorporan al release Elixir ni a la imagen final. Metadatos
+verificados con `npm view playwright@1.63.0 version license engines --json`.
+La necesidad es repetir en GitHub Actions las comprobaciones sintéticas que el
+preview T3 permite ejecutar interactivamente. La versión fija la revisión Chromium
+que instala la CLI; las bibliotecas del SO instaladas por `--with-deps` siguen la
+imagen del runner y no se afirma reproducibilidad bit a bit.
+
+La instalación usa `npm ci --ignore-scripts` y la CLI fijada instala Chromium sin
+credenciales del producto. El navegador solo admite el origen del fixture y este
+se ejecuta en red Docker interna. No hay servicios de navegador externos ni entrega
+de datos reales. Retirada: eliminar el paso CI, scripts del runner y devDependency;
+los checks compartidos/T3 y el runtime permanecen independientes. Fuentes oficiales:
+[paquete npm](https://www.npmjs.com/package/playwright/v/1.63.0),
+[evaluación de funciones](https://playwright.dev/docs/api/class-page#page-evaluate),
+[intercepción de rutas](https://playwright.dev/docs/api/class-browsercontext#browser-context-route).

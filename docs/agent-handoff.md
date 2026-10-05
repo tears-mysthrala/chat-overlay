@@ -364,6 +364,26 @@ Local verification:
   nivel, evidencia local, estado y deuda; no se presume PASS de filas no evaluadas.
 - #42 sigue abierto: política de sesiones, mix-up, cookies/cliente, matriz exhaustiva
   de rutas y revisión humana. #43 hará evidencia navegador/OBS por separado.
+
+## 2026-10-02 — navegador y OBS (#43)
+
+- Worktree/rama `../chat-overlay-worktrees/43-browser-evidence` / `test/43-browser-evidence`.
+- Fixture local y checks de navegador sintéticos: login/A-B/HttpOnly/permisos,
+  error multimedia, capabilities/SSE y logout pasan a 1280x800 y 390x844.
+- Corregidos controles de subida para can_upload=false y limpieza de copias de
+  capabilities al cerrar sesión; logout fallido ya no simula éxito.
+- OBS real 32.2.2 FAIL por inicialización CEF código 28; captura vacía. Ver
+  `docs/browser-f2.md`. No se atribuyen pruebas visuales al snapshot T3 fallido.
+- Kalista aprobó explícitamente ambas unidades de ADR 0005 en esta sesión:
+  PostgreSQL/RLS/Postgrex y cuarentena FFmpeg, para implementación/pruebas locales.
+  Agentes trabajan en ramas aisladas; no merge/despliegue ni datos reales.
+
+- Runner CI de #43 preparado con Playwright 1.63.0 (dev-only, Apache-2.0, Node >=20),
+  lockfile y checks compartidos exportados como función. Contenedor sintético con red
+  interna, publicación loopback y recursos acotados; navegador restringido al fixture.
+- Validación local del runner limitada a sintaxis/lockfile/metadatos. No se ejecutó
+  Playwright local ni se sustituyó la evidencia T3. Primera ejecución real pendiente
+  de CI tras PR; no cerrar #43 ni presentar Chromium como validación OBS.
 ## Evidencia para carga sostenida — issue #4 (2026-10-02)
 
 - PR: https://github.com/tears-mysthrala/chat-overlay/pull/33 (lista para revisión; CI/revisión humana pendientes al redactar).

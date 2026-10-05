@@ -1,0 +1,8 @@
+{
+  "name": "chat-overlay-browser-checks",
+  "private": true,
+  "version": "0.0.0",
+  "engines": { "node": ">=20" },
+  "scripts": { "test:browser:ci": "node scripts/browser_ci.js" },
+  "devDependencies": { "playwright": "1.63.0" }
+}
