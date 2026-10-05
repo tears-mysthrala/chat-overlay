@@ -4,7 +4,7 @@ El contrato del proyecto es `WHAT_WE_ARE_BUILDING.md`. Leerlo antes de implement
 
 ## Alcance y autonomía
 
-Kalista autorizó completar F0 y construir F1 el 20-09-2026 (issue #3): overlay de Twitch/YouTube/Kick sin Chatterino. Cuentas, bots y runners son fases posteriores, no tareas implícitas. Pila de referencia: Elixir/OTP, frontend estático y Docker; no reabrir el debate del lenguaje en cada issue.
+Kalista autorizó completar F0 y construir F1 el 20-09-2026 (issue #3): overlay de Twitch/YouTube/Kick sin Chatterino. F2 se autorizó en #17 y su deuda se está cerrando por instrucción de Kalista del 02-10-2026 (#55); cuentas/OAuth/sesiones y renovación ya forman parte de esa base. Bots F3 y runners F4 siguen sin autorización implícita. La cuarentena #49 y las nuevas dependencias requieren decisión expresa según las reglas siguientes. Pila de referencia: Elixir/OTP, frontend estático y Docker; no reabrir el debate del lenguaje en cada issue.
 
 Dentro de una fase autorizada se pueden crear issues y proponer cambios acotados. Cambios de alcance, nuevas dependencias de producción fuera del conjunto inicial, privilegios, tratamiento de datos o publicación requieren aprobación de Kalista. No desplegar ni hacer merge por iniciativa propia.
 

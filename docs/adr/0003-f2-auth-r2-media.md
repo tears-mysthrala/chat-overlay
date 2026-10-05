@@ -1,5 +1,13 @@
 # ADR 0003 — Arquitectura F2: Autenticación OAuth, Capability Tokens y Módulo Multimedia R2
 
+> Nota de revisión 02-10-2026 (#41): este ADR conserva decisiones históricas y
+> objetivos; no constituye evidencia de que todos estén implementados. #51 mantiene
+> SEC-13 abierto; #49 mantiene formato real/cuarentena pendientes. #57 añade
+> inventario y limpieza reintentable; borrar perfil y borrar objetos remotos no es
+> una única operación confirmada. La afirmación de derechos/olvido requiere revisión
+> humana #37, y las comparaciones de precio/proveedor de abajo no se han actualizado.
+> Ver [evidencia actual](../verification.md) y [propuesta pendiente](0005-f2-isolation-and-quarantine-proposal.md).
+
 Estado: Aprobada por Kalista el 29-09-2026 para issue #17.
 
 ## Motivo y contexto
