@@ -77,3 +77,15 @@ ExUnit utiliza fixtures sintéticas, transporte HTTP local, mock de WebSocket y 
 - **Validación en OBS Studio 32.2.2 (DEV-13 / SEC-07)**: ejecutada contra OBS Studio 32.2.2 real en Linux (Wayland) mediante OBS WebSocket v5 (`ws://127.0.0.1:4455`). En F1 (`scripts/test_obs_validation.py`) se verificó la transparencia y reconexión de fuentes. En F2 (`scripts/test_obs_f2.py`) se verificó el ciclo completo de seguridad: rechazo 401 de accesos sin token, admisión 200 con streaming SSE con capability token, revocación en caliente en tiempo real al regenerar tokens y restauración inmediata de servicio, con estricto cumplimiento de CSP mediante hash SHA-256 para el CSS de OBS.
 - **Módulo multimedia R2 (SEC-05 / SEC-15)**: generación de URLs prefirmadas SigV4 ejecutada íntegramente en Erlang/OTP nativo (`ChatOverlay.Media.generate_presigned_put_url/5`). Cero paso de bytes por el servidor backend. Cuotas de almacenamiento por perfil enforceadas en memoria y persistidas. Bloqueo determinista de subidas `.svg` para neutralizar vectores XSS en CEF.
 - **Diferimiento de Kick**: por directriz del operador Kalista en el issue #15, el conector de Kick se difiere formalmente para evitar la deuda técnica derivada de los frecuentes breaking changes de su API de desarrolladores (4-5 alteraciones en el último año) y de la fricción operativa de su portal de desarrollo. La entrega queda consolidada y certificada sobre Twitch, YouTube y OBS Studio.
+
+
+### Preparación de evidencia de carga sostenida — issue #4
+
+La herramienta `scripts/load.exs` registra memoria total de BEAM y procesos cada
+minuto, duración real e instantes UTC, y admite una etiqueta de revisión del código.
+Histograma acotado y percentiles conservadores comprobados por
+`test/load_metrics_test.exs`. Metodología y comandos reproducibles en
+[scripts/README.md](../scripts/README.md#carga-sostenida-sintética-issue-4-rel-08).
+Esta instrumentación no acredita estabilidad por sí sola. Las ejecuciones de
+cuatro y 24 horas, el análisis de su tendencia de memoria y la aprobación humana
+de publicación siguen pendientes bajo #4.

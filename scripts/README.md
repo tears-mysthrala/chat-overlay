@@ -42,3 +42,45 @@ On the inherited AGY commit `8ef5838`, all three lifecycle regressions fail and
 block acceptance of #25/#27. Production fixes are pending; this CI work does not
 claim the token lifecycle is complete. Publishing this intentionally red gate for
 review requires documenting any pre-push exception; CI and merge gates remain active.
+
+## Carga sostenida sintética (issue #4, REL-08)
+
+`scripts/load.exs` admite entre 10 y 86.400 segundos. Usa diez perfiles demo,
+30 fuentes y cien lectores SSE locales, con 200 eventos/s durante diez segundos
+y después 50 eventos/s. No contacta plataformas. Para medir la aplicación con
+recursos acotados, construir una imagen propia de este worktree y ejecutarla sin red:
+
+```bash
+docker build --target validation -t chat-overlay:4-soak-validation .
+mkdir -p output/load
+# Registrar la revisión y el ID de imagen junto a la evidencia; construir desde un árbol limpio.
+git rev-parse HEAD > output/load/source-commit.txt
+docker image inspect --format '{{.Id}}' chat-overlay:4-soak-validation > output/load/image-id.txt
+# 14.400 = cuatro horas; usar 86.400 para la puerta previa a publicación general.
+docker run --rm --network none --cpus 2 --memory 1g --pids-limit 128 \
+  -e ERL_FLAGS='+S 2:2' -e LOAD_SOURCE_COMMIT="$(git rev-parse HEAD)" \
+  chat-overlay:4-soak-validation mix run --no-start scripts/load.exs 14400 \
+  > output/load/soak-4h.json
+```
+
+Conservar también el código de salida, la máquina y sus recursos, la versión de
+Docker y los límites efectivos. `source_commit` es una etiqueta proporcionada por
+el operador; no acredita por sí sola que la imagen corresponda a esa revisión.
+La evidencia solo es válida si el proceso termina con código cero y el informe
+está completo; una interrupción o un contenedor terminado por OOM no es un PASS.
+
+El JSON conserva los campos previos y añade instantes UTC, duración real incluyendo
+drenaje, muestras de memoria total de BEAM y número de procesos cada minuto, y el
+máximo **muestreado**. La primera muestra es con lectores conectados y la última
+tras su parada. No son RSS del contenedor ni un pico continuo; pueden perderse picos
+entre muestras. No se fuerza GC. Como máximo se guardan 1.442 muestras en 24 horas.
+El histograma tiene como máximo 1.001 buckets: redondea hacia arriba al milisegundo
+(conservador cerca de 100 ms) y agrupa las latencias de al menos 1.000 ms en el
+último bucket. Un informe sin muestras no tiene percentil válido.
+
+El proceso falla ante pérdida de muestras, errores de lectores o p95 >=100 ms.
+Estos gates no certifican estabilidad de memoria: revisar la serie temporal y
+explicar cualquier crecimiento sostenido antes de aceptar REL-08. Tampoco prueban
+recuperación de workers, upstream, OBS, navegador ni Internet. Las pruebas de 4 y
+24 horas siguen pendientes hasta disponer de sus informes y revisión; un smoke
+de 65 segundos solo verifica el muestreo periódico y la entrega corta.
