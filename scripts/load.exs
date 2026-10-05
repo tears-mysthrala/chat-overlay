@@ -164,12 +164,17 @@ for profile <- profiles do
   source = hd(profile["sources"])
 
   warmup =
-    ChatOverlay.Event.new(source["platform"], source["channel"], "message", "load-warmup", %{
-      "message_id" => "load-warmup",
-      "author_id" => "synthetic",
-      "author_display" => "Warmup",
-      "text" => "Warmup"
-    })
+    ChatOverlay.Event.new(
+      source["platform"],
+      source["channel"],
+      "message",
+      "load-warmup",
+      %{
+        "message_id" => "load-warmup",
+        "author_id" => "synthetic",
+        "author_display" => "Warmup",
+        "text" => "Warmup"
+      }, occurred_at: DateTime.to_iso8601(DateTime.utc_now()))
 
   :ok = ChatOverlay.Store.ingest(ChatOverlay.Store.name(profile["handle"]), warmup)
 end
