@@ -18,7 +18,8 @@ se realiza la validación HTTP.
 - La cuota disponible descuenta ambos conceptos. Reemplazar una alerta libera su
   contador activo inmediatamente, pero el objeto anterior sigue cobrándose hasta
   confirmar DELETE y guardar el nuevo inventario.
-- `media_objects`, en la raíz JSON, contiene el inventario acotado a 128 objetos.
+- `media_objects`, en la raíz JSON, contiene el inventario acotado a 128 objetos,
+  con un máximo de 12 por handle para preservar capacidad entre creadores.
   Se guarda atómicamente junto a los perfiles, con el límite global de 64 KiB.
 - El proceso supervisado `MediaCleanup` intenta un objeto cada 30 segundos, en
   orden circular para no bloquear todos los objetos detrás de un fallo remoto.
@@ -28,6 +29,9 @@ se realiza la validación HTTP.
   o disco conservan el inventario para reintentar. El borrado del perfil conserva
   sus objetos retirados hasta completar la limpieza. No se entregan permisos DELETE
   al navegador.
+- La limpieza persiste el estado `deleting` bajo serialización, realiza DELETE fuera
+  de `Profiles` y confirma el resultado mediante otra mutación serializada. Una caída
+  conserva el claim para reintento; un objeto en limpieza no puede reactivarse.
 - HEAD/DELETE usan exclusivamente el endpoint configurado por el operador, HTTPS
   443, resolución a IPv4 pública fijada para la conexión, TLS verificado y respuestas
   acotadas. No se siguen redirecciones. No hay credenciales ficticias por defecto

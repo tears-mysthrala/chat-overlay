@@ -41,7 +41,18 @@ defmodule ChatOverlay.Profiles do
   end
 
   def reserve_media_upload(handle, upload), do: call_serialized({:reserve_media, handle, upload})
-  def cleanup_media(key), do: call_serialized({:cleanup_media, key})
+
+  def cleanup_media(key) do
+    # Persist an irreversible claim before remote I/O; never block the shared writer.
+    with {:ok, object} <- call_serialized({:claim_cleanup_media, key}),
+         :ok <- ChatOverlay.Media.delete_object(key) do
+      call_serialized({:finish_cleanup_media, object})
+    else
+      :absent -> :ok
+      error -> error
+    end
+  end
+
   def media_objects, do: Application.get_env(:chat_overlay, :media_objects, [])
 
   defp execute_action({:reserve_media, handle, upload}) do
@@ -62,26 +73,41 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp execute_action({:cleanup_media, key}) do
+  defp execute_action({:claim_cleanup_media, key}) do
     now = System.system_time(:second)
     objects = media_objects()
 
     case Enum.find(objects, &(&1["key"] == key)) do
       nil ->
-        :ok
+        :absent
 
       object ->
         if ChatOverlay.MediaLedger.due?(object, now) do
-          remaining = Enum.reject(objects, &(&1["key"] == key))
+          claimed = Map.put(object, "state", "deleting")
+          updated = Enum.map(objects, fn o -> if o["key"] == key, do: claimed, else: o end)
 
-          with :ok <- ChatOverlay.Media.delete_object(key),
-               :ok <- persist_profiles(Config.profiles(), remaining) do
-            Application.put_env(:chat_overlay, :media_objects, remaining)
-            :ok
+          with :ok <- persist_profiles(Config.profiles(), updated) do
+            Application.put_env(:chat_overlay, :media_objects, updated)
+            {:ok, claimed}
           end
         else
           {:error, :object_not_retired}
         end
+    end
+  end
+
+  defp execute_action({:finish_cleanup_media, claimed}) do
+    objects = media_objects()
+
+    if claimed in objects do
+      remaining = Enum.reject(objects, &(&1 == claimed))
+
+      with :ok <- persist_profiles(Config.profiles(), remaining) do
+        Application.put_env(:chat_overlay, :media_objects, remaining)
+        :ok
+      end
+    else
+      {:error, :cleanup_state_changed}
     end
   end
 
