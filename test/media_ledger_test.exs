@@ -84,6 +84,50 @@ defmodule ChatOverlay.MediaLedgerTest do
     assert Profiles.media_objects() == []
   end
 
+  test "one profile cannot consume the shared reservation inventory" do
+    for _ <- 1..12, do: assert({:ok, _} = reserve(1))
+    assert {:error, :profile_upload_reservations_full} = reserve(1)
+    other = Map.put(Config.profile("ledger"), "handle", "other")
+
+    {:ok, upload} =
+      Media.validate_upload_request(
+        %{"filename" => "alert.mp3", "content_type" => "audio/mpeg", "size" => 1},
+        0
+      )
+
+    assert {:ok, _, _} =
+             MediaLedger.reserve(
+               Profiles.media_objects(),
+               other,
+               upload,
+               System.system_time(:second)
+             )
+  end
+
+  test "slow remote cleanup does not block unrelated profile mutations" do
+    {:ok, object} = reserve(100)
+    expire(object["key"])
+    parent = self()
+
+    Application.put_env(:chat_overlay, :media_http_client, fn _, _ ->
+      send(parent, {:deleting, self()})
+
+      receive do
+        :finish_delete -> {:ok, 204, [], ""}
+      after
+        5_000 -> {:error, :timeout}
+      end
+    end)
+
+    task = Task.async(fn -> Profiles.cleanup_media(object["key"]) end)
+    assert_receive {:deleting, worker}, 1_000
+    assert [%{"state" => "deleting"}] = Profiles.media_objects()
+    mutation = Task.async(fn -> Profiles.regenerate_capability_token("ledger") end)
+    assert {:ok, _, _} = Task.await(mutation, 1_000)
+    send(worker, :finish_delete)
+    assert :ok = Task.await(task)
+  end
+
   test "replacement retains physical quota until confirmed remote cleanup", %{path: path} do
     {:ok, first} = reserve(400)
     {:ok, second} = reserve(400)

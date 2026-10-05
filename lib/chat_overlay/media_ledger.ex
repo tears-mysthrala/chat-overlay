@@ -1,6 +1,7 @@
 defmodule ChatOverlay.MediaLedger do
   @moduledoc "Bounded inventory of reserved, active and retired R2 objects."
   @limit 128
+  @profile_limit 12
   @fields ~w(handle key size category mime expires_at state)
 
   def valid?(objects) when is_list(objects) and length(objects) <= @limit do
@@ -13,7 +14,7 @@ defmodule ChatOverlay.MediaLedger do
         byte_size(o["mime"]) <= 64 and
         is_integer(o["size"]) and o["size"] in 1..2_097_152 and
         is_integer(o["expires_at"]) and o["expires_at"] > 0 and
-        o["state"] in ["pending", "active", "retired"]
+        o["state"] in ["pending", "active", "retired", "deleting"]
     end) and Enum.uniq_by(objects, & &1["key"]) == objects
   end
 
@@ -42,6 +43,9 @@ defmodule ChatOverlay.MediaLedger do
 
       length(objects) >= @limit ->
         {:error, :upload_reservations_full}
+
+      Enum.count(objects, &(&1["handle"] == handle)) >= @profile_limit ->
+        {:error, :profile_upload_reservations_full}
 
       not valid?(objects ++ [object]) ->
         {:error, :invalid_parameters}
