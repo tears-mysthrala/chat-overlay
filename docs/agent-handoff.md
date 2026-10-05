@@ -261,6 +261,39 @@ Local verification:
    - GitHub Actions CI (PR #31, Run `36852264248`): **100% PASS** (`source-and-tests` ✓, `image-security` ✓, `quality-gate` ✓).
 
 
+## Seguimiento y cumplimiento estricto de cuotas de almacenamiento R2 — issue #32
+
+- Issue: https://github.com/tears-mysthrala/chat-overlay/issues/32
+- Rama: `feat/32-media-storage-quotas`
+- Worktree: `/home/tears/github/tears-mysthrala/chat-overlay-worktrees/32-media-storage-quotas`
+
+### Alcance e Implementación:
+1. **Cómputo Atómico y Seguimiento de Cuota (`ChatOverlay.Profiles`) (SEC-05, SEC-17, ADR-0003)**:
+   - `Profiles.update_media/3`: calcula atómicamente la suma exacta de almacenamiento ocupado por los archivos R2 activos (`source: "r2"`) del perfil y actualiza de forma persistente `storage_used_bytes`.
+   - Cumplimiento estricto fail-closed: si la suma total de almacenamiento excede `storage_quota_bytes` (10 MB por defecto), la operación se rechaza atómicamente con `{:error, :quota_exceeded}` sin modificar la configuración ni el uso persistido.
+   - Liberación y deducción de cuota: al reemplazar un archivo por otro, al cambiar el origen de R2 a URL externa (`source: "external"`, 0 bytes de cuota consumida) o al eliminar una alerta (`url: ""`), el espacio correspondiente se deduce de inmediato.
+   - Trazabilidad y saneamiento de objetos huérfanos: `Profiles.update_media/3` (con `with_removed_keys: true`) y `Profiles.delete/2` detectan los identificadores de claves R2 huérfanas o reemplazadas (`removed_r2_keys`) para su posterior eliminación.
+2. **Generación de URLs Prefirmadas SigV4 DELETE para R2 (`ChatOverlay.Media`)**:
+   - `Media.generate_presigned_delete/1`: generación de peticiones y URLs prefirmadas DELETE compatibles con AWS SigV4 y Cloudflare R2 utilizando exclusivamente primitivas nativas de Erlang/OTP `:crypto` (`:crypto.mac(:hmac, :sha256, ...)`).
+   - `Media.r2_config/0`: centralización de configuración de S3/R2 a partir de variables de entorno y configuración de aplicación.
+   - `Media.presigned_delete_url/2`: helper de conveniencia para generar URLs de eliminación de claves específicas.
+   - Zero Server Footprint: las URLs DELETE son emitidas por el backend y ejecutadas de forma asíncrona por el navegador del cliente (`fetch(url, { method: "DELETE" })`), manteniendo cero consumo de red de salida y cero dependencias de SDKs pesados en el backend.
+3. **Anti-Tampering y Validación Criptográfica de Subidas (`ChatOverlay.Media`, `ChatOverlay.Web`)**:
+   - `Media.generate_upload_token/4` y `Media.verify_upload_token/3`: token criptográfico AEAD (AES-256-GCM, AAD `"media_upload_token"`) que vincula unívocamente handle, key, size y category.
+   - En `POST /api/media/presign`: emite el `upload_token` autenticado y tiene en cuenta el reemplazo de alertas de la misma categoría (`effective_used = max(0, used - existing_size)`) para no bloquear reemplazos válidos cerca del límite de cuota.
+   - En `POST /api/profiles/:handle/media`: valida el `upload_token` o verifica que el tamaño declarado sea entero positivo no superior al máximo de categoría (`max_bytes(category)`). Cualquier intento de manipulación se rechaza con 422 Unprocessable Entity.
+   - En `DELETE /api/profiles/:handle` y `POST /api/profiles/:handle/media`: devuelve las `cleanup_urls` correspondientes a objetos R2 sustituidos o desasociados.
+4. **Visualización en Panel de Creador (`priv/static/index.html`, `app.js`, `app.css`)**:
+   - Widget interactivo `#storage-quota-card` en la sección de alertas multimedia del panel del creador: barra de progreso visual con cambios dinámicos de color (verde normal, amarillo >70%, rojo >90%) y texto detallado (`X KB / Y MB usados (Z%)`).
+   - Envío de metadatos `key`, `size` y `upload_token` en la asociación de alertas.
+   - Ejecución desatendida en segundo plano de las `cleanup_urls` devueltas tanto al guardar alertas como al eliminar un perfil.
+   - Modificación 100% segura mediante `.textContent`, `.style.width` y APIs de DOM nativas, superando sin observaciones `scripts/security_static.py`.
+5. **Regresiones y Verificación**:
+   - `test/media_test.exs`: pruebas unitarias de firmas SigV4 DELETE, `presigned_delete_url/2`, emisión de tokens de subida y rechazo de tokens manipulados/forjados.
+   - `test/profiles_f2_test.exs`: pruebas de cálculo atómico de `storage_used_bytes`, rechazo por exceso de cuota, liberación de cuota ante reemplazo/eliminación/switch externo y retorno de claves R2 en eliminación de perfil.
+   - `test/web_f2_test.exs`: pruebas de integración HTTP verificando emisión de `upload_token` en presign, cálculo y actualización de cuota en `POST /api/profiles/:handle/media`, generación de `cleanup_urls` para R2, rechazo 422 de token manipulado y cuota excedida, y retorno de `cleanup_urls` en `DELETE /api/profiles/:handle`.
+   - Suite completa ExUnit: **208/208 pruebas PASS** en 9.3s (0 fallos, 0 advertencias de compilación).
+   - Verificaciones automáticas 100% PASS: `python3 scripts/security_static.py`, `python3 scripts/scan_secrets.py`, `python3 scripts/check_traceability.py`, `mix format --check-formatted`.
 ## Deuda F2 — persistencia (#51)
 
 - Rama/worktree: `fix/51-profile-persistence`, `../chat-overlay-worktrees/51-profile-persistence`; PR: #56.
@@ -281,6 +314,18 @@ Local verification:
   ciclo de vida/validación multimedia (#48/#49), controles/documentación (#41/#42)
   y pruebas web/OBS (#43). No se ha aprobado merge ni despliegue.
 
+## 2026-10-02 — #32, continuación autorizada del worktree
+
+- Rama `feat/32-media-storage-quotas`, worktree `../chat-overlay-worktrees/32-media-storage-quotas`.
+- Se conservaron los cambios heredados en `0e0e1ca` y se integró localmente #51
+  (`470348d`); PR base de persistencia: #56. La PR de cuotas debe apilarse sobre ella.
+- Reservas persistentes y serializadas, claves por perfil, tickets temporales,
+  firma de longitud/MIME, verificación HEAD con fixtures, cuota pendiente y limpieza
+  supervisada con reintentos. DELETE ya no depende del navegador.
+- Ver `docs/media-storage.md`: SEC-17/#49 no está cumplido, no hay prueba R2 real;
+  #48 mantiene conciliación heredada, reautenticación y visibilidad de borrados pendientes.
+- El documento incorpora `media_objects`; conservar backup e inventario para rollback.
+  No desplegar ni hacer merge sin autorización humana.
 ## Evidencia para carga sostenida — issue #4 (2026-10-02)
 
 - PR: https://github.com/tears-mysthrala/chat-overlay/pull/33 (lista para revisión; CI/revisión humana pendientes al redactar).

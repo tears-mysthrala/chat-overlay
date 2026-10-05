@@ -85,6 +85,14 @@
 
     const saveAlertsBtn = document.getElementById("save-alerts-btn");
     const saveAlertsFeedback = document.getElementById("save-alerts-feedback");
+    const storageQuotaBar = document.getElementById("storage-quota-bar");
+    const storageQuotaText = document.getElementById("storage-quota-text");
+
+    function formatBytes(bytes) {
+      if (!bytes || bytes <= 0) return "0 KB";
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    }
 
     // Platform Accounts (OAuth 2.0 PKCE)
     const twitchStatusBadge = document.getElementById("twitch-status-badge");
@@ -125,6 +133,20 @@
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=••••••••••••••••••••••••••••••••`;
       } else {
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}`;
+      }
+
+      // Populate storage quota
+      const pendingBytes = p.storage_pending_bytes || 0;
+      const usedBytes = (p.storage_used_bytes || 0) + pendingBytes;
+      const quotaBytes = p.storage_quota_bytes || 10485760;
+      const percent = Math.min(100, Math.round((usedBytes / quotaBytes) * 100));
+
+      if (storageQuotaBar) {
+        storageQuotaBar.style.width = `${percent}%`;
+        storageQuotaBar.className = "quota-bar" + (percent > 90 ? " danger" : (percent > 70 ? " warning" : ""));
+      }
+      if (storageQuotaText) {
+        storageQuotaText.textContent = `${formatBytes(usedBytes)} / ${formatBytes(quotaBytes)} (${percent}%) · pendientes de subida o limpieza: ${formatBytes(pendingBytes)}`;
       }
 
       // Populate media
@@ -502,12 +524,20 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": file.type || "audio/mpeg" }
+              headers: { "Content-Type": presignData.content_type }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de audio a R2");
             }
-            soundResult = { url: presignData.public_url, source: "r2" };
+            soundResult = {
+              url: presignData.public_url,
+              source: "r2",
+              key: presignData.key,
+              size: presignData.size || file.size,
+              upload_token: presignData.upload_token
+            };
+          } else if (audioTypeUpload && audioTypeUpload.checked && p.media && p.media.alert_sound) {
+            soundResult = p.media.alert_sound;
           } else if (audioUrlInput && audioUrlInput.value.trim()) {
             soundResult = { url: audioUrlInput.value.trim(), source: "external" };
           } else {
@@ -540,12 +570,20 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": file.type || "image/png" }
+              headers: { "Content-Type": presignData.content_type }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de imagen a R2");
             }
-            imageResult = { url: presignData.public_url, source: "r2" };
+            imageResult = {
+              url: presignData.public_url,
+              source: "r2",
+              key: presignData.key,
+              size: presignData.size || file.size,
+              upload_token: presignData.upload_token
+            };
+          } else if (imageTypeUpload && imageTypeUpload.checked && p.media && p.media.alert_image) {
+            imageResult = p.media.alert_image;
           } else if (imageUrlInput && imageUrlInput.value.trim()) {
             imageResult = { url: imageUrlInput.value.trim(), source: "external" };
           } else {

@@ -4,8 +4,11 @@ defmodule ChatOverlay.ProfilesF2Test do
 
   setup do
     original_profiles = Application.get_env(:chat_overlay, :profiles, [])
+    original_objects = Application.get_env(:chat_overlay, :media_objects, [])
+    Application.put_env(:chat_overlay, :media_objects, [])
 
     on_exit(fn ->
+      Application.put_env(:chat_overlay, :media_objects, original_objects)
       Application.put_env(:chat_overlay, :profiles, original_profiles)
     end)
 
@@ -112,5 +115,99 @@ defmodule ChatOverlay.ProfilesF2Test do
     assert summary["can_upload"] == false
     assert summary["storage_quota_bytes"] == 10_485_760
     assert summary["storage_used_bytes"] == 0
+  end
+
+  test "atomic computation of storage_used_bytes and quota enforcement (SEC-05, SEC-17)" do
+    # 1. Setting R2 media computes exact storage_used_bytes
+    media = %{
+      "alert_sound" => %{
+        "url" => "https://cdn.example.com/audio/alert1.mp3",
+        "source" => "r2",
+        "key" => "audio/alert1.mp3",
+        "size" => 1_000_000
+      },
+      "alert_image" => %{
+        "url" => "https://cdn.example.com/image/badge1.png",
+        "source" => "r2",
+        "key" => "image/badge1.png",
+        "size" => 300_000
+      }
+    }
+
+    assert {:ok, p1} = Profiles.update_media("f2test", media)
+    assert p1["storage_used_bytes"] == 1_300_000
+
+    # 2. Reject update if new total storage exceeds quota (default 10 MB = 10_485_760)
+    oversized = %{
+      "alert_sound" => %{
+        "url" => "https://cdn.example.com/audio/huge.mp3",
+        "source" => "r2",
+        "key" => "audio/huge.mp3",
+        "size" => 10_200_000
+      }
+    }
+
+    # 10_200_000 + 300_000 = 10_500_000 > 10_485_760
+    assert {:error, :quota_exceeded} = Profiles.update_media("f2test", oversized)
+
+    # 3. Replacing an R2 file deducts old size and reports old key in removed_keys
+    replacement = %{
+      "alert_sound" => %{
+        "url" => "https://cdn.example.com/audio/alert2.mp3",
+        "source" => "r2",
+        "key" => "audio/alert2.mp3",
+        "size" => 500_000
+      }
+    }
+
+    assert {:ok, p2, removed_keys} =
+             Profiles.update_media("f2test", replacement, with_removed_keys: true)
+
+    assert p2["storage_used_bytes"] == 800_000
+    assert "audio/alert1.mp3" in removed_keys
+
+    # 4. Switching R2 to external frees the R2 quota
+    external_switch = %{
+      "alert_image" => %{
+        "url" => "https://cdn.discordapp.com/emojis/external.png",
+        "source" => "external"
+      }
+    }
+
+    assert {:ok, p3, removed_keys2} =
+             Profiles.update_media("f2test", external_switch, with_removed_keys: true)
+
+    assert p3["storage_used_bytes"] == 500_000
+    assert "image/badge1.png" in removed_keys2
+
+    # 5. Removing an alert (empty URL) frees remaining R2 quota
+    removal = %{
+      "alert_sound" => %{"url" => ""}
+    }
+
+    assert {:ok, p4, removed_keys3} =
+             Profiles.update_media("f2test", removal, with_removed_keys: true)
+
+    assert p4["storage_used_bytes"] == 0
+    assert "audio/alert2.mp3" in removed_keys3
+  end
+
+  test "deletion preserves untracked legacy R2 references pending reconciliation" do
+    Profiles.update_media("f2test", %{
+      "alert_sound" => %{
+        "url" => "https://cdn.example.com/audio/del_alert.mp3",
+        "source" => "r2",
+        "key" => "audio/del_alert.mp3",
+        "size" => 100_000
+      }
+    })
+
+    assert {:error, :media_inventory_required} =
+             Profiles.delete("f2test", with_removed_keys: true)
+
+    assert Profiles.get("f2test")["media"]["alert_sound"]["key"] == "audio/del_alert.mp3"
+
+    # Nonexistent handle returns 404/not_found
+    assert {:error, :not_found} = Profiles.delete("nonexistent_profile", with_removed_keys: true)
   end
 end

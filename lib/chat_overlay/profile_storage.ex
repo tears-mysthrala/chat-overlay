@@ -2,8 +2,8 @@ defmodule ChatOverlay.ProfileStorage do
   @moduledoc "Atomic, private replacement of the bounded operator profile document."
   @max_bytes 65_536
 
-  def write(path, profiles) do
-    json = ChatOverlay.JSON.encode(%{"profiles" => profiles})
+  def write(path, profiles, objects \\ []) do
+    json = ChatOverlay.JSON.encode(%{"profiles" => profiles, "media_objects" => objects})
     dir = Path.dirname(path)
 
     cond do

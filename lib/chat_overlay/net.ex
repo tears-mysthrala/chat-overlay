@@ -1,7 +1,10 @@
 defmodule ChatOverlay.Net do
   @moduledoc "Fixed destinations, pinned public IPs, verified TLS, bounded passive reads."
   @hosts ~w(api.twitch.tv id.twitch.tv eventsub.wss.twitch.tv www.googleapis.com oauth2.googleapis.com api.kick.com gql.twitch.tv)
-  def open(host) when host in @hosts do
+  def open(host) when host in @hosts, do: connect_public(host)
+  def open(_), do: {:error, :destination_rejected}
+
+  defp connect_public(host) do
     with {:ok, addresses} <- :inet.getaddrs(String.to_charlist(host), :inet),
          true <- addresses != [] and Enum.all?(addresses, &public_ip?/1) do
       Mint.HTTP.connect(:https, hd(addresses), 443,
@@ -22,7 +25,6 @@ defmodule ChatOverlay.Net do
     end
   end
 
-  def open(_), do: {:error, :destination_rejected}
   # IPv4 only for outbound connections. Deny non-global and special-purpose ranges.
   def public_ip?({a, b, c, d}) when a in 1..223 and b in 0..255 and c in 0..255 and d in 0..255 do
     not (a in [10, 127] or (a == 100 and b in 64..127) or (a == 169 and b == 254) or
@@ -34,7 +36,30 @@ defmodule ChatOverlay.Net do
   def public_ip?(_), do: false
 
   def request(host, method, path, headers \\ [], body \\ "") do
-    with true <- valid_request?(method, path, headers), {:ok, conn} <- open(host) do
+    if method in ["GET", "POST"],
+      do: request_with(host, method, path, headers, body, &open/1),
+      else: {:error, :upstream_unavailable}
+  end
+
+  # Only the operator-configured storage endpoint can receive storage methods.
+  def storage_request(method, url) when method in ["HEAD", "DELETE"] do
+    uri = URI.parse(url)
+    configured = URI.parse(ChatOverlay.Media.r2_config()[:endpoint] || "")
+
+    if uri.scheme == "https" and uri.port == 443 and is_binary(uri.host) and
+         uri.host == configured.host and configured.scheme == "https" and
+         configured.port == 443 and is_nil(uri.userinfo) and is_nil(uri.fragment) do
+      path = (uri.path || "/") <> if(uri.query, do: "?" <> uri.query, else: "")
+      request_with(uri.host, method, path, [], "", &connect_public/1)
+    else
+      {:error, :destination_rejected}
+    end
+  end
+
+  def storage_request(_, _), do: {:error, :destination_rejected}
+
+  defp request_with(host, method, path, headers, body, opener) do
+    with true <- valid_request?(method, path, headers), {:ok, conn} <- opener.(host) do
       try do
         case Mint.HTTP.request(
                conn,
@@ -74,7 +99,7 @@ defmodule ChatOverlay.Net do
   end
 
   defp valid_request?(method, path, headers) do
-    method in ["GET", "POST"] and is_binary(path) and byte_size(path) <= 4096 and
+    method in ["GET", "POST", "HEAD", "DELETE"] and is_binary(path) and byte_size(path) <= 4096 and
       String.starts_with?(path, "/") and not String.contains?(path, ["\r", "\n", " "]) and
       Enum.all?(headers, fn {k, v} ->
         is_binary(k) and is_binary(v) and byte_size(v) <= 4096 and

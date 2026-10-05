@@ -5,7 +5,8 @@ defmodule ChatOverlay.Media do
   external URL sanitization, and S3/Cloudflare R2 Presigned PUT URL generation
   using AWS SigV4.
 
-  Fulfills SEC-05, SEC-17 and ADR 0003.
+  Implements request validation from ADR 0003; actual-format validation (SEC-17)
+  remains tracked separately in #49.
   """
 
   @max_audio_bytes 2_097_152
@@ -52,8 +53,8 @@ defmodule ChatOverlay.Media do
     content_type = params["content_type"] || params[:content_type] || ""
     size = params["size"] || params[:size] || 0
 
-    with true <- is_binary(filename) and String.length(filename) > 0,
-         true <- is_binary(content_type) and String.length(content_type) > 0,
+    with true <- is_binary(filename) and byte_size(filename) in 1..255,
+         true <- is_binary(content_type) and byte_size(content_type) in 1..64,
          true <- is_integer(size) and size > 0,
          {:ok, category, ext} <- classify_extension(filename),
          {:ok, mime} <- match_mime(ext, content_type),
@@ -128,12 +129,24 @@ defmodule ChatOverlay.Media do
 
       canonical_uri = "/" <> bucket <> "/" <> URI.encode(key)
 
+      size = config[:size] || config["size"]
+
+      upload_headers =
+        if is_integer(size) and size > 0 and is_binary(content_type) do
+          [{"content-length", to_string(size)}, {"content-type", content_type}, {"host", host}]
+        else
+          [{"host", host}]
+        end
+
+      signed_headers = Enum.map_join(upload_headers, ";", &elem(&1, 0))
+      canonical_headers = Enum.map_join(upload_headers, "", fn {k, v} -> "#{k}:#{v}\n" end)
+
       query_params = [
         {"X-Amz-Algorithm", "AWS4-HMAC-SHA256"},
         {"X-Amz-Credential", "#{access_key_id}/#{credential_scope}"},
         {"X-Amz-Date", amz_date},
         {"X-Amz-Expires", to_string(expires_in)},
-        {"X-Amz-SignedHeaders", "host"}
+        {"X-Amz-SignedHeaders", signed_headers}
       ]
 
       canonical_query =
@@ -141,8 +154,6 @@ defmodule ChatOverlay.Media do
           "#{URI.encode(k, &URI.char_unreserved?/1)}=#{URI.encode(v, &URI.char_unreserved?/1)}"
         end)
 
-      canonical_headers = "host:#{host}\n"
-      signed_headers = "host"
       payload_hash = "UNSIGNED-PAYLOAD"
 
       canonical_request =
@@ -185,17 +196,293 @@ defmodule ChatOverlay.Media do
           "#{endpoint}#{canonical_uri}"
         end
 
+      handle = config[:handle] || config["handle"]
+      size = config[:size] || config["size"]
+      category = config[:category] || config["category"]
+
+      upload_token =
+        if is_binary(handle) and is_integer(size) and (is_atom(category) or is_binary(category)) do
+          case generate_upload_token(handle, key, size, category) do
+            {:ok, token} -> token
+            _ -> nil
+          end
+        else
+          nil
+        end
+
+      result = %{
+        upload_url: upload_url,
+        public_url: public_url,
+        key: key,
+        content_type: content_type,
+        expires_in: expires_in
+      }
+
+      result =
+        if upload_token do
+          Map.put(result, :upload_token, upload_token)
+        else
+          result
+        end
+
+      {:ok, result}
+    else
+      _ -> {:error, :invalid_s3_configuration}
+    end
+  end
+
+  @doc """
+  Returns R2/S3 configuration map resolved from environment variables and application env.
+  """
+  @spec r2_config() :: map()
+  def r2_config do
+    %{
+      endpoint:
+        System.get_env("R2_ENDPOINT") ||
+          Application.get_env(:chat_overlay, :r2_endpoint),
+      bucket:
+        System.get_env("R2_BUCKET") ||
+          Application.get_env(:chat_overlay, :r2_bucket),
+      access_key_id:
+        System.get_env("R2_ACCESS_KEY_ID") ||
+          Application.get_env(:chat_overlay, :r2_access_key_id),
+      secret_access_key:
+        System.get_env("R2_SECRET_ACCESS_KEY") ||
+          Application.get_env(:chat_overlay, :r2_secret_access_key),
+      public_cdn_base:
+        System.get_env("R2_PUBLIC_CDN") ||
+          Application.get_env(
+            :chat_overlay,
+            :r2_public_cdn
+          ),
+      region:
+        System.get_env("R2_REGION") ||
+          Application.get_env(:chat_overlay, :r2_region, "auto")
+    }
+  end
+
+  def configured? do
+    config = r2_config()
+
+    Enum.all?([:access_key_id, :secret_access_key, :bucket], fn key ->
+      is_binary(config[key]) and byte_size(config[key]) in 1..256
+    end) and https_base?(config[:endpoint]) and https_base?(config[:public_cdn_base])
+  end
+
+  defp https_base?(url) when is_binary(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host, port: 443, userinfo: nil, query: nil, fragment: nil}
+      when is_binary(host) ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
+  defp https_base?(_), do: false
+
+  @doc """
+  Generates an S3 / Cloudflare R2 Presigned DELETE URL using AWS Signature Version 4 (SigV4).
+  Does not require third-party AWS SDKs; implemented with native Erlang/OTP `:crypto`.
+  """
+  @spec generate_presigned_delete(map()) :: {:ok, map()} | {:error, term()}
+  def generate_presigned_delete(config) when is_map(config),
+    do: generate_presigned_metadata(config, "DELETE")
+
+  defp generate_presigned_metadata(config, method) do
+    endpoint = config[:endpoint] || config["endpoint"]
+    bucket = config[:bucket] || config["bucket"]
+    key = config[:key] || config["key"]
+    access_key_id = config[:access_key_id] || config["access_key_id"]
+    secret_access_key = config[:secret_access_key] || config["secret_access_key"]
+    region = config[:region] || config["region"] || "auto"
+    expires_in = config[:expires_in] || config["expires_in"] || 300
+
+    with true <- is_binary(endpoint) and is_binary(bucket) and is_binary(key),
+         true <- is_binary(access_key_id) and is_binary(secret_access_key) do
+      now = DateTime.utc_now()
+      date_stamp = Calendar.strftime(now, "%Y%m%d")
+      amz_date = Calendar.strftime(now, "%Y%m%dT%H%M%SZ")
+
+      uri = URI.parse(endpoint)
+      host = uri.host
+      service = "s3"
+      credential_scope = "#{date_stamp}/#{region}/#{service}/aws4_request"
+
+      canonical_uri = "/" <> bucket <> "/" <> URI.encode(key)
+
+      query_params = [
+        {"X-Amz-Algorithm", "AWS4-HMAC-SHA256"},
+        {"X-Amz-Credential", "#{access_key_id}/#{credential_scope}"},
+        {"X-Amz-Date", amz_date},
+        {"X-Amz-Expires", to_string(expires_in)},
+        {"X-Amz-SignedHeaders", "host"}
+      ]
+
+      canonical_query =
+        Enum.map_join(query_params, "&", fn {k, v} ->
+          "#{URI.encode(k, &URI.char_unreserved?/1)}=#{URI.encode(v, &URI.char_unreserved?/1)}"
+        end)
+
+      canonical_headers = "host:#{host}\n"
+      signed_headers = "host"
+      payload_hash = "UNSIGNED-PAYLOAD"
+
+      canonical_request =
+        Enum.join(
+          [
+            method,
+            canonical_uri,
+            canonical_query,
+            canonical_headers,
+            signed_headers,
+            payload_hash
+          ],
+          "\n"
+        )
+
+      string_to_sign =
+        Enum.join(
+          [
+            "AWS4-HMAC-SHA256",
+            amz_date,
+            credential_scope,
+            :crypto.hash(:sha256, canonical_request) |> Base.encode16(case: :lower)
+          ],
+          "\n"
+        )
+
+      signing_key = derive_signing_key(secret_access_key, date_stamp, region, service)
+
+      signature =
+        :crypto.mac(:hmac, :sha256, signing_key, string_to_sign)
+        |> Base.encode16(case: :lower)
+
+      delete_url =
+        "#{endpoint}#{canonical_uri}?#{canonical_query}&X-Amz-Signature=#{signature}"
+
       {:ok,
        %{
-         upload_url: upload_url,
-         public_url: public_url,
+         delete_url: delete_url,
          key: key,
-         content_type: content_type,
          expires_in: expires_in
        }}
     else
       _ -> {:error, :invalid_s3_configuration}
     end
+  end
+
+  @doc """
+  Generates a presigned DELETE URL for the given key using default R2 configuration.
+  """
+  @spec presigned_delete_url(String.t(), keyword() | map()) :: {:ok, map()} | {:error, term()}
+  def presigned_delete_url(key, opts \\ %{})
+
+  def presigned_delete_url(key, opts) when is_binary(key) and is_list(opts) do
+    presigned_delete_url(key, Enum.into(opts, %{}))
+  end
+
+  def presigned_delete_url(key, opts) when is_binary(key) and is_map(opts) do
+    config =
+      r2_config()
+      |> Map.put(:key, key)
+      |> Map.merge(opts)
+
+    generate_presigned_delete(config)
+  end
+
+  def presigned_delete_url(_, _), do: {:error, :invalid_parameters}
+
+  @doc """
+  Generates an authenticated AEAD upload token binding handle, key, size, and category.
+  Prevents client tampering with media size or profile associations.
+  """
+  @spec generate_upload_token(String.t(), String.t(), non_neg_integer(), atom() | String.t()) ::
+          {:ok, String.t()} | {:error, term()}
+  def generate_upload_token(handle, key, size, category)
+      when is_binary(handle) and is_binary(key) and is_integer(size) and size >= 0 do
+    secret = ChatOverlay.OAuth.encryption_key()
+
+    payload =
+      ChatOverlay.JSON.encode(%{
+        "handle" => handle,
+        "key" => key,
+        "size" => size,
+        "category" => to_string(category),
+        "expires_at" => System.system_time(:second) + 300
+      })
+
+    ChatOverlay.Crypto.encrypt_aead(payload, secret, "media_upload_token")
+  end
+
+  def generate_upload_token(_, _, _, _), do: {:error, :invalid_parameters}
+
+  @doc """
+  Verifies an AEAD upload token against handle and key. Returns verified size and category.
+  """
+  @spec verify_upload_token(String.t(), String.t(), String.t()) ::
+          {:ok, %{size: non_neg_integer(), category: String.t()}} | {:error, term()}
+  def verify_upload_token(token, handle, key)
+      when is_binary(token) and byte_size(token) <= 8192 and is_binary(handle) and is_binary(key) do
+    secret = ChatOverlay.OAuth.encryption_key()
+
+    with {:ok, json} <- ChatOverlay.Crypto.decrypt_aead(token, secret, "media_upload_token"),
+         {:ok, data} when is_map(data) <- ChatOverlay.JSON.decode(json),
+         true <-
+           data["handle"] == handle and data["key"] == key and is_integer(data["size"]) and
+             data["size"] > 0 and data["category"] in ["audio", "image"] and
+             is_integer(data["expires_at"]) and data["expires_at"] > System.system_time(:second) and
+             data["expires_at"] <= System.system_time(:second) + 300 do
+      {:ok, %{size: data["size"], category: data["category"]}}
+    else
+      _ -> {:error, :invalid_upload_token}
+    end
+  end
+
+  def verify_upload_token(_, _, _), do: {:error, :invalid_upload_token}
+
+  def public_url(key) when is_binary(key) do
+    config = r2_config()
+    base = config[:public_cdn_base]
+
+    if is_binary(base) and String.starts_with?(base, "https://") do
+      {:ok, String.trim_trailing(base, "/") <> "/" <> URI.encode(key)}
+    else
+      {:error, :invalid_s3_configuration}
+    end
+  end
+
+  # HEAD checks the stored size and declared type, not its actual format.
+  def verify_object(object) do
+    with {:ok, signed} <-
+           generate_presigned_metadata(Map.put(r2_config(), :key, object["key"]), "HEAD"),
+         {:ok, 200, headers, _} <- storage_request("HEAD", signed.delete_url),
+         true <- Enum.count(headers, fn {k, _} -> String.downcase(k) == "content-length" end) == 1,
+         {_, size} <- Enum.find(headers, fn {k, _} -> String.downcase(k) == "content-length" end),
+         {_, mime} <- Enum.find(headers, fn {k, _} -> String.downcase(k) == "content-type" end),
+         true <- size == to_string(object["size"]) and mime == object["mime"] do
+      :ok
+    else
+      _ -> {:error, :stored_object_mismatch}
+    end
+  end
+
+  def delete_object(key) do
+    with {:ok, signed} <- presigned_delete_url(key),
+         {:ok, status, _, _} <- storage_request("DELETE", signed.delete_url),
+         true <- status in [200, 204, 404] do
+      :ok
+    else
+      _ -> {:error, :storage_cleanup_failed}
+    end
+  end
+
+  defp storage_request(method, url) do
+    client =
+      Application.get_env(:chat_overlay, :media_http_client, &ChatOverlay.Net.storage_request/2)
+
+    client.(method, url)
   end
 
   # Helpers
@@ -236,6 +523,7 @@ defmodule ChatOverlay.Media do
     filename
     |> Path.basename()
     |> String.replace(~r/[^a-zA-Z0-9_\-\.]/, "_")
+    |> String.replace("..", "_")
     |> String.slice(0, 64)
   end
 
