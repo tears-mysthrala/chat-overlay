@@ -356,6 +356,14 @@ Local verification:
   `Profiles.delete` espera terminar hijos, pero Registry procesa sus notificaciones
   DOWN de forma asíncrona. La prueba ahora monitoriza muerte de ambos PIDs y exige
   retirar ambas entradas con un límite de 1 s; no se salta ninguna aserción.
+
+## 2026-10-02 — selección ASVS (#42)
+
+- Rama/worktree `docs/42-asvs-evidence` / `../chat-overlay-worktrees/42-asvs-evidence`.
+- `docs/asvs-f2.md`: 43 IDs de ASVS 5.0.0 verificados contra fuente oficial fijada,
+  nivel, evidencia local, estado y deuda; no se presume PASS de filas no evaluadas.
+- #42 sigue abierto: política de sesiones, mix-up, cookies/cliente, matriz exhaustiva
+  de rutas y revisión humana. #43 hará evidencia navegador/OBS por separado.
 ## Evidencia para carga sostenida — issue #4 (2026-10-02)
 
 - PR: https://github.com/tears-mysthrala/chat-overlay/pull/33 (lista para revisión; CI/revisión humana pendientes al redactar).

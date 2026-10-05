@@ -78,6 +78,11 @@ ExUnit utiliza fixtures sintéticas, transporte HTTP local, mock de WebSocket y 
 - **Módulo multimedia R2 (SEC-05 / SEC-15)**: generación de URLs prefirmadas SigV4 ejecutada íntegramente en Erlang/OTP nativo (`ChatOverlay.Media.generate_presigned_put_url/5`). Cero paso de bytes por el servidor backend. Cuotas de almacenamiento por perfil enforceadas en memoria y persistidas. Bloqueo determinista de subidas `.svg` para neutralizar vectores XSS en CEF.
 - **Diferimiento de Kick**: por directriz del operador Kalista en el issue #15, el conector de Kick se difiere formalmente para evitar la deuda técnica derivada de los frecuentes breaking changes de su API de desarrolladores (4-5 alteraciones en el último año) y de la fricción operativa de su portal de desarrollo. La entrega queda consolidada y certificada sobre Twitch, YouTube y OBS Studio.
 
+## Mapeo ASVS actual (#42)
+
+La [selección ASVS 5.0.0](asvs-f2.md) contrasta IDs y niveles con una revisión fija
+del repositorio oficial. Mantiene estados parciales, no validados y pendientes;
+no constituye evaluación L2 completa ni autorización de publicación.
 
 ### Preparación de evidencia de carga sostenida — issue #4
 
