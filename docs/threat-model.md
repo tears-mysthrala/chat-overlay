@@ -33,3 +33,23 @@ Las URLs externas se cargan en el navegador; la comprobación DNS al guardarlas 
 es pinning de futuras peticiones del navegador ni inspección del archivo. Su uso
 requiere origen confiable y política CSP; no se declara eliminada toda SSRF/XSS por
 validar una extensión. No se publican aquí reproducciones sensibles (DEV-09).
+## Frontera de recuperación offline — #40
+
+Activos: clave maestra, documento de perfiles, credenciales cifradas y copias.
+Solo el operador autorizado ejecuta `scripts/recovery.exs`; las rutas, archivos y
+artefactos importados requieren validación, aunque procedan de una copia local.
+La herramienta se ejecuta con `--no-start`, sin conectores ni configuración real
+de red. No establece una frontera contra un administrador del host comprometido.
+
+| Abuso | Control | Riesgo residual |
+| --- | --- | --- |
+| Clave expuesta o ruta de clave no privada | Archivo regular sin symlink, permisos POSIX privados, tamaño acotado; claves fuera de argumentos/logs | lstat/read no es una apertura inmune a carreras: directorio y host deben ser confiables; Windows ACL no validada |
+| Copia manipulada, truncada o con otra clave | AEAD, AAD de dominio/versión/key_id, límites y validación del documento y credenciales | El cifrado no impide restaurar una copia válida pero antigua |
+| Destino existente o symlink | Staging privado y publicación por hard-link sin sobrescritura | Directorio padre debe ser confiable; fsync de archivo no acredita durabilidad del directorio |
+| Restauración resucita permisos o refresh tokens | Parada previa de escritores, conciliación y reautenticación antes del cambio | La herramienta no comprueba parada ni revoca upstream; decisión del operador |
+| Rotación incompleta o mezcla de generaciones | Verificación de todas las credenciales, salida nueva, cambio coordinado de documento/clave | Cookies y OAuth pendientes se invalidan; capabilities OBS y secretos externos necesitan revocación separada |
+
+Las pruebas sintéticas de `recovery_test.exs` verifican errores, integridad y
+publicación privada; no son un ensayo de recuperación de producción ni de corte
+eléctrico. Conservar inventario multimedia al restaurar y custodiar las claves
+separadas de las copias, con retención y eliminación autorizadas.
