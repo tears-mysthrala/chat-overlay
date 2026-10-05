@@ -96,6 +96,14 @@ defmodule LoadReader do
 
         Enum.each(events, fn event ->
           case event do
+            %{"event" => "message", "upstream_id" => "load-warmup"} ->
+              :ets.insert(metrics, {{:ready_reader, self()}, true})
+
+            %{"event" => "snapshot", "payload" => %{"messages" => messages}} ->
+              if Enum.any?(messages, &(&1["upstream_id"] == "load-warmup")) do
+                :ets.insert(metrics, {{:ready_reader, self()}, true})
+              end
+
             %{"event" => "message", "upstream_id" => "load:" <> sent} ->
               {start, ""} = Integer.parse(sent)
               us = System.monotonic_time(:microsecond) - start
@@ -127,6 +135,48 @@ for _ <- readers do
     15_000 -> raise "viewer startup timeout"
   end
 end
+
+# Source demand starts asynchronously and Kick's initial clear invalidates replay.
+# Start measurement only after workers and every reader have crossed that barrier.
+ready_deadline = System.monotonic_time(:millisecond) + 15_000
+
+await_ready = fn await_ready, predicate ->
+  cond do
+    predicate.() ->
+      :ok
+
+    System.monotonic_time(:millisecond) >= ready_deadline ->
+      raise "load warmup timeout"
+
+    true ->
+      Process.sleep(25)
+      await_ready.(await_ready, predicate)
+  end
+end
+
+await_ready.(await_ready, fn ->
+  Enum.all?(profiles, fn profile ->
+    Enum.all?(profile["sources"], &ChatOverlay.Source.active?/1)
+  end)
+end)
+
+for profile <- profiles do
+  source = hd(profile["sources"])
+
+  warmup =
+    ChatOverlay.Event.new(source["platform"], source["channel"], "message", "load-warmup", %{
+      "message_id" => "load-warmup",
+      "author_id" => "synthetic",
+      "author_display" => "Warmup",
+      "text" => "Warmup"
+    })
+
+  :ok = ChatOverlay.Store.ingest(ChatOverlay.Store.name(profile["handle"]), warmup)
+end
+
+await_ready.(await_ready, fn ->
+  :ets.select_count(metrics, [{{{:ready_reader, :_}, true}, [], [true]}]) == 100
+end)
 
 memory_before = :erlang.memory(:total)
 start = System.monotonic_time(:millisecond)
