@@ -40,6 +40,9 @@ defmodule ChatOverlay.Stream do
                   "Unauthorized: Capability Token Invalid"
                 )
               else
+                {preview_cursor, _} = Store.preview_since(Store.name(handle), nil)
+                Process.put({__MODULE__, :preview_cursor}, preview_cursor)
+
                 conn =
                   conn
                   |> Plug.Conn.merge_resp_headers(
@@ -186,6 +189,12 @@ defmodule ChatOverlay.Stream do
 
         response = if data, do: Plug.Conn.chunk(conn, data), else: {:ok, conn}
 
+        response =
+          case response do
+            {:ok, conn} -> preview_chunk(conn, handle, is_overlay, token)
+            error -> error
+          end
+
         case response do
           {:ok, conn} ->
             receive do
@@ -274,6 +283,30 @@ defmodule ChatOverlay.Stream do
         end
     end
   end
+
+  defp preview_chunk(conn, handle, true, token) do
+    {cursor, event} =
+      Store.preview_since(Store.name(handle), Process.get({__MODULE__, :preview_cursor}))
+
+    Process.put({__MODULE__, :preview_cursor}, cursor)
+
+    with event when is_map(event) <- event,
+         {:ok, _} <- ChatOverlay.Profiles.verify_capability_token(handle, token),
+         profile when is_map(profile) <- Config.profile(handle),
+         {:ok, payload} <-
+           ChatOverlay.MediaPreview.payload(profile, ChatOverlay.Profiles.media_objects()),
+         true <- Map.drop(event, ["id", "expires_at"]) == payload do
+      Plug.Conn.chunk(conn, [
+        "event: media_preview\ndata: ",
+        ChatOverlay.JSON.encode(event),
+        "\n\n"
+      ])
+    else
+      _ -> {:ok, conn}
+    end
+  end
+
+  defp preview_chunk(conn, _, _, _), do: {:ok, conn}
 
   def filter_events(events, platforms) do
     Enum.flat_map(events, fn

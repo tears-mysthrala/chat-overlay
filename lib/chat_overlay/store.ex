@@ -19,6 +19,8 @@ defmodule ChatOverlay.Store do
   def ingest(server, event), do: GenServer.call(server, {:ingest, event})
   def read(server, cursor \\ nil), do: GenServer.call(server, {:read, cursor})
   def update_sources(server, sources), do: GenServer.call(server, {:update_sources, sources})
+  def preview(server, payload), do: GenServer.call(server, {:preview, payload})
+  def preview_since(server, sequence), do: GenServer.call(server, {:preview_since, sequence})
 
   def init(opts) do
     Process.send_after(self(), :expire, 1000)
@@ -27,6 +29,9 @@ defmodule ChatOverlay.Store do
      %{
        epoch: Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
        sequence: 0,
+       preview_sequence: 0,
+       preview: nil,
+       preview_at: nil,
        messages: [],
        states: %{},
        ring: [],
@@ -38,6 +43,32 @@ defmodule ChatOverlay.Store do
   end
 
   def format_status(status), do: Map.put(status, :state, :redacted_overlay_state)
+
+  def handle_call({:preview, payload}, _, s) do
+    now = System.monotonic_time(:millisecond)
+
+    if s.preview_at != nil and now - s.preview_at < 10_000 do
+      {:reply, {:error, :cooldown}, s}
+    else
+      sequence = s.preview_sequence + 1
+
+      event =
+        Map.merge(payload, %{
+          "id" => Base.url_encode64(:crypto.strong_rand_bytes(18), padding: false),
+          "expires_at" => System.system_time(:millisecond) + 10_000
+        })
+
+      {:reply, :ok, %{s | preview_sequence: sequence, preview: event, preview_at: now}}
+    end
+  end
+
+  def handle_call({:preview_since, sequence}, _, s) do
+    event =
+      if is_integer(sequence) and sequence < s.preview_sequence and s.preview != nil and
+           s.preview["expires_at"] > System.system_time(:millisecond), do: s.preview, else: nil
+
+    {:reply, {s.preview_sequence, event}, s}
+  end
 
   def handle_call({:ingest, e}, _, s) do
     if Event.valid?(e) and MapSet.member?(s.sources, source(e)) do

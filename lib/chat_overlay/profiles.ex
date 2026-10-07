@@ -47,6 +47,8 @@ defmodule ChatOverlay.Profiles do
 
   def reserve_media_upload(handle, upload), do: call_serialized({:reserve_media, handle, upload})
 
+  def preview_media(handle, authorize), do: call_serialized({:preview_media, handle, authorize})
+
   def validate_media_upload(handle, key, token, authorize \\ fn -> :ok end) do
     with :ok <- authorize.(),
          {:ok, verified} <- ChatOverlay.Media.verify_upload_token(token, handle, key) do
@@ -117,6 +119,16 @@ defmodule ChatOverlay.Profiles do
          "source" => ChatOverlay.Media.object_backend(ready),
          "upload_token" => token
        }}
+    end
+  end
+
+  defp execute_action({:preview_media, handle, authorize}) do
+    with :ok <- authorize.(),
+         profile when is_map(profile) <- Config.profile(handle),
+         {:ok, payload} <- ChatOverlay.MediaPreview.payload(profile, media_objects()) do
+      Store.preview(Store.name(handle), payload)
+    else
+      _ -> {:error, :preview_rejected}
     end
   end
 

@@ -233,6 +233,9 @@ defmodule ChatOverlay.Web do
             )
         end
 
+      {"POST", ["api", "profiles", handle, "media", "preview"]} ->
+        api_media_preview(conn, handle)
+
       {"POST", ["api", "profiles", handle, "media"]} ->
         with true <- allowed_origin?(conn),
              true <- json_content_type?(conn),
@@ -760,6 +763,52 @@ defmodule ChatOverlay.Web do
           422,
           "application/json",
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => format_error(reason)})
+        )
+    end
+  end
+
+  defp api_media_preview(conn, handle) do
+    authorize = fn ->
+      with {:ok, _} <- Session.fetch_session(conn),
+           :ok <- Session.authorize(conn, handle),
+           do: :ok
+    end
+
+    with [origin] <- Plug.Conn.get_req_header(conn, "origin"),
+         true <- is_binary(origin) and origin == ChatOverlay.LocalMedia.public_base(),
+         ["application/json"] <- Plug.Conn.get_req_header(conn, "content-type"),
+         :ok <- authorize.(),
+         {:ok, body, conn} <-
+           Plug.Conn.read_body(conn, length: 128, read_length: 128, read_timeout: 4000),
+         {:ok, params} <- ChatOverlay.JSON.decode(body),
+         true <- params == %{} do
+      case ChatOverlay.Profiles.preview_media(handle, authorize) do
+        :ok ->
+          reply(conn, 200, "application/json", "{\"ok\":true}")
+
+        {:error, :cooldown} ->
+          reply(
+            conn,
+            429,
+            "application/json",
+            "{\"ok\":false,\"error\":\"Espera 10 segundos entre pruebas.\"}"
+          )
+
+        _ ->
+          reply(
+            conn,
+            422,
+            "application/json",
+            "{\"ok\":false,\"error\":\"Guarda primero archivos locales normalizados.\"}"
+          )
+      end
+    else
+      _ ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          "{\"ok\":false,\"error\":\"Prueba no autorizada o petición inválida.\"}"
         )
     end
   end

@@ -398,6 +398,23 @@
       });
     }
 
+    const previewObsBtn = document.getElementById("preview-obs-btn");
+    if (previewObsBtn) {
+      previewObsBtn.addEventListener("click", async () => {
+        const feedback = document.getElementById("preview-obs-feedback");
+        previewObsBtn.disabled = true;
+        try {
+          const p = getSelectedProfile();
+          if (!p) throw new Error("Selecciona un perfil.");
+          const response = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/media/preview`, {method: "POST", headers: {"content-type": "application/json"}, body: "{}"});
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar la prueba.");
+          feedback.textContent = "Prueba enviada a los overlays conectados. No se repite al reconectar.";
+        } catch (error) { feedback.textContent = error.message; }
+        finally { previewObsBtn.disabled = false; }
+      });
+    }
+
     if (testAudioBtn) {
       testAudioBtn.addEventListener("click", () => {
         let playUrl = null;
@@ -1107,7 +1124,35 @@
   if (token) streamQuery.set("token", token);
   const stream = new EventSource(`/events/${encodeURIComponent(handle)}?${streamQuery.toString()}`);
   stream.onopen = () => { connected = true; renderStatus(); };
-  stream.onerror = () => { connected = false; renderStatus(); };
+  let previewAudio = null, previewNode = null, previewTimer = null;
+  const previewIds = new Set();
+  function stopPreview() {
+    if (previewAudio) { previewAudio.pause(); previewAudio.src = ""; previewAudio = null; }
+    if (previewNode) { previewNode.remove(); previewNode = null; }
+    clearTimeout(previewTimer);
+  }
+  const previewURL = (value, extension) => typeof value === "string" && new RegExp(`^/media/local/${handle}/validated/[a-f0-9]{32}/[a-f0-9]{64}\\.${extension}$`).test(value);
+  stream.addEventListener("media_preview", event => {
+    if (!overlay) return;
+    try {
+      const p = JSON.parse(event.data);
+      const remaining = p.expires_at - Date.now();
+      if (p.version !== 1 || typeof p.id !== "string" || p.id.length > 64 || !Number.isSafeInteger(p.expires_at) || remaining <= 0 || remaining > 10000 || previewIds.has(p.id)) return;
+      if ((p.image_url !== undefined && !previewURL(p.image_url, "png")) || (p.audio_url !== undefined && !previewURL(p.audio_url, "wav"))) return;
+      stopPreview();
+      previewIds.add(p.id);
+      if (previewIds.size > 32) previewIds.delete(previewIds.values().next().value);
+      if (p.image_url) {
+        previewNode = element("img", "media-preview");
+        previewNode.alt = "Prueba manual de alerta";
+        previewNode.src = p.image_url;
+        document.body.appendChild(previewNode);
+      }
+      if (p.audio_url) { previewAudio = new Audio(p.audio_url); previewAudio.volume = 0.35; previewAudio.play().catch(() => {}); }
+      previewTimer = setTimeout(stopPreview, remaining);
+    } catch { stopPreview(); }
+  });
+  stream.onerror = () => { stopPreview(); connected = false; renderStatus(); };
   stream.addEventListener("batch", event => {
     try {
       const batch = JSON.parse(event.data);
@@ -1124,5 +1169,5 @@
     else renderStatus();
   }, 10000);
   window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
-  window.addEventListener("pagehide", () => { clearInterval(clock); stream.close(); }, {once:true});
+  window.addEventListener("pagehide", () => { stopPreview(); clearInterval(clock); stream.close(); }, {once:true});
 })();

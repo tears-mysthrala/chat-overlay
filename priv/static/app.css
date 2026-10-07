@@ -238,3 +238,5 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
   font-size: 12px;
 }
 
+
+.media-preview { position: fixed; inset: 15% auto auto 50%; transform: translateX(-50%); width: 224px; height: 224px; object-fit: contain; z-index: 10; }
