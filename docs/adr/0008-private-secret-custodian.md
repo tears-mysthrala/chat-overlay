@@ -39,10 +39,12 @@ límites de tamaño y backpressure, red sin acceso desde LAN/Internet.
 ## Contratos y aceptación antes de implementar
 
 El protocolo privado es un contrato nuevo y la separación cambia arquitectura
-y permisos efectivos. Requiere decisión explícita del propietario según
-WHAT_WE_ARE_BUILDING.md: «Cambiar [...] la retención, las fronteras entre clientes
-o las condiciones de publicación exige issue, justificación y aprobación».
-La continuación general autoriza preparar el diseño, no acredita el protocolo.
+y permisos efectivos. Según WHAT_WE_ARE_BUILDING.md, esos cambios requieren
+issue, justificación y aprobación explícita del propietario. Durante la
+preparación inicial solo estaba autorizado el diseño. Kalista aprobó después,
+el 07-10-2026, la implementación y las pruebas de la separación y del protocolo
+privado tipado, como recoge el estado de este ADR. Esa aprobación no acredita
+la candidata en producción ni elimina las puertas de revisión, CI y corte.
 
 Primera unidad: matriz de operaciones de sesión/perfil/OAuth y eventos por
 versión; fixtures negativas de handle cruzado, revocación y replay. Segunda:
