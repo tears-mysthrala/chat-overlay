@@ -1,5 +1,29 @@
 # Inventario y cuota multimedia — #32 / #48
 
+La implementación actual incorpora cuarentena y normalización (#49), y backend
+local privado (#62, ADR0006). El texto siguiente conserva el diseño histórico R2
+de #32/#48; HEAD por sí solo nunca acredita el formato real. Para el flujo actual,
+consultar [cuarentena](media-quarantine.md), [ADR local](adr/0006-local-media-storage.md)
+y [evidencia del despliegue](workflows/deployment/runs/2026-10-07-local-media.md).
+
+En local, la reserva ligada a perfil se persiste antes de emitir una prueba AEAD;
+el navegador carga bytes por PUT autenticado del mismo origen, con prueba en
+headers. El coordinador privado ejecuta el decoder aislado y publica una salida
+PNG estática o WAV de hasta10 segundos vinculada por hash, job y propietario.
+La asociación vuelve a autorizar y comprobar inventario dentro del escritor.
+GET solo sirve ready/active con MIME, tamaño y SHA256 verificados; originales
+no tienen ruta pública. El backend queda ligado a cada objeto, sin migración
+automática al cambiar variables. Tombstones locales impiden escrituras tardías.
+
+Los límites acumulativos de índice4096 y journal128 fallan cerrado: el arranque
+local no ofrece todavía compactación operativa automática. Registrar/revisar
+ocupación y conciliar offline antes de alcanzar límites; no borrar tombstones
+mientras existan pruebas válidas o trabajo en vuelo. El backup dentro del guest
+no sustituye copia externa y prueba de restauración. La aceptación funcional
+panel/OBS y la deuda ARCH06 se mantienen separadas de build/tests/escaneo.
+
+## Diseño histórico R2 de #32/#48
+
 Las URLs PUT se entregan después de guardar una reserva en el documento de perfiles.
 Cada clave nueva incluye el handle y un identificador aleatorio. La firma incluye
 `content-length`, `content-type` y `host`; el cliente debe usar el MIME normalizado

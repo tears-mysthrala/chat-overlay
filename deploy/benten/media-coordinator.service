@@ -1,0 +1,36 @@
+[Unit]
+Description=Chat Overlay private local media coordinator
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/chat-overlay/media-62
+EnvironmentFile=/etc/chat-overlay/media-coordinator.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=TMPDIR=/var/lib/chat-overlay/media-local/staging
+ExecStart=/usr/bin/python3 /opt/chat-overlay/media-62/scripts/local_media_coordinator.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/chat-overlay/media-local
+RestrictAddressFamilies=AF_UNIX AF_INET
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+MemoryMax=512M
+TasksMax=64
+TimeoutStopSec=20
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
