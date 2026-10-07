@@ -4,7 +4,8 @@
 > en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,
 > revisión oficial OpenAI e28c1e39 completada sin vulnerabilidades del diff.
 > PNG visto en OBS y refresh inmediato sin replay PASS. Audio audible confirmado
-> por el operador. Revocación actual y CI/publicación/merge pendientes.
+> por el operador. Revocación antigua401 y recuperación con enlace nuevo PASS.
+> CI/publicación/merge pendientes; no equivale a cierre global de F2.
 > Detalle: docs/workflows/deployment/runs/2026-10-07-obs-preview.md.
 
 > Estado actual 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.

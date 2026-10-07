@@ -132,6 +132,8 @@ jobs:
           export MEDIA_VALIDATOR_IMAGE=$(docker image inspect --format '{{.Id}}' chat-overlay:media-validator)
           python3 scripts/test_media_sandbox.py -v
           python3 scripts/test_media_coordinator.py -v
+          python3 scripts/test_local_media_store.py -v
+          python3 scripts/test_local_media_e2e.py -v
       - name: Install pinned SBOM validation tooling (development only)
         run: |
           python3 -m venv "$RUNNER_TEMP/decoder-audit"

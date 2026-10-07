@@ -43,5 +43,14 @@ CDP presentaba timeout antes de dispatch en pestañas reutilizadas; nueva pesta�
 y acción/observación en una llamada completaron envío, sin duplicar a ciegas.
 Audio audible: confirmado explícitamente por el operador en esta conversación.
 Es validación comunicada por el usuario, no medición instrumental. Revocación de capability
-actual: pendiente de paso manual del propietario; prueba local de sesión revocada PASS.
+actual: propietario regeneró el enlace; refresh real de la fuente antigua mostró
+401 No Autorizado. Captura output/obs/revoked.png: revocación real PASS.
+Recuperación con enlace nuevo PASS: propietario lo pegó en la fuente de la escena
+activa InGame Scene. Se detectaron dos fuentes del proyecto: Browser en escena Chat
+con enlace viejo y fuente activa con enlace nuevo. Se seleccionó únicamente la
+fuente habilitada de la escena activa, sin modificar escenas ni otras fuentes.
+Preview nuevo mostró PNG; captura output/obs/preview-newlink-observed.png. Refresh
+inmediato produjo captura transparente output/obs/preview-newlink-reconnected.png,
+sin replay. No streaming/grabación. La fuente antigua se conservó, ya revocada.
+Prueba local de sesión revocada PASS.
 CI, publicación/merge y deuda operativa siguen separados.
