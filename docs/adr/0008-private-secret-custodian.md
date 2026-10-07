@@ -1,6 +1,8 @@
 # ADR 0008 — Custodio privado de secretos — Refs #39
 
-Estado: propuesta concreta; no implementada ni aprobada por este ADR.
+Estado: implementación y pruebas aprobadas explícitamente por Kalista el
+07-10-2026 en la conversación del proyecto. Separación todavía no implementada
+ni acreditada en producción.
 
 ## Problema y decisión propuesta
 
@@ -56,8 +58,23 @@ desarrollo ni una ruta alternativa local. Un frente comprometido aún puede
 robar sesiones que circulen por él; esta arquitectura limita exposición de
 secretos, no promete inmunidad a todas las acciones del usuario autorizado.
 
-## Pendiente de decisión
+## Autenticación interna y siguiente unidad
 
-Aprobar la separación y el protocolo privado tipado para implementación y
-pruebas, manteniendo bots/F3 y nuevas dependencias fuera del alcance. El diseño
-detallado debe especificar autenticación interna antes de activar cualquier RPC.
+La aprobación cubre la separación y el protocolo privado tipado, manteniendo
+bots/F3 y nuevas dependencias fuera del alcance. El canal será TLS mutuo con una
+CA dedicada al protocolo, usando OTP SSL, Bandit y Mint ya presentes. El
+custodio requiere certificado de cliente; el frente verifica CA y hostname del
+custodio. Certificados de transporte separados de la CA PostgreSQL y de las
+credenciales OAuth. No se acepta TLS sin verificación ni un secreto Bearer como
+sustituto. El certificado del frente identifica el transporte, no al usuario:
+cada operación sigue requiriendo la autorización vigente del usuario.
+
+El frente necesariamente conserva su clave privada de transporte. La ausencia
+de secretos exigida por ARCH06 se refiere a la clave maestra, contraseñas DB,
+client secrets OAuth, credenciales del coordinador y tokens de plataforma.
+Comprometer el frente permite invocar las operaciones públicas como ese frente;
+no concede acceso genérico al custodio ni una identidad administrativa.
+
+El protocolo v1 se documenta en `docs/custodian-protocol.md`. Su codec no activa
+un listener ni cambia el despliegue. El corte queda bloqueado hasta conectar
+todos los flujos, validar dos procesos reales y completar revisión/CI/OBS.

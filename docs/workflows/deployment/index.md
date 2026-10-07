@@ -1,5 +1,8 @@
 # Despliegue
 
+- [Custodio privado 2026-10-07](runs/2026-10-07-private-custodian.md): ADR0008
+  aprobado, codec de entrada validado; integración y separación efectiva pendientes.
+
 - [Recuperación 2026-10-07](runs/2026-10-07-ops-recovery.md): backup real cifrado
   sincronizado a Drive, base/medios/cuentas restaurados sin red; ARCH06 y
   mantenimiento pendientes.
