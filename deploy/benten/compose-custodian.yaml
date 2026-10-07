@@ -1,0 +1,104 @@
+name: chat-overlay
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: overlay
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-admin
+    volumes:
+      - /var/lib/chat-overlay/postgres:/var/lib/postgresql
+      - /etc/chat-overlay/postgres-admin:/run/secrets/postgres-admin:ro
+      - /etc/chat-overlay/init.sql:/docker-entrypoint-initdb.d/001.sql:ro
+      - /etc/chat-overlay/tls/server.crt:/tls/server.crt:ro
+      - /etc/chat-overlay/tls/server.key:/tls/server.key:ro
+    command: [postgres, -c, ssl=on, -c, ssl_cert_file=/tls/server.crt, -c, ssl_key_file=/tls/server.key]
+    networks: [database]
+    restart: unless-stopped
+    healthcheck:
+      test: [CMD, pg_isready, -U, postgres, -d, overlay]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 64
+    logging: &logging
+      driver: local
+      options: {max-size: 5m, max-file: '2'}
+  overlay:
+    image: ${CHAT_OVERLAY_IMAGE:?exact reviewed image ID required}
+    environment:
+      CHAT_ROLE: frontend
+      CHAT_CUSTODIAN_HOST: custodian
+      CHAT_CUSTODIAN_ADDRESS: 172.30.98.3
+      CHAT_CUSTODIAN_TLS_DIR: /run/custodian/tls
+      CHAT_PUBLIC_ORIGIN: https://overlay.mysthrala.com
+      CHAT_TRUSTED_PROXY_IPS: 192.168.1.112
+      ERL_FLAGS: '+S 2:2 +P 32768 +Q 8192'
+    volumes:
+      - /etc/chat-overlay/custodian/frontend/client.crt:/run/custodian/tls/client.crt:ro
+      - /etc/chat-overlay/custodian/frontend/client.key:/run/custodian/tls/client.key:ro
+      - /etc/chat-overlay/custodian/ca.crt:/run/custodian/tls/ca.crt:ro
+    ports: ['192.168.1.114:4100:4100', '127.0.0.1:4100:4100']
+    networks:
+      boundary: {ipv4_address: 172.30.98.2}
+    dns: [127.0.0.1]
+    depends_on: [custodian]
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+    cpus: 1
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging: *logging
+  custodian:
+    image: ${CHAT_OVERLAY_IMAGE:?exact reviewed image ID required}
+    env_file: /etc/chat-overlay/runtime.env
+    environment:
+      CHAT_ROLE: custodian
+      CHAT_STORAGE: postgres
+      CHAT_DB_HOST: postgres
+      CHAT_DB_NAME: overlay
+      CHAT_PUBLIC_ORIGIN: https://overlay.mysthrala.com
+      CHAT_CUSTODIAN_TLS_DIR: /run/custodian/tls
+      ERL_FLAGS: '+S 2:2 +P 32768 +Q 8192'
+    volumes:
+      - /etc/chat-overlay/tls/ca-bundle.crt:/etc/ssl/cert.pem:ro
+      - /etc/chat-overlay/tls/ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
+      - /etc/chat-overlay/custodian/private/server.crt:/run/custodian/tls/server.crt:ro
+      - /etc/chat-overlay/custodian/private/server.key:/run/custodian/tls/server.key:ro
+      - /etc/chat-overlay/custodian/ca.crt:/run/custodian/tls/ca.crt:ro
+    networks:
+      boundary: {ipv4_address: 172.30.98.3}
+      database: {}
+      egress: {ipv4_address: 172.30.96.2}
+    depends_on:
+      postgres: {condition: service_healthy}
+    read_only: true
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=16m,mode=1777']
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1g
+    cpus: 2
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 15s
+    logging: *logging
+networks:
+  boundary:
+    # Approved routed bridge: harden.sh custodian must block new frontend
+    # egress except its fixed mTLS peer before this topology is started.
+    ipam:
+      config: [{subnet: 172.30.98.0/28}]
+  database:
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.97.0/28}]
+  egress:
+    ipam:
+      config: [{subnet: 172.30.96.0/28}]

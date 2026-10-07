@@ -5,6 +5,21 @@ defmodule ChatOverlay.Application do
 
   @impl true
   def start(_type, _args) do
+    case ChatOverlay.Custodian.Role.current() do
+      :frontend ->
+        :ok = ChatOverlay.Custodian.Role.assert_safe_frontend!()
+
+        Supervisor.start_link([ChatOverlay.HTTP],
+          strategy: :one_for_one,
+          name: __MODULE__.Supervisor
+        )
+
+      role ->
+        start_private(role)
+    end
+  end
+
+  defp start_private(role) do
     case ChatOverlay.OAuth.validate_encryption_key() do
       :ok ->
         :ok
@@ -31,10 +46,18 @@ defmodule ChatOverlay.Application do
           ChatOverlay.WebhookGate
         ] ++
         [ChatOverlay.Sources] ++
-        if(Application.get_env(:chat_overlay, :http), do: [ChatOverlay.HTTP], else: [])
+        listener_children(role)
 
     Supervisor.start_link(children, strategy: :rest_for_one, name: __MODULE__.Supervisor)
   end
+
+  defp listener_children(:custodian),
+    do: [
+      {ChatOverlay.Custodian.Listener, Application.fetch_env!(:chat_overlay, :custodian_listener)}
+    ]
+
+  defp listener_children(:combined),
+    do: if(Application.get_env(:chat_overlay, :http), do: [ChatOverlay.HTTP], else: [])
 end
 
 defmodule ChatOverlay.Stores do

@@ -120,7 +120,7 @@ def check(bundle, work):
             raise ValueError('Invalid pinned application image')
         # Supply only ciphertext account metadata through stdin. No host directory
         # is mounted into UID65532, and the operator directory stays private.
-        run('docker', 'run', '--rm', '-i', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '512m', '--pids-limit', '128', '--env-file', str(work/'runtime.env'), '-e', 'CHAT_STORAGE=json_demo', app_image, '/app/bin/chat_overlay', 'eval', evaluation, input_data=accounts)
+        run('docker', 'run', '--rm', '-i', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '512m', '--pids-limit', '128', '--env-file', str(work/'runtime.env'), '-e', 'CHAT_STORAGE=json_demo', '-e', 'CHAT_ROLE=combined', app_image, '/app/bin/chat_overlay', 'eval', evaluation, input_data=accounts)
         result = {'database_restore': 'PASS', 'counts': counts, 'rls_tables': 3, 'media_objects_verified': media_count, 'account_decryption': 'PASS', 'network': 'none', 'product_upstream': 'NOT TESTED'}
         (work/'result.json').write_text(json.dumps(result))
         print(json.dumps(result))

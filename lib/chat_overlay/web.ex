@@ -813,6 +813,8 @@ defmodule ChatOverlay.Web do
     end
   end
 
+  def custodian_upload_object(conn, handle), do: local_upload_object(conn, handle)
+
   defp local_upload_object(conn, handle) do
     with true <- ChatOverlay.LocalMedia.backend() == "local" and ChatOverlay.Media.configured?(),
          :ok <- Session.authorize(conn, handle),

@@ -17,11 +17,17 @@ defmodule ChatOverlay.Custodian.Protocol do
     "media.save" => %{"handle" => :handle, "document" => :document},
     "media.preview" => %{"handle" => :handle, "document" => :document},
     "media.read" => %{"key" => 256},
+    "media.upload_authorize" => %{
+      "handle" => :handle,
+      "key" => 256,
+      "upload_token" => 4096,
+      "mime" => 64
+    },
+    "media.upload" => %{"handle" => :handle, "key" => 256, "upload_token" => 4096, "mime" => 64},
     "oauth.begin" => %{
       "handle" => :handle,
       "provider" => :provider,
-      "capability" => 4096,
-      "browser" => 4096
+      "capability" => 4096
     },
     "oauth.complete" => %{
       "provider" => :provider,
@@ -31,19 +37,18 @@ defmodule ChatOverlay.Custodian.Protocol do
       "browser" => 4096
     },
     "view.authorize" => %{"handle" => :handle, "view" => :view, "capability" => 4096},
-    "events.read" => %{
+    "events.subscribe" => %{
       "handle" => :handle,
       "view" => :view,
       "capability" => 4096,
-      "cursor" => 256,
-      "preview_cursor" => 256
+      "cursor" => 256
     },
     "health.ready" => %{}
   }
   @required %{
     "profiles.save" => ["document"],
     "profiles.delete" => ["handle"],
-    "profiles.resolve" => ["target", "platform"],
+    "profiles.resolve" => ["target"],
     "profiles.sync_youtube" => ["handle"],
     "profiles.rotate_capability" => ["handle"],
     "profiles.unlink" => ["handle", "provider"],
@@ -52,10 +57,12 @@ defmodule ChatOverlay.Custodian.Protocol do
     "media.save" => ["handle", "document"],
     "media.preview" => ["handle", "document"],
     "media.read" => ["key"],
+    "media.upload_authorize" => ["handle", "key", "upload_token", "mime"],
+    "media.upload" => ["handle", "key", "upload_token", "mime"],
     "oauth.begin" => ["handle", "provider"],
     "oauth.complete" => ["provider", "state", "browser"],
     "view.authorize" => ["handle", "view"],
-    "events.read" => ["handle", "view"]
+    "events.subscribe" => ["handle", "view"]
   }
 
   def operations, do: Map.keys(@operations) |> Enum.sort()
@@ -87,8 +94,8 @@ defmodule ChatOverlay.Custodian.Protocol do
 
   defp valid_field?(:handle, value) when is_binary(value),
     do:
-      byte_size(value) in 1..32 and String.valid?(value) and
-        Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,31}\z/, value)
+      byte_size(value) in 1..40 and String.valid?(value) and
+        Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,39}\z/, value)
 
   defp valid_field?(:provider, value), do: value in ["twitch", "youtube"]
   defp valid_field?(:platform, value), do: value in ["twitch", "youtube", "auto"]

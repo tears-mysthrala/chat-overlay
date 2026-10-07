@@ -30,18 +30,31 @@ defmodule ChatOverlay.Profiles do
     {:ok, %{}}
   end
 
-  def handle_call({:scoped_action, scope, action}, _from, state) do
-    result = ChatOverlay.RequestScope.with_scope(scope, fn -> execute_action(action) end)
+  def handle_call({:scoped_action, scope, authorizer, action}, _from, state) do
+    result =
+      ChatOverlay.RequestScope.with_scope(scope, fn ->
+        with :ok <- authorizer.(), do: execute_action(action)
+      end)
+
     {:reply, result, state}
   end
 
   defp call_serialized(action) do
     case GenServer.whereis(__MODULE__) do
       nil ->
-        execute_action(action)
+        if ChatOverlay.Custodian.Role.current() == :custodian do
+          {:error, :custodian_unavailable}
+        else
+          with :ok <- ChatOverlay.RequestScope.authorizer().(), do: execute_action(action)
+        end
 
       pid ->
-        GenServer.call(pid, {:scoped_action, ChatOverlay.RequestScope.current(), action}, 30_000)
+        GenServer.call(
+          pid,
+          {:scoped_action, ChatOverlay.RequestScope.current(),
+           ChatOverlay.RequestScope.authorizer(), action},
+          30_000
+        )
     end
   end
 
@@ -434,30 +447,33 @@ defmodule ChatOverlay.Profiles do
 
   @doc "Lists all currently active profiles."
   def list do
-    Enum.map(Config.profiles(), fn p ->
-      %{
-        "handle" => p["handle"],
-        "platforms" => Enum.map(p["sources"], & &1["platform"]),
-        "sources" => Enum.map(p["sources"], &format_source_summary/1),
-        "overlay_platforms" => p["overlay_platforms"],
-        "linked_youtube" => p["linked_youtube"],
-        "has_capability_token" => not is_nil(p["capability_token_hash"]),
-        "media" => p["media"] || %{},
-        "can_upload" => p["can_upload"] || false,
-        "media_storage" => ChatOverlay.LocalMedia.backend(),
-        "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
-        "storage_used_bytes" => p["storage_used_bytes"] || 0,
-        "storage_pending_bytes" =>
-          max(
-            0,
-            ChatOverlay.MediaLedger.total_bytes(media_objects(), p) -
-              (p["storage_used_bytes"] || 0)
-          ),
-        "linked_accounts" => format_linked_accounts_summary(p["linked_accounts"]),
-        "reader_url" => "/reader/#{p["handle"]}",
-        "overlay_url" => "/overlay/#{p["handle"]}"
-      }
-    end)
+    Enum.map(Config.profiles(), &public_summary/1)
+  end
+
+  @doc "Explicit public metadata projection; private account and source state stays in the custodian."
+  def public_summary(p) when is_map(p) do
+    %{
+      "handle" => p["handle"],
+      "platforms" => Enum.map(p["sources"], & &1["platform"]),
+      "sources" => Enum.map(p["sources"], &format_source_summary/1),
+      "overlay_platforms" => p["overlay_platforms"],
+      "linked_youtube" => p["linked_youtube"],
+      "has_capability_token" => not is_nil(p["capability_token_hash"]),
+      "media" => p["media"] || %{},
+      "can_upload" => p["can_upload"] || false,
+      "media_storage" => ChatOverlay.LocalMedia.backend(),
+      "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
+      "storage_used_bytes" => p["storage_used_bytes"] || 0,
+      "storage_pending_bytes" =>
+        max(
+          0,
+          ChatOverlay.MediaLedger.total_bytes(media_objects(), p) -
+            (p["storage_used_bytes"] || 0)
+        ),
+      "linked_accounts" => format_linked_accounts_summary(p["linked_accounts"]),
+      "reader_url" => "/reader/#{p["handle"]}",
+      "overlay_url" => "/overlay/#{p["handle"]}"
+    }
   end
 
   @doc "Finds a profile summary by handle."
@@ -1682,7 +1698,9 @@ defmodule ChatOverlay.Profiles do
       if is_map(data) do
         sanitized =
           data
-          |> Map.delete("encrypted_tokens")
+          |> Map.take(
+            ~w(linked provider account_version user_id username linked_at expires_at status last_error)
+          )
           |> Map.put_new("linked", true)
 
         Map.put(acc, provider, sanitized)

@@ -1,6 +1,15 @@
 #!/bin/sh
 # Run over the verified SSH connection to VM9502 only.
 set -eu
+case ${1:-combined} in
+  combined) public_ip=172.30.96.2; frontend_rules='' ;;
+  custodian)
+    public_ip=172.30.98.2
+    frontend_rules='ip saddr 172.30.98.2 ip daddr 172.30.98.3 tcp dport 4200 accept
+    ip saddr 172.30.98.2 ct state new drop'
+    ;;
+  *) echo 'Expected combined or custodian topology'; exit 1 ;;
+esac
 admin_ip=${SSH_CONNECTION%% *}
 case "$admin_ip" in 192.168.1.*) ;; *) echo 'Unexpected administration source'; exit 1 ;; esac
 install -d -m 755 /etc/ssh/sshd_config.d
@@ -25,12 +34,13 @@ table inet chat_overlay_guard {
     udp sport 67 udp dport 68 accept
     ip protocol icmp accept
     meta l4proto ipv6-icmp accept
-    # Private local-media coordinator: only the statically assigned overlay peer.
+    # Private local-media coordinator: only the statically assigned custodian peer.
     ip saddr 172.30.96.2 ip daddr 172.30.96.1 tcp dport 4199 accept
   }
   chain forward {
     type filter hook forward priority -20; policy accept;
-    ip saddr 192.168.1.112 ip daddr { 172.30.96.0/28, 172.30.97.0/28 } tcp dport 4100 accept
+    ip saddr 192.168.1.112 ip daddr $public_ip tcp dport 4100 accept
+    $frontend_rules
     # Also block LAN access to Docker loopback-published ports on older engines.
     iifname "eth0" ct state new drop
   }

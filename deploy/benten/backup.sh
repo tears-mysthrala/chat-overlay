@@ -8,6 +8,13 @@ root=/var/backups/chat-overlay
 install -d -m 700 "$root"
 run=$(mktemp -d "$root/external-XXXXXXXX")
 backup_ready=0
+app_services=overlay
+services=$(cd /opt/chat-overlay && docker compose config --services)
+printf '%s\n' "$services" | grep -qx overlay || { echo 'Invalid service inventory' >&2; exit 1; }
+if printf '%s\n' "$services" | grep -qx custodian; then
+  app_services='overlay custodian'
+  test "$(docker inspect chat-overlay-custodian-1 --format '{{.State.Running}}')" = true
+fi
 test "$(docker inspect chat-overlay-overlay-1 --format '{{.State.Running}}')" = true
 systemctl is-active --quiet chat-overlay-media.service
 resume() {
@@ -17,13 +24,13 @@ resume() {
     rm -f "$run/backup.cms" || status=1
   fi
   systemctl start chat-overlay-media.service || status=1
-  (cd /opt/chat-overlay && docker compose start overlay </dev/null) >&2 || status=1
+  (cd /opt/chat-overlay && docker compose start $app_services </dev/null) >&2 || status=1
   exit "$status"
 }
 trap resume EXIT
 trap 'exit 1' HUP INT TERM
 cd /opt/chat-overlay
-docker compose stop overlay </dev/null >&2
+docker compose stop $app_services </dev/null >&2
 systemctl stop chat-overlay-media.service
 docker exec -u postgres chat-overlay-postgres-1 pg_dump -U postgres -d overlay -Fc </dev/null > "$run/overlay.dump"
 docker exec -u postgres chat-overlay-postgres-1 pg_dumpall -U postgres --roles-only </dev/null > "$run/roles.sql"
