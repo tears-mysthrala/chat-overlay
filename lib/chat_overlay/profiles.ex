@@ -17,10 +17,15 @@ defmodule ChatOverlay.Profiles do
       :ets.new(:chat_overlay_revoked_sessions, [
         :named_table,
         :set,
-        :public,
+        :protected,
         read_concurrency: true
       ])
     end
+
+    :ets.insert(
+      :chat_overlay_revoked_sessions,
+      {:epoch, Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)}
+    )
 
     {:ok, %{}}
   end
@@ -139,6 +144,42 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:link_account, handle, provider, account_data, tokens}),
     do: do_link_account(handle, provider, account_data, tokens)
 
+  defp execute_action({:link_account_guarded, handle, provider, account_data, tokens, guard}) do
+    if guard.(Config.profile(handle)),
+      do: do_link_account(handle, provider, account_data, tokens),
+      else: {:error, :authorization_changed}
+  end
+
+  defp execute_action({:revoke_session, token, opts}) do
+    case ChatOverlay.Session.verify_token(token, opts) do
+      {:ok, session} ->
+        now = System.system_time(:second)
+
+        :ets.select_delete(:chat_overlay_revoked_sessions, [
+          {{:"$1", :"$2"}, [{:is_integer, :"$2"}, {:"=<", :"$2", now}], [true]}
+        ])
+
+        if :ets.info(:chat_overlay_revoked_sessions, :size) >= 4097 do
+          :ets.delete_all_objects(:chat_overlay_revoked_sessions)
+
+          :ets.insert(
+            :chat_overlay_revoked_sessions,
+            {:epoch, Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)}
+          )
+        else
+          :ets.insert(
+            :chat_overlay_revoked_sessions,
+            {:crypto.hash(:sha256, token), session["expires_at"]}
+          )
+        end
+
+      _ ->
+        :ok
+    end
+
+    :ok
+  end
+
   defp execute_action({:update_tokens, handle, provider, new_tokens}),
     do: do_update_tokens(handle, provider, new_tokens, [])
 
@@ -249,6 +290,16 @@ defmodule ChatOverlay.Profiles do
   end
 
   def link_account(_, _, _, _), do: {:error, :invalid_params}
+
+  @doc "Rechecks authorization in the same serialized operation that persists the account."
+  def link_account(handle, provider, account_data, tokens, guard) when is_function(guard, 1) do
+    call_serialized(
+      {:link_account_guarded, handle, to_string(provider), account_data, tokens, guard}
+    )
+  end
+
+  @doc false
+  def revoke_session(token, opts), do: call_serialized({:revoke_session, token, opts})
 
   @doc "Unlinks an external platform account, removing stored encrypted credentials."
   def unlink_account(handle, provider) when is_binary(handle) do

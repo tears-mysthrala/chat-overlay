@@ -16,5 +16,12 @@ if config_env() != :test do
       _ -> raise "Invalid CHAT_BIND"
     end
 
-  config :chat_overlay, port: port, bind: bind
+  config :chat_overlay,
+    port: port,
+    bind: bind,
+    trusted_proxy_ips:
+      ChatOverlay.Transport.parse_proxy_ips!(System.get_env("CHAT_TRUSTED_PROXY_IPS", ""))
+
+  config :chat_overlay,
+    oauth_origin: ChatOverlay.Transport.parse_origin!(System.get_env("CHAT_PUBLIC_ORIGIN"))
 end

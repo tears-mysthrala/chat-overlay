@@ -33,6 +33,30 @@ Las URLs externas se cargan en el navegador; la comprobación DNS al guardarlas 
 es pinning de futuras peticiones del navegador ni inspección del archivo. Su uso
 requiere origen confiable y política CSP; no se declara eliminada toda SSRF/XSS por
 validar una extensión. No se publican aquí reproducciones sensibles (DEV-09).
+## Transacciones OAuth — #42
+
+El callback HTTP exige el estado cifrado y la cookie HttpOnly del navegador que
+inició el flujo. El registro privado de hashes consume la pareja de forma atómica,
+antes del intercambio remoto, también ante denegación del proveedor o fallo.
+La cookie usa SameSite=Lax para el retorno GET y Secure cuando el transporte
+usa TLS directo o procede de una IP de proxy explícitamente configurada en
+`CHAT_TRUSTED_PROXY_IPS` con una única cabecera `X-Forwarded-Proto: https`.
+Sin proxy configurado no se confía en esa cabecera. El operador debe impedir
+acceso directo y hacer que el proxy reemplace las cabeceras del cliente; esta
+frontera sigue pendiente de validación en la infraestructura real. Fuera de
+loopback no se inicia un flujo sobre HTTP no confiable.
+
+El registro admite 1024 transacciones, hasta 512 anónimas, cuatro anónimas por
+perfil y solicitante y ocho autorizadas por perfil, con vida de diez minutos y
+limpieza al acceder. Conserva hashes e instantáneas de identidad/autorización;
+un reinicio cancela los flujos pendientes. Cada transacción tiene una cookie
+independiente que se borra al consumirla; HTTPS usa el prefijo `__Host-`.
+La escritura revalida la sesión y la instantánea dentro del escritor serializado.
+NAT y peers de proxy sin XFF único verificado comparten la cuota anónima.
+Ver [configuración y límites](oauth-runtime.md).
+No se acredita coordinación entre réplicas, navegador/proveedor real, ni se
+sustituye la autorización vigente del perfil por el binding del navegador.
+
 ## Frontera de recuperación offline — #40
 
 Activos: clave maestra, documento de perfiles, credenciales cifradas y copias.

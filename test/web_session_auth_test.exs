@@ -112,6 +112,16 @@ defmodule ChatOverlay.WebSessionAuthTest do
     {"cookie", "#{Session.cookie_name()}=#{token}"}
   end
 
+  defp bound_state(handle, verifier) do
+    state = OAuth.generate_state(handle, "twitch", verifier)
+
+    {:ok, conn} =
+      ChatOverlay.OAuthFlow.bind(Plug.Test.conn(:get, "http://localhost/"), state, "twitch")
+
+    cookie = conn.resp_cookies[ChatOverlay.OAuthFlow.cookie_name(state)].value
+    {state, {"cookie", "#{ChatOverlay.OAuthFlow.cookie_name(state)}=#{cookie}"}}
+  end
+
   test "GET /api/auth/me returns unauthenticated status without session", %{port: port} do
     {200, headers, body} = request(port, "GET", "/api/auth/me")
     assert Enum.any?(headers, fn {k, v} -> k == "content-type" and v =~ "application/json" end)
@@ -399,12 +409,12 @@ defmodule ChatOverlay.WebSessionAuthTest do
 
     Application.put_env(:chat_overlay, :oauth_http_client, mock_client)
 
-    state = OAuth.generate_state("streamer", "twitch", "test_verifier_string")
+    {state, flow_cookie} = bound_state("streamer", "test_verifier_string")
 
     callback_path =
       "/oauth/callback/twitch?code=auth_code_xyz&state=#{URI.encode_www_form(state)}"
 
-    {302, headers, _} = request(port, "GET", callback_path)
+    {302, headers, _} = request(port, "GET", callback_path, [flow_cookie])
 
     # 1. Location redirect
     {_, location} = List.keyfind(headers, "location", 0)
@@ -522,12 +532,12 @@ defmodule ChatOverlay.WebSessionAuthTest do
     end)
 
     # State requested for streamer-prod (whose configured user_id is 12345)
-    state = OAuth.generate_state("streamer-prod", "twitch", "test_verifier_attacker")
+    {state, flow_cookie} = bound_state("streamer-prod", "test_verifier_attacker")
 
     callback_path =
       "/oauth/callback/twitch?code=auth_code_attacker&state=#{URI.encode_www_form(state)}"
 
-    {302, headers, _} = request(port, "GET", callback_path)
+    {302, headers, _} = request(port, "GET", callback_path, [flow_cookie])
 
     # Must redirect with error=identity_mismatch and NOT issue session cookie
     {_, location} = List.keyfind(headers, "location", 0)
@@ -646,7 +656,7 @@ defmodule ChatOverlay.WebSessionAuthTest do
     assert unauth_data["error"] =~ "token de capacidad"
 
     # 2. Remote creator provides capability token via query param -> 200 with OAuth URL
-    {200, _, ok_body} =
+    {200, authorize_headers, ok_body} =
       request(
         port,
         "GET",
@@ -667,7 +677,11 @@ defmodule ChatOverlay.WebSessionAuthTest do
     callback_path =
       "/oauth/callback/twitch?code=auth_code_remote&state=#{URI.encode_www_form(state)}"
 
-    {302, headers, _} = request(port, "GET", callback_path)
+    {_, flow_cookie} = List.keyfind(authorize_headers, "set-cookie", 0)
+
+    {302, headers, _} =
+      request(port, "GET", callback_path, [{"cookie", flow_cookie |> String.split(";") |> hd()}])
+
     {_, location} = List.keyfind(headers, "location", 0)
     assert location =~ "/?handle=streamer-remote&linked=twitch"
 
@@ -749,12 +763,12 @@ defmodule ChatOverlay.WebSessionAuthTest do
     current_profiles = Application.get_env(:chat_overlay, :profiles, [])
     Application.put_env(:chat_overlay, :profiles, [p_unlinked | current_profiles])
 
-    state = OAuth.generate_state("streamer-unlinked", "twitch", "test_verifier_claimant")
+    {state, flow_cookie} = bound_state("streamer-unlinked", "test_verifier_claimant")
 
     callback_path =
       "/oauth/callback/twitch?code=auth_code_claimant&state=#{URI.encode_www_form(state)}"
 
-    {302, headers, _} = request(port, "GET", callback_path)
+    {302, headers, _} = request(port, "GET", callback_path, [flow_cookie])
 
     # Must redirect with error=unauthorized_profile_claim and NOT issue cookie
     {_, location} = List.keyfind(headers, "location", 0)

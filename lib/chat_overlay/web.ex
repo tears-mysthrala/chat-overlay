@@ -1103,6 +1103,17 @@ defmodule ChatOverlay.Web do
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Proveedor no soportado"})
         )
 
+      not ChatOverlay.Transport.oauth_allowed?(conn) ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "error" => "OAuth requiere origen HTTPS configurado fuera del desarrollo local"
+          })
+        )
+
       true ->
         token = extract_token_from_conn(conn)
 
@@ -1113,7 +1124,7 @@ defmodule ChatOverlay.Web do
             ChatOverlay.Crypto.verify_token(token, profile["capability_token_hash"])
 
         session_auth = Session.authorize(conn, handle)
-        session_valid? = session_auth == :ok
+        session_valid? = session_auth == :ok and match?({:ok, _}, Session.fetch_session(conn))
 
         linked_accounts = profile["linked_accounts"] || %{}
         has_linked? = linked_accounts[provider] && linked_accounts[provider]["user_id"] != nil
@@ -1159,15 +1170,48 @@ defmodule ChatOverlay.Web do
                    auth_proof: auth_proof
                  ) do
               {:ok, auth_url} ->
-                if params["redirect"] == "true" do
-                  redirect(conn, auth_url)
-                else
-                  reply(
-                    conn,
-                    200,
-                    "application/json",
-                    ChatOverlay.JSON.encode(%{"ok" => true, "url" => auth_url})
-                  )
+                state =
+                  auth_url
+                  |> URI.parse()
+                  |> Map.fetch!(:query)
+                  |> URI.decode_query()
+                  |> Map.fetch!("state")
+
+                case ChatOverlay.OAuthFlow.bind(conn, state, provider, profile) do
+                  {:ok, conn} ->
+                    if params["redirect"] == "true" do
+                      redirect(conn, auth_url)
+                    else
+                      reply(
+                        conn,
+                        200,
+                        "application/json",
+                        ChatOverlay.JSON.encode(%{"ok" => true, "url" => auth_url})
+                      )
+                    end
+
+                  {:error, :insecure_transport} ->
+                    reply(
+                      conn,
+                      403,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" => "OAuth requiere HTTPS fuera de loopback"
+                      })
+                    )
+
+                  {:error, _} ->
+                    reply(
+                      conn,
+                      429,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" =>
+                          "Demasiados flujos OAuth pendientes; espere e inténtelo de nuevo"
+                      })
+                    )
                 end
 
               {:error, {:unconfigured_client, prov}} ->
@@ -1198,6 +1242,15 @@ defmodule ChatOverlay.Web do
   end
 
   defp oauth_callback(conn, provider) do
+    params = URI.decode_query(conn.query_string || "")
+
+    case ChatOverlay.OAuthFlow.consume(conn, params["state"], provider) do
+      {:ok, conn} -> oauth_callback_bound(conn, provider)
+      {:error, _} -> redirect(conn, "/?error=invalid_oauth_flow")
+    end
+  end
+
+  defp oauth_callback_bound(conn, provider) do
     params = URI.decode_query(conn.query_string || "")
     code = params["code"]
     state = params["state"]
@@ -1302,7 +1355,10 @@ defmodule ChatOverlay.Web do
                          result.handle,
                          result.provider,
                          account_data,
-                         result.tokens
+                         result.tokens,
+                         fn current ->
+                           ChatOverlay.OAuthFlow.authorized?(conn, result.handle, current)
+                         end
                        ) do
                     {:ok, updated_profile} ->
                       linked_info = (updated_profile["linked_accounts"] || %{})[result.provider]
@@ -1427,9 +1483,7 @@ defmodule ChatOverlay.Web do
   end
 
   defp build_redirect_uri(conn, provider) do
-    host = Plug.Conn.get_req_header(conn, "host") |> List.first() || "localhost:4100"
-    proto = if String.starts_with?(host, ["localhost", "127.0.0.1"]), do: "http", else: "https"
-    "#{proto}://#{host}/oauth/callback/#{provider}"
+    "#{ChatOverlay.Transport.origin(conn)}/oauth/callback/#{provider}"
   end
 
   def redirect(conn, location) do

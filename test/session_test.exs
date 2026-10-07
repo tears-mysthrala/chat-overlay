@@ -78,7 +78,8 @@ defmodule ChatOverlay.SessionTest do
       assert {:ok, "v1:" <> encoded} = Session.create_token(payload, key: @test_key)
 
       # Tamper with the base64 content
-      tampered = "v1:" <> "A" <> binary_part(encoded, 1, byte_size(encoded) - 1)
+      replacement = if String.starts_with?(encoded, "A"), do: "B", else: "A"
+      tampered = "v1:" <> replacement <> binary_part(encoded, 1, byte_size(encoded) - 1)
       assert {:error, :invalid_or_tampered_token} = Session.verify_token(tampered, key: @test_key)
 
       # Non-v1 prefix
@@ -131,7 +132,7 @@ defmodule ChatOverlay.SessionTest do
       assert cookie_https =~ "SameSite=Lax"
       assert cookie_https =~ "secure"
 
-      # HTTP with x-forwarded-proto: https -> Secure is true
+      # An untrusted peer cannot make its forwarded header authoritative.
       conn_forwarded =
         conn(:get, "/")
         |> Plug.Conn.put_req_header("x-forwarded-proto", "https")
@@ -139,7 +140,7 @@ defmodule ChatOverlay.SessionTest do
 
       resp_forwarded = Plug.Conn.send_resp(conn_forwarded, 200, "ok")
       [cookie_fwd] = Plug.Conn.get_resp_header(resp_forwarded, "set-cookie")
-      assert cookie_fwd =~ "secure"
+      refute cookie_fwd =~ "secure"
     end
 
     test "delete_session invalidates cookie with max-age=0" do
@@ -296,7 +297,7 @@ defmodule ChatOverlay.SessionTest do
       {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
       assert {:ok, _} = Session.verify_token(token, key: @test_key)
 
-      assert :ok = Session.revoke_token(token)
+      assert :ok = Session.revoke_token(token, key: @test_key)
       assert Session.revoked?(token)
       assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
@@ -308,7 +309,7 @@ defmodule ChatOverlay.SessionTest do
         conn(:post, "/api/auth/logout")
         |> put_req_header("cookie", "chat_overlay_session=#{token}")
 
-      _conn = Session.delete_session(conn)
+      _conn = Session.delete_session(conn, key: @test_key)
       assert Session.revoked?(token)
       assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
@@ -367,5 +368,21 @@ defmodule ChatOverlay.SessionTest do
       assert {:error, :unauthorized} =
                Session.authorize(conn, "streamer-linked", key: @test_key)
     end
+  end
+
+  test "invalid revocation inputs cannot grow the table" do
+    before = :ets.info(:chat_overlay_revoked_sessions, :size)
+    Enum.each(1..100, fn n -> Session.revoke_token("v1:invalid-#{n}") end)
+    assert :ets.info(:chat_overlay_revoked_sessions, :size) == before
+  end
+
+  test "owner restart invalidates previously issued sessions" do
+    {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+    assert {:ok, _} = Session.verify_token(token, key: @test_key)
+    :ok = Supervisor.terminate_child(ChatOverlay.Application.Supervisor, ChatOverlay.Profiles)
+    {:ok, _} = Supervisor.restart_child(ChatOverlay.Application.Supervisor, ChatOverlay.Profiles)
+    assert {:error, _} = Session.verify_token(token, key: @test_key)
+    {:ok, fresh} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+    assert {:ok, _} = Session.verify_token(fresh, key: @test_key)
   end
 end

@@ -25,6 +25,7 @@ defmodule ChatOverlay.Application do
       ] ++
         [
           ChatOverlay.Profiles,
+          ChatOverlay.OAuthFlow,
           ChatOverlay.MediaCleanup,
           ChatOverlay.Tokens,
           ChatOverlay.Stores,

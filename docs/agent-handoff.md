@@ -422,3 +422,19 @@ Local verification:
 - Siguiente paso: revisión humana y CI de esta PR; ejecutar las pruebas sostenidas
   sobre revisión/imagen identificadas y analizar la tendencia bajo #4. No hacer
   merge ni publicar sin autorización expresa del operador.
+
+## Continuación local OAuth — 07-10-2026, Refs #42
+
+Rama `security/42-oauth-session`, worktree `D:/github/_worktrees/chat-overlay-f2-security`.
+Transacciones por navegador, consumo único, origen HTTPS configurado, cuotas por
+solicitante y revalidación serializada de permisos/identidad. Revocaciones acotadas
+con invalidación de sesiones tras reiniciar. Base64 AEAD canónico.
+
+Última imagen `sha256:523f4bf8e38cbc4b80f9461f1f10b34721159dad4ee10ba976fe2f63221586c5`:
+264/264 PASS en ambas semillas, reportes completos. Revisión Sol medium ronda 7
+limpia, estática. Ver `docs/oauth-runtime.md` y
+`docs/workflows/f2-security/runs/2026-10-07.md`.
+
+No cierra #42 ni F2: navegador/proxy/proveedores reales, CI y revisión humana
+pendientes. ADR0005 A/B permanece en ramas separadas; no integrar la cuarentena
+con siete regresiones actuales. Sin push, PR nueva, merge ni despliegue.

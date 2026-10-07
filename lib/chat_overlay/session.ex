@@ -53,7 +53,8 @@ defmodule ChatOverlay.Session do
           "provider" => to_string(provider),
           "user_id" => to_string(user_id),
           "created_at" => now,
-          "expires_at" => now + max_age
+          "expires_at" => now + max_age,
+          "epoch" => epoch()
         }
         |> maybe_put("username", username)
         |> maybe_put("account_version", account_version)
@@ -67,14 +68,25 @@ defmodule ChatOverlay.Session do
   Revokes a session token so it cannot be used again across any device or client.
   """
   @spec revoke_token(String.t()) :: :ok
-  def revoke_token(token) when is_binary(token) do
-    ensure_revocation_table()
-    hash = :crypto.hash(:sha256, token)
-    :ets.insert(:chat_overlay_revoked_sessions, {hash, System.system_time(:second)})
+  def revoke_token(token, opts \\ [])
+
+  def revoke_token(token, opts) when is_binary(token) do
+    if Process.whereis(ChatOverlay.Profiles), do: ChatOverlay.Profiles.revoke_session(token, opts)
     :ok
   end
 
-  def revoke_token(_), do: :ok
+  def revoke_token(_, _), do: :ok
+
+  def epoch do
+    try do
+      case :ets.lookup(:chat_overlay_revoked_sessions, :epoch) do
+        [{:epoch, value}] -> value
+        _ -> nil
+      end
+    rescue
+      ArgumentError -> nil
+    end
+  end
 
   @doc """
   Checks if a session token has been revoked.
@@ -92,25 +104,6 @@ defmodule ChatOverlay.Session do
   end
 
   def revoked?(_), do: false
-
-  defp ensure_revocation_table do
-    case :ets.info(:chat_overlay_revoked_sessions) do
-      :undefined ->
-        try do
-          :ets.new(:chat_overlay_revoked_sessions, [
-            :named_table,
-            :set,
-            :public,
-            read_concurrency: true
-          ])
-        catch
-          _, _ -> :ok
-        end
-
-      _ ->
-        :ok
-    end
-  end
 
   @doc """
   Verifies and decrypts a session token. Validates integrity tag, AAD domain separation,
@@ -138,7 +131,7 @@ defmodule ChatOverlay.Session do
           case JSON.decode(json) do
             {:ok, %{"handle" => handle, "expires_at" => expires_at} = session}
             when is_binary(handle) and byte_size(handle) > 0 and is_integer(expires_at) ->
-              if expires_at > now do
+              if expires_at > now and epoch() != nil and session["epoch"] == epoch() do
                 {:ok, session}
               else
                 {:error, :session_expired}
@@ -182,8 +175,7 @@ defmodule ChatOverlay.Session do
       {:ok, token} ->
         secure =
           Keyword.get_lazy(opts, :secure, fn ->
-            conn.scheme == :https or
-              Plug.Conn.get_req_header(conn, "x-forwarded-proto") == ["https"]
+            ChatOverlay.Transport.secure?(conn)
           end)
 
         max_age = Keyword.get(opts, :max_age, @default_max_age)
@@ -210,7 +202,7 @@ defmodule ChatOverlay.Session do
 
     case conn.cookies[@cookie_name] do
       token when is_binary(token) and byte_size(token) > 0 ->
-        revoke_token(token)
+        revoke_token(token, opts)
 
       _ ->
         :ok
@@ -218,8 +210,7 @@ defmodule ChatOverlay.Session do
 
     secure =
       Keyword.get_lazy(opts, :secure, fn ->
-        conn.scheme == :https or
-          Plug.Conn.get_req_header(conn, "x-forwarded-proto") == ["https"]
+        ChatOverlay.Transport.secure?(conn)
       end)
 
     Plug.Conn.delete_resp_cookie(conn, @cookie_name,
