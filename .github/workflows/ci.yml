@@ -137,6 +137,18 @@ jobs:
           python3 scripts/test_media_coordinator.py -v
           python3 scripts/test_local_media_store.py -v
           python3 scripts/test_local_media_e2e.py -v
+      - name: Load and test the exact human-approved decoder artifact
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 --output "$RUNNER_TEMP/decoder-89432cb3.tar" https://github.com/tears-mysthrala/chat-overlay/releases/download/decoder-89432cb3-20261007/decoder-89432cb3.tar
+          printf '%s  %s\n' '1dc0c8e7da9a6fb11b449a22f1a36da9f44aad824b25a3075f8b044b68a00ae5' "$RUNNER_TEMP/decoder-89432cb3.tar" | sha256sum --check --strict
+          docker load --input "$RUNNER_TEMP/decoder-89432cb3.tar"
+          export MEDIA_VALIDATOR_IMAGE=sha256:89432cb33a13415bb42558259ccf1ea299118d0163547555f8644ae11b0f8bff
+          test "$(docker image inspect --format '{{.Id}}' "$MEDIA_VALIDATOR_IMAGE")" = "$MEDIA_VALIDATOR_IMAGE"
+          docker tag "$MEDIA_VALIDATOR_IMAGE" chat-overlay:media-validator
+          python3 scripts/test_media_sandbox.py -v
+          python3 scripts/test_media_coordinator.py -v
+          python3 scripts/test_local_media_store.py -v
+          python3 scripts/test_local_media_e2e.py -v
       - name: Install pinned SBOM validation tooling (development only)
         run: |
           python3 -m venv "$RUNNER_TEMP/decoder-audit"

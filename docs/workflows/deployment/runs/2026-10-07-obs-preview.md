@@ -71,3 +71,15 @@ Ambos confirmados. Lectura SSH verificada de Benten: runtime43ed8a7a,
 egress172.30.96.2 y regla exacta peer172.30.96.2 -> host172.30.96.1:4199
 ya activos. Se concilian los archivos versionados con ese estado, incluyendo IP
 estática en Compose. No se reejecuta provisionado ni firewall en producción.
+
+CI 37649256567 sobre 1d5caf8: source-and-tests, postgres-rls, image-security
+y CodeQL PASS. media-decoder reconstruyó sha256:245de3e4... y rechazó el VEX
+por identidad distinta de sha256:89432cb3...; quality-gate falló por ese job.
+No se modificó ni amplió el VEX aprobado. El propietario autorizó publicar el
+artefacto exacto aprobado como release decoder-89432cb3-20261007.
+Archivo público decoder-89432cb3.tar: 67511296 bytes, SHA256
+1dc0c8e7da9a6fb11b449a22f1a36da9f44aad824b25a3075f8b044b68a00ae5.
+GitHub confirmó asset uploaded y checksum idéntico. CI conserva el build y sus
+pruebas y añade descarga con checksum e identidad exactos, pruebas del artefacto
+aprobado y escaneo fresco con los controles VEX y caducidad intactos.
+Controles estáticos y test VEX normal/optimizado PASS. Producción no cambia.
