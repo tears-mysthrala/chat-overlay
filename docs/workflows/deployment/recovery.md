@@ -20,6 +20,8 @@
    valida miembros/checksums, SQLite y medios, restaura PostgreSQL sin red y
    comprueba conteos/FORCE RLS y descifrado en la imagen real sin upstream.
    Los archivos extraídos contienen secretos: permanecer en el directorio privado.
+   El runtime recibe solo los metadatos cifrados de cuentas por stdin; no monta
+   el directorio del operador ni requiere ampliar sus permisos al UID65532.
    El checker elimina solo su contenedor aleatorio, nunca servicios reales.
 6. La recuperación efectiva sobre producción exige parar writers, conservar
    cambios posteriores al backup y decidir cómo conciliarlos. Esta prueba no

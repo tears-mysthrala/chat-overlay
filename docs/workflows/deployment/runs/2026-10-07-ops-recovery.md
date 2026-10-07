@@ -60,3 +60,10 @@ revisión y CI. Para trabajo ambiguo se mantiene el bloqueo y conciliación manu
 ARCH06: propuesta concreta ADR0008, sin nuevas dependencias; custodio privado y
 frente público sin clave maestra/DB/OAuth. El protocolo privado cerrado necesita
 decisión explícita antes de implementar. No se cambia la arquitectura en esta PR.
+
+Codex cloud sobre55048d9 detectó P1: un operador Linux distinto de UID65532
+no permite al runtime atravesar el bind mount del directorio0700. Confirmado;
+la prueba anterior en Docker Desktop no acreditaba esos permisos Linux. Se
+elimina el montaje completo y se envían únicamente metadatos de cuentas cifradas
+por stdin al proceso no root. El directorio privado no cambia permisos.
+Restore real con stdin: DB/conteos/RLS/medios/descifrado PASS; 8tests scripts PASS.

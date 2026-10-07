@@ -18,8 +18,8 @@ IMAGE = 'postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c666
 FILES = {'overlay.dump', 'roles.sql', 'image-id.txt', 'counts.txt', 'state.tar', 'SHA256SUMS'}
 PRIVATE_LOG = None
 
-def run(*args):
-    result = subprocess.run(args, capture_output=True)
+def run(*args, input_data=None):
+    result = subprocess.run(args, capture_output=True, input=input_data)
     if result.returncode:
         if PRIVATE_LOG is not None:
             PRIVATE_LOG.write_bytes(result.stderr + result.stdout)
@@ -95,7 +95,7 @@ def check(bundle, work):
         accounts = run('docker', 'exec', container, 'psql', '-U', 'postgres', '-d', 'overlay', '-Atc', "SELECT coalesce(json_agg(json_build_object('handle',handle,'provider',provider,'body',body::json)), '[]'::json) FROM overlay.accounts")
         (work/'accounts.json').write_bytes(accounts)
         evaluation = '''
-        accounts = case ChatOverlay.JSON.decode(File.read!("/restore/accounts.json")) do
+        accounts = case ChatOverlay.JSON.decode(IO.read(:stdio, :eof)) do
           {:ok, values} when is_list(values) -> values
           _ -> raise "Restored account document invalid"
         end
@@ -115,7 +115,9 @@ def check(bundle, work):
         app_image = (work/'image-id.txt').read_text().strip()
         if not re.fullmatch(r'sha256:[a-f0-9]{64}', app_image):
             raise ValueError('Invalid pinned application image')
-        run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '512m', '--pids-limit', '128', '--env-file', str(work/'runtime.env'), '-e', 'CHAT_STORAGE=json_demo', '--mount', f'type=bind,source={work.resolve()},target=/restore,readonly', app_image, '/app/bin/chat_overlay', 'eval', evaluation)
+        # Supply only ciphertext account metadata through stdin. No host directory
+        # is mounted into UID65532, and the operator directory stays private.
+        run('docker', 'run', '--rm', '-i', '--network', 'none', '--read-only', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true', '--memory', '512m', '--pids-limit', '128', '--env-file', str(work/'runtime.env'), '-e', 'CHAT_STORAGE=json_demo', app_image, '/app/bin/chat_overlay', 'eval', evaluation, input_data=accounts)
         result = {'database_restore': 'PASS', 'counts': counts, 'rls_tables': 3, 'media_objects_verified': media_count, 'account_decryption': 'PASS', 'network': 'none', 'product_upstream': 'NOT TESTED'}
         (work/'result.json').write_text(json.dumps(result))
         print(json.dumps(result))
