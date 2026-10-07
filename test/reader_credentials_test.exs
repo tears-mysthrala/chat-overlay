@@ -126,4 +126,76 @@ defmodule ChatOverlay.ReaderCredentialsTest do
     :sys.replace_state(Tokens, &%{&1 | cache: old_cache})
     assert {:ok, "token-new"} = Net.token(hd(Config.profile("readera")["sources"]))
   end
+
+  test "queued failure from previous binding cannot invalidate relinked account" do
+    assert {:ok, _} = link("readera", "token-old")
+    old_version = Config.profile("readera")["linked_accounts"]["twitch"]["account_version"]
+    assert {:ok, _} = link("readera", "token-new")
+
+    assert {:error, :stale_binding} =
+             Profiles.mark_account_reauth_required("readera", "twitch", :invalid_grant,
+               expected_version: old_version,
+               invalidate_cache: false
+             )
+
+    assert Config.profile("readera")["linked_accounts"]["twitch"]["status"] == "active"
+    assert {:ok, "token-new"} = Net.token(hd(Config.profile("readera")["sources"]))
+  end
+
+  test "Twitch target cannot autodiscover with revoked YouTube operator credentials" do
+    assert :ok = Profiles.delete("readerb")
+
+    assert {:ok, _} =
+             Profiles.link_account("readera", "youtube", %{user_id: "owned-youtube"}, %{
+               "access_token" => "synthetic-google",
+               "expires_in" => 7200
+             })
+
+    assert {:ok, _} = Profiles.unlink_account("readera", "youtube")
+    owner = self()
+    original = Application.get_env(:chat_overlay, :resolver_http_client)
+
+    Application.put_env(:chat_overlay, :resolver_http_client, fn host, _, _, _, _ ->
+      send(owner, {:resolver_host, host})
+
+      body =
+        case host do
+          "id.twitch.tv" ->
+            %{"client_id" => "test-client", "user_id" => "123", "login" => "readera"}
+
+          "api.twitch.tv" ->
+            %{
+              "data" => [
+                %{
+                  "id" => "123",
+                  "login" => "readera",
+                  "display_name" => "Reader",
+                  "description" => "https://www.youtube.com/@readera"
+                }
+              ]
+            }
+
+          _ ->
+            flunk("Unexpected secondary resolver request to #{host}")
+        end
+
+      {:ok, 200, [], ChatOverlay.JSON.encode(body)}
+    end)
+
+    on_exit(fn ->
+      if original,
+        do: Application.put_env(:chat_overlay, :resolver_http_client, original),
+        else: Application.delete_env(:chat_overlay, :resolver_http_client)
+    end)
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{
+               "handle" => "readera",
+               "target" => "https://twitch.tv/readera"
+             })
+
+    assert_receive {:resolver_host, "id.twitch.tv"}
+    assert_receive {:resolver_host, "api.twitch.tv"}
+    refute_receive {:resolver_host, "www.googleapis.com"}
+  end
 end

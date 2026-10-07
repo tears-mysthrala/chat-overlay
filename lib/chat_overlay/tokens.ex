@@ -387,6 +387,7 @@ defmodule ChatOverlay.Tokens do
                 handle,
                 provider_str,
                 :persistence_failure_during_rotation,
+                expected_version: expected_version,
                 invalidate_cache: false
               )
 
@@ -395,6 +396,7 @@ defmodule ChatOverlay.Tokens do
 
         {:error, :invalid_grant} ->
           Profiles.mark_account_reauth_required(handle, provider_str, :invalid_grant,
+            expected_version: expected_version,
             invalidate_cache: false
           )
 

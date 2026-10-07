@@ -2,8 +2,14 @@ defmodule ChatOverlay.Resolver do
   @moduledoc "Dynamic platform channel and live stream resolver."
   alias ChatOverlay.{JSON, Net}
 
+  defp request(host, method, path, headers, body \\ "") do
+    # Trusted application configuration only; never supplied by an HTTP caller.
+    client = Application.get_env(:chat_overlay, :resolver_http_client, &Net.request/5)
+    client.(host, method, path, headers, body)
+  end
+
   def validate_twitch_token(token) when is_binary(token) and byte_size(token) > 0 do
-    case Net.request("id.twitch.tv", "GET", "/oauth2/validate", [
+    case request("id.twitch.tv", "GET", "/oauth2/validate", [
            {"authorization", "Bearer " <> token}
          ]) do
       {:ok, 200, _, raw} ->
@@ -45,7 +51,7 @@ defmodule ChatOverlay.Resolver do
           do: "/helix/users?id=" <> URI.encode(slug),
           else: "/helix/users?login=" <> URI.encode(slug)
 
-      case Net.request(
+      case request(
              "api.twitch.tv",
              "GET",
              query,
@@ -128,7 +134,7 @@ defmodule ChatOverlay.Resolver do
         "variables" => variables
       }
 
-      case Net.request(
+      case request(
              "gql.twitch.tv",
              "POST",
              "/gql",
@@ -254,7 +260,7 @@ defmodule ChatOverlay.Resolver do
           "part" => "snippet,liveStreamingDetails"
         })
 
-    case Net.request("www.googleapis.com", "GET", path, headers) do
+    case request("www.googleapis.com", "GET", path, headers) do
       {:ok, 200, _, raw} ->
         with {:ok, %{"items" => [item | _]}} <-
                JSON.decode(raw, Net.body_limit("www.googleapis.com")) do
@@ -300,7 +306,7 @@ defmodule ChatOverlay.Resolver do
             "part" => "id,snippet"
           })
 
-      case Net.request("www.googleapis.com", "GET", path, headers) do
+      case request("www.googleapis.com", "GET", path, headers) do
         {:ok, 200, _, raw} ->
           with {:ok, %{"items" => [item | _]}} <-
                  JSON.decode(raw, Net.body_limit("www.googleapis.com")),
@@ -329,7 +335,7 @@ defmodule ChatOverlay.Resolver do
           "part" => "id,snippet"
         })
 
-    case Net.request("www.googleapis.com", "GET", path, headers) do
+    case request("www.googleapis.com", "GET", path, headers) do
       {:ok, 200, _, raw} ->
         with {:ok, %{"items" => [item | _]}} <-
                JSON.decode(raw, Net.body_limit("www.googleapis.com")),

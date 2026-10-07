@@ -762,6 +762,11 @@ defmodule ChatOverlay.Profiles do
 
   defp target_resolution_options(handle, target, opts)
        when is_binary(handle) and is_binary(target) do
+    opts =
+      if Enum.any?(["twitch", "youtube"], &oauth_reader_history?(slugify(handle), &1)),
+        do: Keyword.put(opts, :auto_discover_youtube, false),
+        else: opts
+
     provider =
       if opts[:platform] in ["twitch", "youtube"],
         do: opts[:platform],
@@ -1573,6 +1578,18 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp do_mark_reauth_required(handle, provider, reason, opts) do
+    expected_version = opts[:expected_version]
+    current = target_reader_binding(handle, to_string(provider))
+
+    if not is_nil(expected_version) and
+         (is_nil(current) or elem(current, 0) != expected_version) do
+      {:error, :stale_binding}
+    else
+      do_mark_current_reauth_required(handle, provider, reason, opts)
+    end
+  end
+
+  defp do_mark_current_reauth_required(handle, provider, reason, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
