@@ -3,7 +3,8 @@
 **Estado: A y B aprobadas expresamente por el usuario el 05-10-2026 para implementación y pruebas locales.**
 La autorización incluye Postgrex y las dependencias/restricciones descritas; excluye
 infraestructura y cuentas reales, push, PR externa, merge y despliegue. Esta rama
-implementa solo A (#51); B se realiza en una unidad independiente. La aprobación
+integra localmente A (#51), B (#49) y OAuth en la candidata #55. Las unidades
+originales se conservan en ramas independientes. La aprobación
 no acredita controles terminados. #56 corrige
 persistencia JSON; #57 corrige inventario/cuota. Ninguna satisface por sí sola RLS
 o validación de formatos. Se solicita aprobación de implementación local en dos

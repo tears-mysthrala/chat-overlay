@@ -471,3 +471,17 @@ activación dejando artefacto normalizado público pendiente de retirada, con ca
 Revisión Sol scoped y fix comprobado por inspección. No R2 real/OBS/CI remota,
 PR, push, merge ni despliegue. Integración candidata se valida por separado.
 Ver docs/workflows/media-quarantine/runs/2026-10-07.md.
+
+## Candidata F2 integrada y revisión oficial — 07-10-2026, Refs #55
+
+`security/55-f2-local-candidate`, D:/github/_worktrees/chat-overlay-f2-candidate.
+OAuth/A/B integrados localmente: 274 generales y 26 PostgreSQL por semilla PASS;
+10 decoder y 8 coordinator PASS; escritorio sintético login/permisos/OBS capability/
+SSE/logout PASS. Los siete fallos antiguos de B quedaron resueltos.
+OpenAI Codex Security security-diff-scan completado y sellado sobre `aab4572`:
+44 entradas fuente oficiales revisadas, cero nuevos hallazgos reportables,
+cobertura parcial con seguimientos. Solo Sol. La autorización de revisión ya
+superó el bloqueo histórico de envío; no se usó la skill personal autoreview.
+Seis matches decoder sin suppressions y cobertura FFmpeg git siguen pendientes;
+demo detrás de proxy loopback requiere evaluación de configuración. No cierre F2,
+publicación o despliegue. Registro actual: docs/workflows/f2-security/runs/2026-10-07-candidate.md.

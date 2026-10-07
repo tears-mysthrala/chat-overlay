@@ -1,5 +1,30 @@
 # Candidata local F2 — 2026-10-07
 
+## Actualización: revisión oficial OpenAI completada
+
+Tras autorización expresa del usuario, se sustituyó la skill personal autoreview
+por OpenAI Codex Security `security-diff-scan`. Scan
+`ca29daab-434e-4c62-955c-afebd4fe2a85`, rango inmutable base main -> `aab4572`.
+Preflight ready; padre y trabajadores `gpt-6.1-sol`, sin modelos superiores.
+44 entradas oficiales revisadas (23 auth/RLS, 12 media, 9 tooling), más
+Dockerfiles, parches CPython y pruebas de apoyo. Cero hallazgos nuevos reportables;
+cobertura marcada parcial por seguimientos pendientes. Informe sellado en el
+estado local del plugin, colección `chat-overlay-f2-candidate`, revisión `aab4572`,
+directorio `aab45728d0087b8513bf25ef0354cb1fdb3a3c9f_20261007T083616Z_e8fv5_so/report.md`.
+
+La duda sobre CVE-2026-12345 se resolvió con registro CVE oficial PUBLISHED y
+checksum del parche upstream coincidente. No resuelve los matches APK del scanner.
+Demo tras proxy loopback conserva una excepción de autorización preexistente;
+su configuración pública debe evaluarse antes de distribuir. Postgrex transmite
+verify_peer/CA/SNI a OTP; la opción ssl_opts está deprecada y no se probó TLS real.
+Los contadores del plugin proceden de tres rollouts, no de un coste facturado
+aislado: totalTokens 4831047, inputTokens 4816855, cachedInputTokens 4605696.
+La revisión no ejecutó de nuevo las suites ni acredita producción.
+
+Este resultado sustituye el bloqueo de revisión descrito históricamente abajo.
+Siguen pendientes seis matches, cobertura CVE del FFmpeg git, gates operativos,
+CI y aprobación humana. No se aplicó VEX ni se hizo push/merge/despliegue.
+
 Estado: implementación integrada y validación local; cierre de seguridad pendiente.
 Rama `security/55-f2-local-candidate`, issue #55. Base main
 `1bc715c875ebe61a63b533705b88ae9c066cf3c7`. Sin push, PR, merge ni despliegue.
