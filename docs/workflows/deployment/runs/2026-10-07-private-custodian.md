@@ -71,3 +71,37 @@ distintos, UID65532 y rootfs readonly; frente sin credenciales ni perfiles,
 perfil autorizado vía mTLS, custodio sin puerto publicado y 503 al detenerlo.
 Evidencia: output/custodian/isolation.json, release fcb08dc49a5f.
 No acredita el firewall del huésped, PostgreSQL, upstream OAuth ni decoder.
+
+## Revisión de candidata y corrección funcional
+
+Commit97312b5 publicado como PR #67, listo para revisión y enlazado en T3.
+Revisión oficial OpenAI875c8b69-a847-4343-b47d-a668494d3dfb completada:22 archivos
+fuente, dos reviewers Sol con reparto8/8 y seis operativos revisados por padre.
+Sin vulnerabilidades confirmadas; dos bloqueos funcionales conservados en notas:
+formato de cookie OAuth y límite Base64 menor que audio crudo admitido.
+Contador del goal de revisión:259715 tokens,782 segundos; no es medida de tokens
+facturados. El contador del plugin agrega caché/input de las conversaciones.
+
+Corregido sufijo real de cookie32hex lowercase, también en borrado; presupuesto
+cerrado privado2800300bytes para2MiB raw+Base64+metadatos. Defaults públicos y
+profundidad JSON preservados. Regresiones dirigidas:15PASS, incluyendo inicio y
+callback cancelado de ambos proveedores por mTLS, audio máximo por ruta real con
+almacenamiento sintético, hashes/tamaños inválidos y negativos TLS. No upstream.
+La primera ejecución de integración PostgreSQL omitió la migración del fixture
+y falló; repetido orden exactoCI con identidad migrator:26PASS porseed y boot/
+write/restartPASS. 12regresionesLinuxPythonPASS. Auditoría releasefcb08dc49a5f:
+295componentes CycloneDX schema válido;0pendientes,4matches porVEX previamente
+aprobado. La imagen corregida requiere su propia identidad y CI; no extrapolar.
+
+Correcciones locales finales: 327 ExUnit PASS en seeds 0/424242, serial y
+concurrente, en validation6ff8abfb4106. 16 pruebas dirigidas PASS. El primer
+ensayo de 100 streams dejó reservas transitorias al cerrar sockets y afectó a
+otras pruebas; ahora revoca la sesión real y verifica la liberación natural
+antes de continuar, sin reiniciar ni vaciar Admission. Capacidad privada
+alineada a la pública: ThousandIsland limita por aceptador, 2x256 frente a
+4x128; admisión SSE conserva100. Formato y diff check PASS.
+CI97312b5 falló por ConnectionResetError al arrancar el comprobador; el retry
+acotado de readiness incluye ese error, sin reintentar mutaciones.
+Release8f4b1a79bcb5: aislamiento dos contenedores y smoke PASS;
+SBOM295 schema válido, cero pendientes y cuatro coincidencias cubiertas por
+VEX aprobado. Falta CI de las correcciones, revisión de su delta y producción.

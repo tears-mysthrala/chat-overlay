@@ -1,8 +1,8 @@
 # ADR 0008 — Custodio privado de secretos — Refs #39
 
 Estado: implementación y pruebas aprobadas explícitamente por Kalista el
-07-10-2026 en la conversación del proyecto. Separación todavía no implementada
-ni acreditada en producción.
+07-10-2026 en la conversación del proyecto. Separación implementada en candidata
+y probada con dos releases sintéticas; todavía no acreditada en producción.
 
 ## Problema y decisión propuesta
 
@@ -75,6 +75,9 @@ client secrets OAuth, credenciales del coordinador y tokens de plataforma.
 Comprometer el frente permite invocar las operaciones públicas como ese frente;
 no concede acceso genérico al custodio ni una identidad administrativa.
 
-El protocolo v1 se documenta en `docs/custodian-protocol.md`. Su codec no activa
-un listener ni cambia el despliegue. El corte queda bloqueado hasta conectar
-todos los flujos, validar dos procesos reales y completar revisión/CI/OBS.
+El protocolo v1 se documenta en `docs/custodian-protocol.md`. La candidata incluye
+listener mTLS, roles y Compose separado. La red frontal ruteada fue aprobada
+expresamente después de comprobar que Docker internal impide publicar HTTP;
+requiere aplicar y verificar el bloqueo de salida con harden.sh custodian antes
+de arrancar. El corte espera revisión/CI y verificación de firewall y flujos
+OAuth/OBS/multimedia reales. No extrapolar los fixtures a producción.

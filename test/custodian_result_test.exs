@@ -52,6 +52,14 @@ defmodule ChatOverlay.Custodian.ResultTest do
 
     assert :ok = Result.validate(Map.put(json(%{}), "cookies", [cookie]))
 
+    oauth_cookie =
+      Map.put(cookie, "name", ChatOverlay.OAuthFlow.cookie_name("fixture-state", true))
+
+    assert :ok = Result.validate(Map.put(json(%{}), "cookies", [oauth_cookie]))
+
+    assert :ok =
+             Result.validate(Map.put(json(%{}), "cookies", [Map.put(oauth_cookie, "max_age", 0)]))
+
     for bad <- [
           Map.put(cookie, "secure", false),
           Map.put(cookie, "name", "other"),
@@ -60,5 +68,27 @@ defmodule ChatOverlay.Custodian.ResultTest do
         ] do
       assert {:error, :response_rejected} = Result.validate(Map.put(json(%{}), "cookies", [bad]))
     end
+  end
+
+  test "raw media ceiling survives base64 expansion without accepting oversized objects" do
+    bytes = :binary.copy(<<0>>, 2_097_152)
+
+    result = %{
+      "version" => 1,
+      "kind" => "media",
+      "status" => 200,
+      "mime" => "audio/wav",
+      "size" => byte_size(bytes),
+      "sha256" => Base.encode16(:crypto.hash(:sha256, bytes), case: :lower),
+      "bytes" => Base.encode64(bytes)
+    }
+
+    assert :ok = Result.validate(result)
+    encoded = ChatOverlay.JSON.encode(result)
+    assert byte_size(encoded) > 2_097_152
+    assert {:ok, ^result} = Result.decode(encoded)
+    assert {:error, :response_rejected} = Result.validate(Map.put(result, "size", 2_097_153))
+    assert {:error, :response_rejected} = Result.validate(Map.put(result, "sha256", "wrong"))
+    assert {:error, :response_rejected} = Result.decode(:binary.copy(" ", Result.max_bytes() + 1))
   end
 end

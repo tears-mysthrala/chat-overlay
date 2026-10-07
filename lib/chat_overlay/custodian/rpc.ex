@@ -108,7 +108,9 @@ defmodule ChatOverlay.Custodian.Listener do
         http_options: [compress: false, log_protocol_errors: false],
         thousand_island_options: [
           num_acceptors: 2,
-          num_connections: 128,
+          # ThousandIsland applies this bound per acceptor: 2 * 256 matches
+          # the public listener's 4 * 128, while SSE admission stays at 100.
+          num_connections: 256,
           read_timeout: 5000,
           transport_options: [
             cacertfile: Keyword.fetch!(options, :cacertfile),

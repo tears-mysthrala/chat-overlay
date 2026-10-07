@@ -2,7 +2,6 @@ defmodule ChatOverlay.Custodian.Client do
   @moduledoc "Fixed operator endpoint, mutual TLS, bounded reads and no automatic mutation retries."
   alias ChatOverlay.Custodian.Protocol
   @deadline_ms 35_000
-  @max_response 2_097_152
 
   def open do
     config = Application.fetch_env!(:chat_overlay, :custodian_client)
@@ -105,7 +104,7 @@ defmodule ChatOverlay.Custodian.Client do
             end)
 
           cond do
-            size > @max_response ->
+            size > ChatOverlay.Custodian.Result.max_bytes() ->
               {:error, :response_rejected}
 
             done and status == 200 ->

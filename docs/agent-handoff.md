@@ -1,5 +1,14 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> 07-10-2026: ADR0008/#39 implementado en security/39-private-custodian,
+> PR #67 abierta y enlazada. 327 ExUnit PASS por seed; PostgreSQL26 PASS por
+> seed más boot/persistencia/reinicio; smoke release, 12 Python Linux y separación
+> sintética de dos releases PASS. Revisión oficial875c8b69 de97312b5 completa:
+> sin vulnerabilidades confirmadas, con dos regresiones funcionales OAuth/media
+> que bloquearon merge y se corrigen con nuevas pruebas mTLS. CI, revisión de
+> correcciones y corte Benten/firewall/OAuth/OBS reales pendientes. Producción
+> conserva43ed8a7a. Detalle: docs/workflows/deployment/runs/2026-10-07-private-custodian.md.
+
 > 07-10-2026: preview manual #64 implementado en feat/64-obs-preview y desplegado
 > en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,
 > revisión oficial OpenAI e28c1e39 completada sin vulnerabilidades del diff.

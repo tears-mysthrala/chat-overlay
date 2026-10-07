@@ -40,6 +40,9 @@ antes de escribir. El límite de transporte es 2 MiB y el dominio impone además
 los límites de categoría. La respuesta admite únicamente variantes cerradas,
 cookies seguras y redirecciones locales u oficiales; rechaza claves de secretos.
 Los objetos estáticos incluyen tamaño, MIME y SHA-256 que verifica el frente.
+La respuesta privada tiene un presupuesto de 2800300 bytes: admite la expansión
+Base64 de 2 MiB crudos y 4096 bytes de metadatos. El límite público JSON por
+defecto sigue en 262144 bytes; SSE conserva su límite independiente de 2 MiB.
 
 `events.subscribe` abre una conexión dedicada de TLS mutuo. El custodio conserva
 la admisión, demanda de fuentes, replay, cursores y revocación del SSE existente.

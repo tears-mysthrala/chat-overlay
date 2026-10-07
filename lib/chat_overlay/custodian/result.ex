@@ -1,6 +1,10 @@
 defmodule ChatOverlay.Custodian.Result do
   @moduledoc "Closed response envelope; platform credentials cannot cross into the public role."
-  @limit 2_097_152
+  @raw_media_limit 2_097_152
+  @base64_limit 4 * div(@raw_media_limit + 2, 3)
+  @limit ChatOverlay.JSON.custodian_response_limit()
+
+  def max_bytes, do: @limit
 
   def decode(bytes) do
     with {:ok, result} <- ChatOverlay.JSON.decode(bytes, @limit),
@@ -67,7 +71,7 @@ defmodule ChatOverlay.Custodian.Result do
        when map_size(result) == 7 do
     with true <- mime in ["image/png", "audio/wav"],
          true <- is_integer(size) and size in 1..2_097_152,
-         true <- is_binary(bytes) and byte_size(bytes) <= 2_097_152,
+         true <- is_binary(bytes) and byte_size(bytes) <= @base64_limit,
          {:ok, decoded} <- Base.decode64(bytes),
          true <- byte_size(decoded) == size,
          true <- Base.encode16(:crypto.hash(:sha256, decoded), case: :lower) == hash do
@@ -120,7 +124,7 @@ defmodule ChatOverlay.Custodian.Result do
        when map_size(cookie) == 7 and is_binary(name) and is_binary(value) do
     String.valid?(name) and byte_size(name) <= 64 and
       (name == ChatOverlay.Session.cookie_name() or
-         Regex.match?(~r/\A__Host-chat_overlay_oauth_[A-F0-9]{16}\z/, name)) and
+         Regex.match?(~r/\A__Host-chat_overlay_oauth_[a-f0-9]{32}\z/, name)) and
       byte_size(value) <= 8192 and String.valid?(value) and
       not String.contains?(value, ["\r", "\n", <<0>>]) and
       (is_nil(age) or (is_integer(age) and age in 0..604_800))

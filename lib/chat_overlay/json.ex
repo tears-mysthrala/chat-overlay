@@ -1,10 +1,13 @@
 defmodule ChatOverlay.JSON do
   @moduledoc "Bounded JSON boundary. Keys remain binaries; decoding never creates atoms."
   @max_bytes 262_144
+  @custodian_response_bytes 4 * div(2_097_152 + 2, 3) + 4096
+  def custodian_response_limit, do: @custodian_response_bytes
   def decode(data, limit \\ @max_bytes)
 
   def decode(data, limit)
-      when limit in [@max_bytes, 2_097_152] and is_binary(data) and byte_size(data) <= limit do
+      when limit in [@max_bytes, 2_097_152, @custodian_response_bytes] and is_binary(data) and
+             byte_size(data) <= limit do
     # Bound nesting before the runtime decoder allocates nested containers.
     with true <- depth?(data, 0, false, false) do
       try do

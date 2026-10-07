@@ -102,7 +102,8 @@ chown 65532:65532 server.key client.key
                     with urllib.request.urlopen(base + "/health/ready", timeout=2) as response:
                         if response.status == 200:
                             break
-                except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected):
+                except (urllib.error.URLError, TimeoutError, http.client.RemoteDisconnected,
+                        ConnectionResetError):
                     time.sleep(0.2)
             else:
                 raise RuntimeError("Separated release did not become ready")
