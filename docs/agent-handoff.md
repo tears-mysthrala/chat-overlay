@@ -553,3 +553,21 @@ SBOM295 válido/escaneo0 activos4 VEX. Quedan panel upload/OBS/revocación y deu
 operativa (registros acotados, backup externo/restore, ARCH06, CI). Chrome requiere
 acceso a file URLs de la extensión o selección manual de fixture. Continuar desde
 docs/workflows/deployment/runs/2026-10-07-local-media.md; preservar otros worktrees.
+
+## Recuperación externa y mantenimiento local — 07-10-2026, Refs #40/#62/#39
+
+PR65 integrada en mainfb016d8: multimedia/preview reales OBS, revocación y
+recuperación verificadas; CI diez checks PASS. CodeRabbit/Copilot omitidos por
+límites, no aprobaciones. Dos P1 Codex de deploy corregidos antes del merge.
+Nueva unidad chore/40-backup-maintenance en worktree chat-overlay-ops-40:
+backup real coherente cifrado CMS AES-256-GCM a Drive existente aprobado por el
+operador; presencia remota y tamaño confirmados, compartición desactivada.
+Restore aislado sin red: 1perfil/2cuentas/2objetos, FORCE RLS y hashesmedia PASS,
+descifrado de cuentas en runtime real PASS. Descarga independiente materializada
+por el conector HTTP403; restore usa copia local verificada de Drive.
+Clave RSA fuera de Drive con ACL privada, sin nueva dependencia de producción.
+Compactación offline conservadora preparada y 3regresiones Linux PASS; aún no
+aplicada en producción. Revisión/CI/merge de esta unidad pendientes. No backup
+periódico ni segunda custodia de clave configurados. Propuesta ARCH06 ADR0008
+preparada; protocolo interno y cambio de arquitectura requieren decisión explícita.
+Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
