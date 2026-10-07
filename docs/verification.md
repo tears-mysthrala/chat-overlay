@@ -22,7 +22,7 @@ No se atribuye una revisión CodeRabbit completa a un resultado limitado por cuo
 | Persistir antes de confirmar | `profile_persistence_test.exs`, `profile_storage_test.exs` | Revisión #56; SEC-13 sigue en #51 |
 | Cuota y limpieza | `media_ledger_test.exs`, `web_f2_test.exs` | #57; conciliación/reautenticación/vista operativa #48 |
 | Recuperación y clave | `recovery_test.exs`, [runbook](recovery.md) | Revisión #40 y aprobación antes de operación real |
-| Aislamiento de almacenamiento SEC-13 | [ADR 0004](adr/0004-f2-profile-persistence.md) | JSON **no acredita** RLS; propuesta ADR 0005 pendiente |
+| Aislamiento de almacenamiento SEC-13 | [PostgreSQL local](postgres-storage.md), `test_postgres/rls_test.exs`, boot/restart del producto | A ADR0005 aprobada e implementada localmente; ARCH-06/#39, infraestructura real y distribución pendientes; JSON **no acredita** RLS |
 | Formato real SEC-17 | [límites multimedia](media-storage.md) | #49: cuarentena/decoder/salida ligada a hash pendientes |
 | ASVS y pruebas negativas | Regresiones existentes; mapa parcial histórico | #42: IDs oficiales/evidencia y revisión de riesgo residual |
 | Navegador y OBS | Evidencia histórica #19/#21 | #43: candidata actual, navegador y OBS por separado |

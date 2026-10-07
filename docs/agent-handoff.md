@@ -438,3 +438,22 @@ limpia, estática. Ver `docs/oauth-runtime.md` y
 No cierra #42 ni F2: navegador/proxy/proveedores reales, CI y revisión humana
 pendientes. ADR0005 A/B permanece en ramas separadas; no integrar la cuarentena
 con siete regresiones actuales. Sin push, PR nueva, merge ni despliegue.
+## Unidad A PostgreSQL RLS — 05-10-2026, Refs #51
+
+Rama security/51-postgres-rls, worktree D:/github/_worktrees/chat-overlay-postgres,
+base 1bc715c875ebe61a63b533705b88ae9c066cf3c7. Autorización expresa A/B ADR0005
+para implementación y validación local. Esta rama solo implementa A. No push,
+PR externa, merge, despliegue ni cuentas reales. Issue #51 permanece abierta.
+
+Backend integrado en producto, roles owner/runtime/bootstrap separados,
+RLS/FORCE en perfiles/cuentas/objetos, contexto transacción derivado de servidor,
+import/export offline validados, selección explícita y sin fallback DB -> JSON.
+Ver [almacenamiento](postgres-storage.md) y [registro de pruebas/revisión](workflows/postgres-rls/runs/2026-10-05.md).
+ARCH-06/#39 sigue pendiente: pools/caché dentro de una BEAM, singleton soportado.
+
+Actualización 07-10: imagen local reconstruida `55d27537510d`, 25 pruebas PostgreSQL
+por semilla y boot/mutación/restart PASS. Exportación exclusiva con regresiones
+concurrente/symlink incorporada. Revisión estructurada Sol bloqueada por aprobación
+automática de red; inspección manual completada, revisión independiente pendiente.
+La integración con OAuth `d261ebf` se valida en otra candidata; esta unidad no
+acredita cierre de F2, CI remota o publicación.

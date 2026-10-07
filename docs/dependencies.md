@@ -102,3 +102,38 @@ los checks compartidos/T3 y el runtime permanecen independientes. Fuentes oficia
 [paquete npm](https://www.npmjs.com/package/playwright/v/1.63.0),
 [evaluación de funciones](https://playwright.dev/docs/api/class-page#page-evaluate),
 [intercepción de rutas](https://playwright.dev/docs/api/class-browsercontext#browser-context-route).
+
+## PostgreSQL/Postgrex — unidad A aprobada 05-10-2026, Refs #51
+
+El usuario aprobó expresamente Postgrex con ADR0005 para implementación/pruebas
+locales. El árbol actualizado contiene **13** paquetes Hex: los diez anteriores,
+Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.1.1. Fijados con
+checksums en mix.lock; no Ecto, Jason ni otra dependencia directa de producción.
+Apache-2.0 en los tres, verificado en [Postgrex versionado](https://raw.githubusercontent.com/elixir-ecto/postgrex/v0.22.4/mix.exs),
+[DBConnection](https://raw.githubusercontent.com/elixir-ecto/db_connection/v2.10.2/mix.exs)
+y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.1.1/mix.exs).
+Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.4
+probado. Postgrex 0.22.4 publicado en [Hex](https://hex.pm/packages/postgrex);
+no se presume una política LTS de Postgrex que el proveedor no publica.
+
+Postgrex/DBConnection omiten LICENSE en el paquete: avisos sin cambios desde README
+de commits `7a12d0b555e9441d3dfcb8f3d55fb5916e90db2d` y
+`e5d6969651d08ee5440fba23302658bfe33b83b9`, más Apache-2.0 completo del paquete
+Decimal en vendor/licenses. inventory.exs los incorpora sin relajar su gate.
+Postgrex emite deprecación upstream `xref: [exclude: ...]` al compilar con Mix
+1.20.4; se conserva como limitación de compatibilidad, sin ocultarla ni parchear
+la dependencia unilateralmente. Compilación del producto warnings-as-errors PASS.
+
+PostgreSQL **18.6** está soportado según la [política oficial](https://www.postgresql.org/support/versioning/)
+consultada el 05-10-2026; fin de soporte major 18: 14-11-2030. Licencia
+[PostgreSQL](https://www.postgresql.org/about/licence/). Imagen oficial local
+postgres:18.6-alpine fijada por digest en compose.postgres-local.yml y versión
+real comprobada por SQL. No se introduce servidor DB en la imagen de la app.
+No se ha hecho auditoría integral de vulnerabilidades de la imagen PostgreSQL;
+el pin y las pruebas no prueban ausencia de CVE.
+
+Contrato de [RLS/FORCE](https://www.postgresql.org/docs/18/ddl-rowsecurity.html),
+[set_config transaction-local](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADMIN-SET)
+y [Postgrex transaction/rollback](https://hexdocs.pm/postgrex/Postgrex.html)
+contrastado también con fuente del paquete resuelto. Inventario/Hex audit del
+build con Hex 2.5.1 PASS; [registro](workflows/postgres-rls/runs/2026-10-05.md).

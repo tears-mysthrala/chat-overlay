@@ -65,6 +65,36 @@ jobs:
             output/browser/result.json
             output/secrets/gitleaks.json
           retention-days: 14
+  postgres-rls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      POSTGRES_TEST_PROJECT: overlay51-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build PostgreSQL integration tooling
+        run: docker build --target validation -t chat-overlay:51-postgres-validation .
+      - name: Isolated synthetic database and restricted migration identity
+        run: |
+          mkdir -p output/postgres
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" up -d --wait postgres
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" cp priv/postgres/001_rls.sql postgres:/tmp/001_rls.sql
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" exec -T -e PGPASSWORD=synthetic-migration postgres psql -h 127.0.0.1 -U overlay_migrator -d overlay_synthetic -v ON_ERROR_STOP=1 -f /tmp/001_rls.sql
+      - name: Real RLS, pool reuse, product persistence and restart
+        run: docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" run --rm tests
+      - name: Reject omitted or failed PostgreSQL tests
+        if: always()
+        run: python3 scripts/check_test_report.py output/postgres/postgres-0.json output/postgres/postgres-424242.json
+      - name: Remove only this run's synthetic resources
+        if: always()
+        run: docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" down --volumes
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: postgres-evidence
+          path: output/postgres/*.json
+          retention-days: 14
+
   image-security:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -90,7 +120,7 @@ jobs:
 
   quality-gate:
     if: ${{ always() }}
-    needs: [source-and-tests, image-security]
+    needs: [source-and-tests, postgres-rls, image-security]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -98,6 +128,8 @@ jobs:
         env:
           SOURCE_RESULT: ${{ needs.source-and-tests.result }}
           IMAGE_RESULT: ${{ needs.image-security.result }}
+          POSTGRES_RESULT: ${{ needs.postgres-rls.result }}
         run: |
           test "$SOURCE_RESULT" = success
           test "$IMAGE_RESULT" = success
+          test "$POSTGRES_RESULT" = success

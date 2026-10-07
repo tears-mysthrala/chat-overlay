@@ -5,6 +5,7 @@ services:
     ports:
       - "127.0.0.1:4100:4100"
     environment:
+      CHAT_STORAGE: json_demo
       CHAT_CONFIG: /state/profiles.json
       ERL_FLAGS: "+S 2:2 +P 32768 +Q 8192"
       TWITCH_CLIENT_ID: "${TWITCH_CLIENT_ID:-}"

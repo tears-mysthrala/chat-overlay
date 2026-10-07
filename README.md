@@ -1,5 +1,10 @@
 # Chat Overlay
 
+Almacenamiento F2: [PostgreSQL y RLS](docs/postgres-storage.md), unidad A ADR0005
+aprobada para implementación/pruebas locales (#51). La release exige
+`CHAT_STORAGE=postgres` o `CHAT_STORAGE=json_demo`; Compose selecciona demo
+explícitamente. JSON demo no acredita RLS. Sin despliegue ni cierre de ARCH-06.
+
 Overlay unificado para Twitch y YouTube (Kick formalmente diferido por inestabilidad upstream), con vista transparente para OBS, panel de creador, capability tokens y módulo de alertas multimedia en Cloudflare R2. Construido sobre Elixir/OTP, Bandit, Mint y frontend estático; sin frameworks pesados, bots de escritura ni servicios de IA.
 
 **Estado:** F2 en cierre de deuda técnica (issues [#32–#55](https://github.com/tears-mysthrala/chat-overlay/issues/55)). El cierre histórico de [#21](https://github.com/tears-mysthrala/chat-overlay/issues/21) documenta su candidata de entonces; no acredita los cambios posteriores ni los requisitos pendientes de aislamiento y cuarentena. Ver [estado y evidencia actual](docs/verification.md), [operación](docs/operations.md) y [plataformas](docs/platforms.md).

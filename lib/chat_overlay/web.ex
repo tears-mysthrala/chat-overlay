@@ -5,6 +5,10 @@ defmodule ChatOverlay.Web do
   def init(opts), do: opts
 
   def call(conn, _) do
+    ChatOverlay.RequestScope.request(fn -> route(conn) end)
+  end
+
+  defp route(conn) do
     case {conn.method, conn.path_info} do
       {"POST", ["hooks", "kick"]} ->
         ChatOverlay.KickWebhook.call(conn)
@@ -1346,6 +1350,8 @@ defmodule ChatOverlay.Web do
                   redirect(conn, "/?handle=#{result.handle}&error=unauthorized_profile_claim")
 
                 true ->
+                  :ok = ChatOverlay.RequestScope.grant(result.handle)
+
                   account_data = %{
                     username: result.username,
                     user_id: result.user_id

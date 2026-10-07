@@ -277,7 +277,13 @@ defmodule ChatOverlay.Session do
           :ok | {:error, :unauthorized | :forbidden}
   def authorize(conn, handle, opts \\ [])
 
-  def authorize(%Plug.Conn{} = conn, handle, opts) when is_binary(handle) do
+  def authorize(conn, handle, opts) do
+    result = do_authorize(conn, handle, opts)
+    if result == :ok, do: ChatOverlay.RequestScope.grant(handle)
+    result
+  end
+
+  defp do_authorize(%Plug.Conn{} = conn, handle, opts) when is_binary(handle) do
     case fetch_session(conn, opts) do
       {:ok, session} ->
         session_handle = session["handle"]
@@ -327,7 +333,7 @@ defmodule ChatOverlay.Session do
     end
   end
 
-  def authorize(%Plug.Conn{}, _handle, _opts), do: {:error, :unauthorized}
+  defp do_authorize(%Plug.Conn{}, _handle, _opts), do: {:error, :unauthorized}
 
   @doc """
   Authorizes creation of a new profile.
@@ -339,7 +345,13 @@ defmodule ChatOverlay.Session do
           :ok | {:error, :unauthorized | :forbidden}
   def authorize_profile_creation(conn, params, opts \\ [])
 
-  def authorize_profile_creation(%Plug.Conn{} = conn, params, opts) when is_map(params) do
+  def authorize_profile_creation(conn, params, opts) do
+    result = do_authorize_profile_creation(conn, params, opts)
+    if result == :ok, do: ChatOverlay.RequestScope.grant(params["handle"])
+    result
+  end
+
+  defp do_authorize_profile_creation(%Plug.Conn{} = conn, params, opts) when is_map(params) do
     handle = params["handle"]
 
     case fetch_session(conn, opts) do
@@ -365,7 +377,7 @@ defmodule ChatOverlay.Session do
     end
   end
 
-  def authorize_profile_creation(%Plug.Conn{}, _, _), do: {:error, :unauthorized}
+  defp do_authorize_profile_creation(%Plug.Conn{}, _, _), do: {:error, :unauthorized}
 
   @doc """
   Scopes a list of profiles according to the caller's authorization.

@@ -30,8 +30,8 @@ defmodule ChatOverlay.Profiles do
     {:ok, %{}}
   end
 
-  def handle_call(action, _from, state) do
-    result = execute_action(action)
+  def handle_call({:scoped_action, scope, action}, _from, state) do
+    result = ChatOverlay.RequestScope.with_scope(scope, fn -> execute_action(action) end)
     {:reply, result, state}
   end
 
@@ -41,7 +41,7 @@ defmodule ChatOverlay.Profiles do
         execute_action(action)
 
       pid ->
-        GenServer.call(pid, action, 30_000)
+        GenServer.call(pid, {:scoped_action, ChatOverlay.RequestScope.current(), action}, 30_000)
     end
   end
 
@@ -1451,6 +1451,17 @@ defmodule ChatOverlay.Profiles do
         System.get_env("CHAT_CONFIG") ||
         "config/local-profiles.json"
 
-    ChatOverlay.ProfileStorage.write(path, profiles, objects || media_objects())
+    case ChatOverlay.Persistence.backend() do
+      :json_demo ->
+        ChatOverlay.ProfileStorage.write(path, profiles, objects || media_objects())
+
+      :postgres ->
+        ChatOverlay.Postgres.replace(
+          %{"profiles" => Config.profiles(), "media_objects" => media_objects()},
+          %{"profiles" => profiles, "media_objects" => objects || media_objects()},
+          ChatOverlay.Postgres.Runtime,
+          ChatOverlay.RequestScope.current()
+        )
+    end
   end
 end

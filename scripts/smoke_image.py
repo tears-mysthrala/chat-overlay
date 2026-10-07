@@ -9,7 +9,7 @@ import urllib.request
 def capture(*args): return subprocess.check_output(args, text=True).strip()
 container = capture("docker", "run", "-d", "--read-only", "--cap-drop=ALL", "--security-opt=no-new-privileges:true",
     "--pids-limit=128", "--memory=1g", "--cpus=2", "--init", "--tmpfs", "/tmp:rw,noexec,nosuid,size=16m,mode=1777",
-    "-p", "127.0.0.1::4100", "-e", "CHAT_CONFIG=/config/profiles.json", "-e", "ERL_FLAGS=+S 2:2 +P 32768 +Q 8192",
+    "-p", "127.0.0.1::4100", "-e", "CHAT_STORAGE=json_demo", "-e", "CHAT_CONFIG=/config/profiles.json", "-e", "ERL_FLAGS=+S 2:2 +P 32768 +Q 8192",
     "-e", "CHAT_ENCRYPTION_KEY=smoke_test_encryption_key_32_bytes!",
     "--mount", f"type=bind,source={pathlib.Path('config/demo.json').resolve()},target=/config/profiles.json,readonly", sys.argv[1])
 try:
