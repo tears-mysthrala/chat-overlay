@@ -1,5 +1,8 @@
 # Seguridad F2
 
+- [VEX aprobado 2026-10-07](runs/2026-10-07-vex-approved.md): autorización
+  humana y aplicación vinculada a digest/hashes/caducidad, con informe bruto.
+
 - [Seguimiento 2026-10-07](runs/2026-10-07-followups.md): frontera demo/proxy
   corregida; 278 + 26 pruebas por semilla. Seis alertas del decoder visibles;
   propuesta VEX pendiente de aprobación humana.

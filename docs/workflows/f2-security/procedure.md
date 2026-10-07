@@ -13,3 +13,9 @@
    Conservar límites pendientes; no convertir fixtures en acreditación de producción.
 7. No hacer merge, publicar ni desplegar sin la autorización correspondiente.
    Hallazgos sensibles siguen DEV-09, fuera del informe público.
+8. El VEX decoder aprobado solo se aplica tras verificar digest, arquitectura,
+   hashes de fuentes y archivos runtime, aprobación y caducidad. Conservar
+   `vulnerabilities.raw.json` junto al informe con disposiciones. Un rebuild con
+   digest distinto requiere nueva evidencia y aprobación; no copiar excepciones
+   por coincidencia de PURL. Ejecutar `scripts/test_decoder_vex.py` también con
+   `python -O`. No confundir un gate con VEX con ausencia de componentes vulnerables.

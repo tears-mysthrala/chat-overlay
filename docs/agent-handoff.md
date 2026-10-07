@@ -485,3 +485,18 @@ superó el bloqueo histórico de envío; no se usó la skill personal autoreview
 Seis matches decoder sin suppressions y cobertura FFmpeg git siguen pendientes;
 demo detrás de proxy loopback requiere evaluación de configuración. No cierre F2,
 publicación o despliegue. Registro actual: docs/workflows/f2-security/runs/2026-10-07-candidate.md.
+
+## Seguimientos y VEX aprobado — 07-10-2026, Refs #55
+
+Demo/proxy corregido en 43568fa: proxy loopback configurado y peer ausente no
+conceden excepción anónima. 278 generales y 26 PostgreSQL por semilla PASS;
+revisión nueva Sol sin bypass/regresión concreta. Ver seguimiento F2.
+Kalista aprobó explícitamente la propuesta VEX del decoder: tres fixed Python
+por backport y un not_affected Busybox limitado al launcher/imagen documentados.
+Busybox wget sigue presente; no se declara parcheado. Activación condicionada a
+digest/arquitectura/hashes de fuentes y runtime/aprobación/caducidad 2026-10-21.
+Informe bruto conservado; cobertura completa FFmpeg git y validación real/CI
+remota siguen pendientes. No merge, push ni despliegue.
+Auditoría decoder con VEX exit 0: seis coincidencias brutas conservadas,
+seis cubiertas por las declaraciones aprobadas y cero activas; igualdad CVE/PURL
+verificada. Registro: docs/workflows/f2-security/runs/2026-10-07-vex-approved.md.

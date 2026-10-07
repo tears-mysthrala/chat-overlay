@@ -89,6 +89,15 @@ if vex_src.is_file() and not decoder:
     vex_n = len(vex_doc["statements"])
     print(f"VEX aplicado: {vex_src} ({vex_n} declaraciones, autor: {vex_doc.get('author')})", flush=True)
 run(*cmd)
+if decoder:
+    # Preserve the unfiltered report before applying any approved disposition.
+    from decoder_vex import verified_document
+    (out / 'vulnerabilities.raw.json').write_bytes((out / 'vulnerabilities.json').read_bytes())
+    vex_doc = verified_document(pathlib.Path('.').resolve(), identity)
+    (out / 'vex.openvex.json').write_text(json.dumps(vex_doc, indent=2))
+    run(*cmd, '--vex', '/scan/vex.openvex.json')
+    vex_n = len(vex_doc['statements'])
+    print(f'Decoder VEX applied: {vex_n} approved declarations; image/source/runtime hashes verified', flush=True)
 report = json.loads((out / "vulnerabilities.json").read_text())
 for match in report["matches"]:
     print(match["vulnerability"]["id"], match["vulnerability"]["severity"], match["artifact"]["name"], match["artifact"]["version"])
@@ -96,7 +105,7 @@ ignored = report.get("ignoredMatches", [])
 for ign in ignored:
     print("VEX-ignored:", ign["vulnerability"]["id"], ign["artifact"]["name"], ign["artifact"]["version"])
 if vex_n:
-    print(f"Image findings: {len(report['matches'])}; {len(ignored)} ignorados vía vex.openvex.json (excepciones firmadas, caducan solas al cambiar la versión)")
+    print(f"Image findings: {len(report['matches'])}; {len(ignored)} covered by VEX; approval and expiry recorded (not a cryptographic signature)")
 else:
     print(f"Image findings: {len(report['matches'])}; no suppressions")
 raise SystemExit(bool(report["matches"]))

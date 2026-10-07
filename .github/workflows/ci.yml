@@ -21,7 +21,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/check_traceability.py
       - name: Verify CI evidence validator
-        run: python3 -m unittest discover -s scripts/tests
+        run: |
+          python3 -m unittest discover -s scripts/tests
+          python3 scripts/test_decoder_vex.py
+          python3 -O scripts/test_decoder_vex.py
       - name: Project static checks
         run: |
           python3 scripts/security_static.py
