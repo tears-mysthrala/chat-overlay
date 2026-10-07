@@ -41,6 +41,7 @@ No streaming ni grabación activos. Los intentos iniciales de captura acabaron
 antes del envío por latencia de herramientas; no se contaron como PASS. Chrome
 CDP presentaba timeout antes de dispatch en pestañas reutilizadas; nueva pestaña
 y acción/observación en una llamada completaron envío, sin duplicar a ciegas.
-Audio audible: pendiente de confirmación del operador. Revocación de capability
+Audio audible: confirmado explícitamente por el operador en esta conversación.
+Es validación comunicada por el usuario, no medición instrumental. Revocación de capability
 actual: pendiente de paso manual del propietario; prueba local de sesión revocada PASS.
 CI, publicación/merge y deuda operativa siguen separados.

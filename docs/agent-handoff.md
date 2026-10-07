@@ -3,8 +3,9 @@
 > 07-10-2026: preview manual #64 implementado en feat/64-obs-preview y desplegado
 > en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,
 > revisión oficial OpenAI e28c1e39 completada sin vulnerabilidades del diff.
-> PNG visto en OBS y refresh inmediato sin replay PASS. Audio audible, revocación
-> actual y CI/publicación/merge pendientes. Detalle: docs/workflows/deployment/runs/2026-10-07-obs-preview.md.
+> PNG visto en OBS y refresh inmediato sin replay PASS. Audio audible confirmado
+> por el operador. Revocación actual y CI/publicación/merge pendientes.
+> Detalle: docs/workflows/deployment/runs/2026-10-07-obs-preview.md.
 
 > Estado actual 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.
 > Las secciones iniciales son historial. Consultar las entradas fechadas al final
