@@ -25,6 +25,8 @@ table inet chat_overlay_guard {
     udp sport 67 udp dport 68 accept
     ip protocol icmp accept
     meta l4proto ipv6-icmp accept
+    # Private local-media coordinator: only the statically assigned overlay peer.
+    ip saddr 172.30.96.2 ip daddr 172.30.96.1 tcp dport 4199 accept
   }
   chain forward {
     type filter hook forward priority -20; policy accept;

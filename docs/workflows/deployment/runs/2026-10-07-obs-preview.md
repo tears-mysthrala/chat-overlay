@@ -64,3 +64,10 @@ ALL capabilities eliminadas y no-new-privileges comprobada localmente PASS.
 El resultado RLS remoto sigue pendiente hasta la siguiente ejecución.
 Codex cloud revisando 7834a91; CodeRabbit omitido por tamaño/capacidad y Copilot
 omitido por cuota. Ninguna omisión se considera aprobación.
+
+Codex cloud sobre 7834a91 señaló dos P1 de reproducibilidad del despliegue:
+pin antiguo en Compose y ausencia de la regla input del coordinador en harden.sh.
+Ambos confirmados. Lectura SSH verificada de Benten: runtime43ed8a7a,
+egress172.30.96.2 y regla exacta peer172.30.96.2 -> host172.30.96.1:4199
+ya activos. Se concilian los archivos versionados con ese estado, incluyendo IP
+estática en Compose. No se reejecuta provisionado ni firewall en producción.

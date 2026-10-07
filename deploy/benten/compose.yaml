@@ -26,7 +26,7 @@ services:
       driver: local
       options: {max-size: 5m, max-file: '2'}
   overlay:
-    image: sha256:a5c3da6a7cfce924dc0e1f0a758eefad850be467a98f245ecae10db726eda140
+    image: sha256:43ed8a7ac203fd6cb13017b4e41d11e45871eca223abd4d4e4e5f0ad2e1987d3
     env_file: /etc/chat-overlay/runtime.env
     environment:
       CHAT_STORAGE: postgres
@@ -40,7 +40,10 @@ services:
       - /etc/chat-overlay/tls/ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
     # Guest firewall permits only the verified cloudflared connector.
     ports: ['192.168.1.114:4100:4100', '127.0.0.1:4100:4100']
-    networks: [database, egress]
+    networks:
+      database: {}
+      egress:
+        ipv4_address: 172.30.96.2
     depends_on:
       postgres: {condition: service_healthy}
     read_only: true
