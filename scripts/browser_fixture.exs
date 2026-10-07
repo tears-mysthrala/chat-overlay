@@ -25,9 +25,21 @@ Application.put_env(:chat_overlay, :port, 4143)
 
 bind =
   case System.get_env("BROWSER_FIXTURE_CONTAINER") do
-    nil -> {127, 0, 0, 1}
-    "1" -> {0, 0, 0, 0}
-    _ -> raise("Invalid browser fixture container opt-in")
+    nil ->
+      {127, 0, 0, 1}
+
+    "1" ->
+      Application.put_env(
+        :chat_overlay,
+        :trusted_proxy_ips,
+        ChatOverlay.Transport.parse_proxy_ips!(System.fetch_env!("BROWSER_FIXTURE_PROXY_PEER"))
+      )
+
+      Application.put_env(:chat_overlay, :oauth_origin, "https://localhost:4143")
+      {0, 0, 0, 0}
+
+    _ ->
+      raise("Invalid browser fixture container opt-in")
   end
 
 Application.put_env(:chat_overlay, :bind, bind)

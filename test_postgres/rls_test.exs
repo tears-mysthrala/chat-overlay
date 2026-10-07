@@ -269,10 +269,11 @@ defmodule ChatOverlay.PostgresRLSTest do
 
     assert :ok = Postgres.replace(before, Map.put(before, "media_objects", objects))
     Application.put_env(:chat_overlay, :media_objects, objects)
-    previous_client = Application.get_env(:chat_overlay, :media_http_client)
+    previous_client = Application.get_env(:chat_overlay, :media_coordinator_client)
 
-    Application.put_env(:chat_overlay, :media_http_client, fn "DELETE", _ ->
-      {:ok, 204, [], ""}
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", request ->
+      assert request == Map.take(object, ["key", "bucket"])
+      {:ok, %{"state" => "deleted", "sealed" => true}}
     end)
 
     try do
@@ -280,8 +281,8 @@ defmodule ChatOverlay.PostgresRLSTest do
       refute Enum.any?(Postgres.export!()["media_objects"], &(&1["key"] == object["key"]))
     after
       if previous_client,
-        do: Application.put_env(:chat_overlay, :media_http_client, previous_client),
-        else: Application.delete_env(:chat_overlay, :media_http_client)
+        do: Application.put_env(:chat_overlay, :media_coordinator_client, previous_client),
+        else: Application.delete_env(:chat_overlay, :media_coordinator_client)
     end
   end
 
@@ -340,6 +341,94 @@ defmodule ChatOverlay.PostgresRLSTest do
         )
       end
     end
+  end
+
+  test "authenticated quarantine lifecycle persists RLS scoped metadata and reloads" do
+    previous = Application.fetch_env(:chat_overlay, :media_coordinator_client)
+
+    Application.put_env(
+      :chat_overlay,
+      :media_coordinator_client,
+      &ChatOverlay.TestMediaCoordinator.request/2
+    )
+
+    on_exit(fn ->
+      case previous do
+        {:ok, value} -> Application.put_env(:chat_overlay, :media_coordinator_client, value)
+        :error -> Application.delete_env(:chat_overlay, :media_coordinator_client)
+      end
+    end)
+
+    alias ChatOverlay.{Media, RequestScope, Session}
+
+    {:ok, session} =
+      Session.create_token(%{
+        "handle" => "alpha",
+        "provider" => "twitch",
+        "user_id" => "synthetic-alpha",
+        "account_version" => 7
+      })
+
+    conn =
+      Plug.Test.conn(:post, "/api/media/validate")
+      |> Plug.Conn.put_req_header("cookie", Session.cookie_name() <> "=" <> session)
+
+    conn = %{conn | remote_ip: {203, 0, 113, 10}}
+    authorize = fn -> Session.authorize(conn, "alpha") end
+
+    {:ok, upload} =
+      Media.validate_upload_request(
+        %{"filename" => "sound.wav", "content_type" => "audio/wav", "size" => 100},
+        0
+      )
+
+    before = Postgres.export!()
+
+    assert {:error, :database_unavailable} =
+             RequestScope.with_scope({:profile, "beta"}, fn ->
+               Profiles.reserve_media_upload("alpha", upload)
+             end)
+
+    assert Postgres.export!() == before
+
+    RequestScope.request(fn ->
+      assert :ok = authorize.()
+      assert {:ok, input} = Profiles.reserve_media_upload("alpha", upload)
+
+      {:ok, token} =
+        Media.generate_upload_token("alpha", input["key"], input["size"], input["category"])
+
+      assert {:ok, ready} =
+               Profiles.validate_media_upload("alpha", input["key"], token, authorize)
+
+      assert {:ok, _} =
+               Profiles.update_media(
+                 "alpha",
+                 %{"alert_sound" => Map.drop(ready, ["state", "upload_token"])},
+                 require_reservation: true
+               )
+
+      assert [
+               %{"bucket" => "quarantine", "state" => "retired"},
+               %{"bucket" => "public", "state" => "active", "output_sha256" => hash}
+             ] =
+               Profiles.media_objects()
+               |> Enum.filter(&(&1["job"] != nil))
+               |> Enum.sort_by(& &1["bucket"], :desc)
+
+      assert byte_size(hash) == 64
+    end)
+
+    stored = Postgres.export!()
+    assert stored == Postgres.canonical(runtime_document())
+
+    assert Enum.find(stored["profiles"], &(&1["handle"] == "beta")) ==
+             Enum.find(before["profiles"], &(&1["handle"] == "beta"))
+
+    Application.put_env(:chat_overlay, :profiles, [])
+    Application.put_env(:chat_overlay, :media_objects, [])
+    start_supervised!(ChatOverlay.Persistence.Loader)
+    assert runtime_document() == stored
   end
 
   test "serialized concurrent product mutations and restart loader match durable storage" do

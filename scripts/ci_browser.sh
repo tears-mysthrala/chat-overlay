@@ -13,11 +13,13 @@ cleanup() {
 trap cleanup EXIT
 
 docker network create --internal "$network" >/dev/null
+proxy_peer="$(docker network inspect -f '{{(index .IPAM.Config 0).Gateway}}' "$network")"
 docker run -d --name "$fixture" --network "$network" \
   --read-only --tmpfs /tmp:rw,nosuid,noexec,size=64m \
   --cpus 2 --memory 1g --pids-limit 128 --cap-drop ALL \
   --security-opt no-new-privileges -e ERL_FLAGS='+S 2:2' \
   -e BROWSER_FIXTURE_CONTAINER=1 -e ERL_CRASH_DUMP=/dev/null \
+  -e BROWSER_FIXTURE_PROXY_PEER="$proxy_peer" \
   chat-overlay:validation mix run --no-compile --no-deps-check --no-start --no-halt \
   scripts/browser_fixture.exs /tmp/browser-fixture >/dev/null
 
