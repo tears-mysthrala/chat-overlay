@@ -6,7 +6,9 @@ defmodule ChatOverlay.MediaLedger do
 
   def valid?(objects) when is_list(objects) and length(objects) <= @limit do
     Enum.all?(objects, fn o ->
-      is_map(o) and Enum.sort(Map.keys(o)) == Enum.sort(@fields) and
+      is_map(o) and Enum.all?(@fields, &Map.has_key?(o, &1)) and
+        Map.keys(o) -- (@fields ++ ~w(bucket job input_sha256 output_sha256 input_key)) == [] and
+        valid_binding?(o) and
         ChatOverlay.Config.handle?(o["handle"]) and is_binary(o["key"]) and
         byte_size(o["key"]) <= 256 and String.starts_with?(o["key"], o["handle"] <> "/") and
         not String.contains?(o["key"], ["..", "\\", "?", "#", "\n", "\r"]) and
@@ -14,7 +16,15 @@ defmodule ChatOverlay.MediaLedger do
         byte_size(o["mime"]) <= 64 and
         is_integer(o["size"]) and o["size"] in 1..2_097_152 and
         is_integer(o["expires_at"]) and o["expires_at"] > 0 and
-        o["state"] in ["pending", "active", "retired", "deleting"]
+        o["state"] in [
+          "pending",
+          "processing",
+          "ready",
+          "failed",
+          "active",
+          "retired",
+          "deleting"
+        ]
     end) and Enum.uniq_by(objects, & &1["key"]) == objects
   end
 
@@ -33,6 +43,8 @@ defmodule ChatOverlay.MediaLedger do
       "expires_at" => now + 300,
       "state" => "pending"
     }
+
+    object = Map.put(object, "bucket", "quarantine")
 
     cond do
       profile["can_upload"] != true ->
@@ -83,8 +95,8 @@ defmodule ChatOverlay.MediaLedger do
           (profile["can_upload"] == true and
              Enum.any?(objects, fn o ->
                o["key"] == item["key"] and o["handle"] == profile["handle"] and
-                 o["size"] == item["size"] and o["state"] in ["pending", "active"] and
-                 o["expires_at"] > System.system_time(:second)
+                 o["size"] == item["size"] and o["state"] in ["ready", "active"] and
+                 o["bucket"] == "public" and is_binary(o["output_sha256"])
              end))
       end)
   end
@@ -112,6 +124,15 @@ defmodule ChatOverlay.MediaLedger do
   end
 
   def due?(object, now), do: object["state"] != "active" and object["expires_at"] + 30 <= now
+
+  defp valid_binding?(o) do
+    (is_nil(o["bucket"]) or o["bucket"] in ["quarantine", "public"]) and
+      (is_nil(o["job"]) or (is_binary(o["job"]) and Regex.match?(~r/\A[0-9a-f]{32}\z/, o["job"]))) and
+      Enum.all?(~w(input_sha256 output_sha256), fn field ->
+        is_nil(o[field]) or (is_binary(o[field]) and Regex.match?(~r/\A[0-9a-f]{64}\z/, o[field]))
+      end) and
+      (is_nil(o["input_key"]) or (is_binary(o["input_key"]) and byte_size(o["input_key"]) <= 256))
+  end
 
   def media_items(profile) do
     (profile["media"] || %{})

@@ -1,5 +1,10 @@
 # Dependencias y cadena de suministro — issue #3
 
+La unidad B ADR0005 añade un decoder separado, aprobado el 05-10-2026: FFmpeg
+8.1.2-r0/Python 3.14.8-r0 sobre Alpine 3.24.2 por digest. No entra en la imagen
+HTTP. Ver [cuarentena](media-quarantine.md) para aislamiento, licencias GPL y
+gates de distribución. SBOM/escaneo propio: `audit_image.py IMAGE --decoder`.
+
 La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2026. [ADR 0001](adr/0001-transporte-f1.md) recoge alternativas y motivo. No se reutilizó código de los forks Chatterino: sus implementaciones no forman parte del artefacto nuevo.
 
 ## Producción

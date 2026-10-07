@@ -457,3 +457,17 @@ concurrente/symlink incorporada. Revisión estructurada Sol bloqueada por aproba
 automática de red; inspección manual completada, revisión independiente pendiente.
 La integración con OAuth `d261ebf` se valida en otra candidata; esta unidad no
 acredita cierre de F2, CI remota o publicación.
+## Unidad B local — 07-10-2026, Refs #49
+
+security/49-media-quarantine, D:/github/_worktrees/chat-overlay-quarantine.
+Ciclo privado pending/processing, normalización aislada, promoción por hash,
+activación autenticada y ledger conectado. Diez pruebas decoder y ocho coordinator
+PASS, storage sintético; BEAM255 dual PASS más ledger16 PASS con nueva regresión.
+Decoder89432cb33a13: FFmpeg mínimo fijado, backports CPython comprobados, licencias
+incluidas. Scanner seis matches sin VEX decoder aprobado; no declarar gate verde.
+La reserva pública incierta se conserva hasta sellado, también tras retry/restart.
+Journal128 acumulado requiere mantenimiento; autorización final puede impedir
+activación dejando artefacto normalizado público pendiente de retirada, con cargo.
+Revisión Sol scoped y fix comprobado por inspección. No R2 real/OBS/CI remota,
+PR, push, merge ni despliegue. Integración candidata se valida por separado.
+Ver docs/workflows/media-quarantine/runs/2026-10-07.md.

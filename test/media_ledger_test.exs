@@ -3,7 +3,14 @@ defmodule ChatOverlay.MediaLedgerTest do
   alias ChatOverlay.{Config, Media, MediaCleanup, MediaLedger, Profiles}
 
   setup do
-    names = [:profiles, :profiles_path, :media_objects, :media_http_client]
+    names = [
+      :profiles,
+      :profiles_path,
+      :media_objects,
+      :media_http_client,
+      :media_coordinator_client
+    ]
+
     previous = Map.new(names, &{&1, Application.fetch_env(:chat_overlay, &1)})
     dir = Path.join(System.tmp_dir!(), "media-ledger-#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
@@ -22,6 +29,10 @@ defmodule ChatOverlay.MediaLedgerTest do
 
     Application.put_env(:chat_overlay, :media_http_client, fn "DELETE", _ ->
       {:ok, 204, [], ""}
+    end)
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "deleted"}}
     end)
 
     on_exit(fn ->
@@ -105,15 +116,15 @@ defmodule ChatOverlay.MediaLedgerTest do
   end
 
   test "slow remote cleanup does not block unrelated profile mutations" do
-    {:ok, object} = reserve(100)
+    {:ok, object} = reserve_public(100)
     expire(object["key"])
     parent = self()
 
-    Application.put_env(:chat_overlay, :media_http_client, fn _, _ ->
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
       send(parent, {:deleting, self()})
 
       receive do
-        :finish_delete -> {:ok, 204, [], ""}
+        :finish_delete -> {:ok, %{"state" => "deleted"}}
       after
         5_000 -> {:error, :timeout}
       end
@@ -129,8 +140,8 @@ defmodule ChatOverlay.MediaLedgerTest do
   end
 
   test "replacement retains physical quota until confirmed remote cleanup", %{path: path} do
-    {:ok, first} = reserve(400)
-    {:ok, second} = reserve(400)
+    {:ok, first} = reserve_public(400)
+    {:ok, second} = reserve_public(400)
 
     assert {:ok, _} =
              Profiles.update_media("ledger", %{"alert_sound" => item(first)},
@@ -150,22 +161,30 @@ defmodule ChatOverlay.MediaLedgerTest do
     assert :ok = MediaCleanup.sweep_one()
     assert Enum.map(Profiles.media_objects(), & &1["key"]) == [second["key"]]
     assert Config.load_document!(path)["media_objects"] == Profiles.media_objects()
-    assert {:ok, _} = reserve(400)
+    assert {:ok, _} = reserve_public(400)
   end
 
   test "failed remote deletion keeps quota and retries", %{path: path} do
-    {:ok, object} = reserve(400)
+    {:ok, object} = reserve_public(400)
     expire(object["key"])
-    Application.put_env(:chat_overlay, :media_http_client, fn _, _ -> {:ok, 503, [], ""} end)
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:error, :upstream_unavailable}
+    end)
+
     assert {:error, :storage_cleanup_failed} = MediaCleanup.sweep_one()
     assert length(Profiles.media_objects()) == 1
-    Application.put_env(:chat_overlay, :media_http_client, fn _, _ -> {:ok, 404, [], ""} end)
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "deleted"}}
+    end)
+
     assert :ok = MediaCleanup.sweep_one()
     assert Config.load_document!(path)["media_objects"] == []
   end
 
   test "disk failure after remote deletion keeps durable retry state", %{dir: dir} do
-    {:ok, object} = reserve(400)
+    {:ok, object} = reserve_public(400)
     expire(object["key"])
 
     Application.put_env(
@@ -179,7 +198,7 @@ defmodule ChatOverlay.MediaLedgerTest do
   end
 
   test "deleted profiles leave cleanup inventory that reloads without account data", %{path: path} do
-    {:ok, object} = reserve(400)
+    {:ok, object} = reserve_public(400)
     assert :ok = Profiles.delete("ledger")
     doc = Config.load_document!(path)
     assert doc["profiles"] == []
@@ -192,7 +211,7 @@ defmodule ChatOverlay.MediaLedgerTest do
   end
 
   test "retired reservation cannot be reactivated by stale association" do
-    {:ok, object} = reserve(400)
+    {:ok, object} = reserve_public(400)
 
     assert {:ok, _} =
              Profiles.update_media("ledger", %{"alert_sound" => item(object)},
@@ -214,6 +233,52 @@ defmodule ChatOverlay.MediaLedgerTest do
     ])
 
     assert {:error, :uploads_not_allowed} = reserve(100)
+  end
+
+  test "quarantine cost survives ambiguous deletion and requires sealed confirmation" do
+    {:ok, input} = reserve(100)
+    expire(input["key"])
+
+    Application.put_env(
+      :chat_overlay,
+      :media_coordinator_client,
+      &ChatOverlay.TestMediaCoordinator.request/2
+    )
+
+    assert {:error, :storage_reconciliation_required} = Profiles.cleanup_media(input["key"])
+    assert MediaLedger.total_bytes(Profiles.media_objects(), Config.profile("ledger")) == 100
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "deleted"}}
+    end)
+
+    assert {:error, :storage_cleanup_failed} = Profiles.cleanup_media(input["key"])
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "deleted", "sealed" => true}}
+    end)
+
+    assert :ok = Profiles.cleanup_media(input["key"])
+    assert Profiles.media_objects() == []
+  end
+
+  test "public cost survives uncertain promotion until sealed reconciliation" do
+    {:ok, output} = reserve_public(100)
+    expire(output["key"])
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "reconcile"}}
+    end)
+
+    assert {:error, :storage_reconciliation_required} = Profiles.cleanup_media(output["key"])
+    assert MediaLedger.total_bytes(Profiles.media_objects(), Config.profile("ledger")) == 100
+
+    Application.put_env(:chat_overlay, :media_coordinator_client, fn "/delete", _ ->
+      {:ok, %{"state" => "deleted", "sealed" => true}}
+    end)
+
+    assert :ok = Profiles.cleanup_media(output["key"])
+    assert Profiles.media_objects() == []
   end
 
   test "revoking upload permission before association prevents activation" do
@@ -251,6 +316,26 @@ defmodule ChatOverlay.MediaLedgerTest do
       )
 
     Profiles.reserve_media_upload("ledger", upload)
+  end
+
+  # Fixture of an already-normalized public object. Byte validation has its own
+  # real decoder/coordinator tests; these regressions exercise ledger transitions.
+  defp reserve_public(size) do
+    {:ok, input} = reserve(size)
+
+    output =
+      input
+      |> Map.put("bucket", "public")
+      |> Map.put("state", "ready")
+      |> Map.put("output_sha256", String.duplicate("a", 64))
+
+    Application.put_env(
+      :chat_overlay,
+      :media_objects,
+      Enum.map(Profiles.media_objects(), fn o -> if o == input, do: output, else: o end)
+    )
+
+    {:ok, output}
   end
 
   defp item(object),

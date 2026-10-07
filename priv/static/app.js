@@ -531,18 +531,20 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*" }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de audio a R2");
             }
-            soundResult = {
-              url: presignData.public_url,
-              source: "r2",
-              key: presignData.key,
-              size: presignData.size || file.size,
-              upload_token: presignData.upload_token
-            };
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
+            const validation = await fetch("/api/media/validate", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: p.handle, key: presignData.key, upload_token: presignData.upload_token })
+            });
+            const validated = await validation.json();
+            if (!validation.ok || validated.state !== "ready") throw new Error(validated.error || "Archivo rechazado; no se ha activado.");
+            soundResult = validated.media;
           } else if (audioTypeUpload && audioTypeUpload.checked && p.media && p.media.alert_sound) {
             soundResult = p.media.alert_sound;
           } else if (audioUrlInput && audioUrlInput.value.trim()) {
@@ -577,18 +579,20 @@
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*" }
             });
             if (!uploadRes.ok) {
               throw new Error("Fallo al subir el archivo de imagen a R2");
             }
-            imageResult = {
-              url: presignData.public_url,
-              source: "r2",
-              key: presignData.key,
-              size: presignData.size || file.size,
-              upload_token: presignData.upload_token
-            };
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
+            const validation = await fetch("/api/media/validate", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: p.handle, key: presignData.key, upload_token: presignData.upload_token })
+            });
+            const validated = await validation.json();
+            if (!validation.ok || validated.state !== "ready") throw new Error(validated.error || "Archivo rechazado; no se ha activado.");
+            imageResult = validated.media;
           } else if (imageTypeUpload && imageTypeUpload.checked && p.media && p.media.alert_image) {
             imageResult = p.media.alert_image;
           } else if (imageUrlInput && imageUrlInput.value.trim()) {

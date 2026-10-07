@@ -193,6 +193,13 @@ defmodule ChatOverlay.Web do
             )
         end
 
+      {"POST", ["api", "media", "validate"]} ->
+        with true <- allowed_origin?(conn), true <- json_content_type?(conn) do
+          api_validate_upload(conn)
+        else
+          _ -> reply(conn, 403, "application/json", ChatOverlay.JSON.encode(%{"ok" => false}))
+        end
+
       {"POST", ["api", "media", "presign"]} ->
         with true <- allowed_origin?(conn),
              true <- json_content_type?(conn) do
@@ -791,7 +798,7 @@ defmodule ChatOverlay.Web do
                   case reservation do
                     {:ok, validated, object} ->
                       validated = %{validated | key: object["key"]}
-                      r2_config = ChatOverlay.Media.r2_config()
+                      r2_config = ChatOverlay.Media.quarantine_config()
 
                       case ChatOverlay.Media.generate_presigned_put(
                              Map.merge(r2_config, %{
@@ -806,7 +813,7 @@ defmodule ChatOverlay.Web do
                           resp = %{
                             "ok" => true,
                             "upload_url" => presigned.upload_url,
-                            "public_url" => presigned.public_url,
+                            "state" => "pending",
                             "key" => presigned.key,
                             "size" => validated.size,
                             "content_type" => validated.mime
@@ -881,6 +888,37 @@ defmodule ChatOverlay.Web do
           413,
           "application/json",
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Petición demasiado grande"})
+        )
+    end
+  end
+
+  defp api_validate_upload(conn) do
+    with {:ok, body, conn} <-
+           Plug.Conn.read_body(conn, length: 2048, read_length: 2048, read_timeout: 4000),
+         {:ok, %{"handle" => handle, "key" => key, "upload_token" => token}} <-
+           ChatOverlay.JSON.decode(body),
+         :ok <- Session.authorize(conn, handle),
+         {:ok, ready} <-
+           ChatOverlay.Profiles.validate_media_upload(handle, key, token, fn ->
+             Session.authorize(conn, handle)
+           end) do
+      reply(
+        conn,
+        200,
+        "application/json",
+        ChatOverlay.JSON.encode(%{"ok" => true, "media" => ready, "state" => "ready"})
+      )
+    else
+      _ ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "state" => "failed",
+            "error" => "Validación multimedia fallida; el archivo sigue sin activarse."
+          })
         )
     end
   end
@@ -1024,11 +1062,11 @@ defmodule ChatOverlay.Web do
                  &(&1["key"] == key and &1["handle"] == handle)
                ),
              true <-
-               object["state"] in ["pending", "active"] and object["size"] == size and
+               object["state"] in ["ready", "active"] and object["bucket"] == "public" and
+                 is_binary(object["output_sha256"]) and object["size"] == size and
                  object["category"] == verified_category,
              {:ok, url} <- ChatOverlay.Media.public_url(key),
-             true <- item["url"] == url,
-             :ok <- ChatOverlay.Media.verify_object(object) do
+             true <- item["url"] == url do
           {:ok, %{"url" => url, "source" => "r2", "key" => key, "size" => size}}
         else
           _ -> {:error, :invalid_upload_token}

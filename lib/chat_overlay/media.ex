@@ -133,7 +133,12 @@ defmodule ChatOverlay.Media do
 
       upload_headers =
         if is_integer(size) and size > 0 and is_binary(content_type) do
-          [{"content-length", to_string(size)}, {"content-type", content_type}, {"host", host}]
+          [
+            {"content-length", to_string(size)},
+            {"content-type", content_type},
+            {"host", host},
+            {"if-none-match", "*"}
+          ]
         else
           [{"host", host}]
         end
@@ -263,10 +268,34 @@ defmodule ChatOverlay.Media do
 
   def configured? do
     config = r2_config()
+    quarantine = quarantine_config()
 
-    Enum.all?([:access_key_id, :secret_access_key, :bucket], fn key ->
-      is_binary(config[key]) and byte_size(config[key]) in 1..256
-    end) and https_base?(config[:endpoint]) and https_base?(config[:public_cdn_base])
+    System.get_env("MEDIA_UPLOADS_SEALED") != "1" and
+      Enum.all?([:access_key_id, :secret_access_key, :bucket], fn key ->
+        is_binary(quarantine[key]) and byte_size(quarantine[key]) in 1..256
+      end) and https_base?(config[:endpoint]) and https_base?(config[:public_cdn_base]) and
+      is_binary(quarantine[:bucket]) and quarantine[:bucket] != config[:bucket] and
+      ChatOverlay.MediaCoordinator.configured?()
+  end
+
+  def quarantine_config do
+    r2_config()
+    |> Map.put(
+      :access_key_id,
+      System.get_env("R2_QUARANTINE_ACCESS_KEY_ID") ||
+        Application.get_env(:chat_overlay, :r2_quarantine_access_key_id)
+    )
+    |> Map.put(
+      :secret_access_key,
+      System.get_env("R2_QUARANTINE_SECRET_ACCESS_KEY") ||
+        Application.get_env(:chat_overlay, :r2_quarantine_secret_access_key)
+    )
+    |> Map.put(
+      :bucket,
+      System.get_env("R2_QUARANTINE_BUCKET") ||
+        Application.get_env(:chat_overlay, :r2_quarantine_bucket)
+    )
+    |> Map.delete(:public_cdn_base)
   end
 
   defp https_base?(url) when is_binary(url) do

@@ -47,10 +47,29 @@ defmodule ChatOverlay.Profiles do
 
   def reserve_media_upload(handle, upload), do: call_serialized({:reserve_media, handle, upload})
 
+  def validate_media_upload(handle, key, token, authorize \\ fn -> :ok end) do
+    with :ok <- authorize.(),
+         {:ok, verified} <- ChatOverlay.Media.verify_upload_token(token, handle, key) do
+      case call_serialized({:begin_media_job, handle, key, verified, authorize}) do
+        {:ready, response} ->
+          {:ok, response}
+
+        {:ok, job} ->
+          with {:ok, result} <- ChatOverlay.MediaCoordinator.request("/normalize", job),
+               :ok <- authorize.() do
+            call_serialized({:finish_media_job, job, result, authorize})
+          end
+
+        error ->
+          error
+      end
+    end
+  end
+
   def cleanup_media(key) do
     # Persist an irreversible claim before remote I/O; never block the shared writer.
     with {:ok, object} <- call_serialized({:claim_cleanup_media, key}),
-         :ok <- ChatOverlay.Media.delete_object(key) do
+         :ok <- cleanup_object(object) do
       call_serialized({:finish_cleanup_media, object})
     else
       :absent -> :ok
@@ -59,6 +78,174 @@ defmodule ChatOverlay.Profiles do
   end
 
   def media_objects, do: Application.get_env(:chat_overlay, :media_objects, [])
+
+  defp cleanup_object(%{"bucket" => bucket} = object) do
+    case ChatOverlay.MediaCoordinator.request("/delete", Map.take(object, ["key", "bucket"])) do
+      {:ok, %{"state" => "deleted"}} when bucket == "public" -> :ok
+      {:ok, %{"state" => "deleted", "sealed" => true}} when bucket == "quarantine" -> :ok
+      {:ok, %{"state" => "reconcile"}} -> {:error, :storage_reconciliation_required}
+      _ -> {:error, :storage_cleanup_failed}
+    end
+  end
+
+  defp cleanup_object(object), do: ChatOverlay.Media.delete_object(object["key"])
+
+  defp ready_media(ready) do
+    with {:ok, url} <- ChatOverlay.Media.public_url(ready["key"]),
+         {:ok, token} <-
+           ChatOverlay.Media.generate_upload_token(
+             ready["handle"],
+             ready["key"],
+             ready["size"],
+             ready["category"]
+           ) do
+      {:ok,
+       %{
+         "state" => "ready",
+         "url" => url,
+         "key" => ready["key"],
+         "size" => ready["size"],
+         "source" => "r2",
+         "upload_token" => token
+       }}
+    end
+  end
+
+  defp execute_action({:begin_media_job, handle, key, verified, authorize}) do
+    objects = media_objects()
+    profile = Config.profile(handle)
+    input = Enum.find(objects, &(&1["key"] == key and &1["handle"] == handle))
+
+    with :ok <- authorize.(),
+         true <- is_map(profile) and profile["can_upload"] == true,
+         true <-
+           is_map(input) and input["bucket"] == "quarantine" and
+             input["state"] in ["pending", "processing", "retired"] and
+             input["expires_at"] > System.system_time(:second) and input["size"] == verified.size and
+             input["category"] == verified.category do
+      if input["job"] do
+        output = Enum.find(objects, &(&1["job"] == input["job"] and &1["bucket"] == "public"))
+
+        cond do
+          input["state"] == "retired" and is_map(output) and
+              output["state"] in ["ready", "active"] ->
+            case ready_media(output) do
+              {:ok, response} -> {:ready, response}
+              error -> error
+            end
+
+          input["state"] == "processing" and is_map(output) and output["state"] == "processing" ->
+            {:ok, Map.take(input, ["job", "handle", "key", "category", "size"])}
+
+          true ->
+            {:error, :invalid_upload_token}
+        end
+      else
+        job = :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+        maximum = if input["category"] == "audio", do: 2_097_152, else: 524_288
+
+        output =
+          input
+          |> Map.put("bucket", "public")
+          |> Map.put("job", job)
+          |> Map.put("size", maximum)
+          |> Map.put("key", handle <> "/validated/" <> job <> "/pending")
+          |> Map.put("state", "processing")
+
+        claimed = input |> Map.put("job", job) |> Map.put("state", "processing")
+        updated = Enum.map(objects, fn o -> if o == input, do: claimed, else: o end) ++ [output]
+
+        cond do
+          Enum.count(updated, &(&1["handle"] == handle)) > 12 or
+              not ChatOverlay.MediaLedger.valid?(updated) ->
+            {:error, :upload_reservations_full}
+
+          ChatOverlay.MediaLedger.total_bytes(updated, profile) >
+              (profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()) ->
+            {:error, :quota_exceeded}
+
+          true ->
+            with :ok <- persist_profiles(Config.profiles(), updated) do
+              Application.put_env(:chat_overlay, :media_objects, updated)
+              {:ok, Map.take(claimed, ["job", "handle", "key", "category", "size"])}
+            end
+        end
+      end
+    else
+      _ -> {:error, :invalid_upload_token}
+    end
+  end
+
+  defp execute_action({:finish_media_job, job, result, authorize}) do
+    objects = media_objects()
+    profile = Config.profile(job["handle"])
+    output = Enum.find(objects, &(&1["job"] == job["job"] and &1["bucket"] == "public"))
+    input = Enum.find(objects, &(&1["key"] == job["key"] and &1["job"] == job["job"]))
+    extension = if job["category"] == "image", do: ".png", else: ".wav"
+    mime = if job["category"] == "image", do: "image/png", else: "audio/wav"
+
+    with :ok <- authorize.(),
+         true <- is_map(profile) and profile["can_upload"] == true,
+         true <-
+           is_map(output) and output["state"] == "processing" and is_map(input) and
+             input["state"] == "processing",
+         true <-
+           is_map(result) and result["job"] == job["job"] and result["handle"] == job["handle"] and
+             result["input_key"] == job["key"] and result["category"] == job["category"] and
+             result["state"] == "ready" and result["mime"] == mime and
+             result["extension"] == extension,
+         true <- is_integer(result["size"]) and result["size"] in 1..output["size"],
+         true <-
+           Enum.all?(~w(input_sha256 output_sha256), fn k ->
+             is_binary(result[k]) and Regex.match?(~r/\A[0-9a-f]{64}\z/, result[k])
+           end),
+         true <-
+           result["key"] ==
+             job["handle"] <>
+               "/validated/" <> job["job"] <> "/" <> result["output_sha256"] <> extension do
+      ready =
+        output
+        |> Map.merge(Map.take(result, ~w(key size mime input_sha256 output_sha256 input_key)))
+        |> Map.put("state", "ready")
+
+      updated =
+        Enum.map(objects, fn
+          ^output -> ready
+          ^input -> Map.put(input, "state", "retired")
+          other -> other
+        end)
+
+      with true <-
+             ChatOverlay.MediaLedger.valid?(updated) and
+               ChatOverlay.MediaLedger.total_bytes(updated, profile) <=
+                 (profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()),
+           {:ok, url} <- ChatOverlay.Media.public_url(ready["key"]),
+           {:ok, token} <-
+             ChatOverlay.Media.generate_upload_token(
+               job["handle"],
+               ready["key"],
+               ready["size"],
+               ready["category"]
+             ),
+           :ok <- persist_profiles(Config.profiles(), updated) do
+        Application.put_env(:chat_overlay, :media_objects, updated)
+
+        {:ok,
+         %{
+           "state" => "ready",
+           "url" => url,
+           "key" => ready["key"],
+           "size" => ready["size"],
+           "source" => "r2",
+           "upload_token" => token
+         }}
+      else
+        _ -> {:error, :quota_exceeded}
+      end
+    else
+      _ -> {:error, :validation_result_rejected}
+    end
+  end
 
   defp execute_action({:reserve_media, handle, upload}) do
     with profile when is_map(profile) <- Config.profile(handle),
