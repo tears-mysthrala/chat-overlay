@@ -3,6 +3,7 @@ _build
 deps
 output
 .env
+.cloudflare
 *.pem
 *.key
 config/local*

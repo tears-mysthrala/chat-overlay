@@ -88,6 +88,7 @@ defmodule ChatOverlay.Crypto do
       when is_binary(key) and is_binary(aad) do
     with {:ok, key_32} <- normalize_key(key),
          {:ok, payload} <- Base.url_decode64(encoded_payload, padding: false),
+         true <- Base.url_encode64(payload, padding: false) == encoded_payload,
          true <- byte_size(payload) >= @iv_bytes + @tag_bytes do
       <<iv::binary-size(@iv_bytes), tag::binary-size(@tag_bytes), ciphertext::binary>> = payload
 

@@ -5,6 +5,10 @@ defmodule ChatOverlay.Web do
   def init(opts), do: opts
 
   def call(conn, _) do
+    ChatOverlay.RequestScope.request(fn -> route(conn) end)
+  end
+
+  defp route(conn) do
     case {conn.method, conn.path_info} do
       {"POST", ["hooks", "kick"]} ->
         ChatOverlay.KickWebhook.call(conn)
@@ -189,6 +193,21 @@ defmodule ChatOverlay.Web do
             )
         end
 
+      {"PUT", ["api", "media", "upload", handle]} ->
+        if allowed_origin?(conn) == true,
+          do: api_local_upload(conn, handle),
+          else: reply(conn, 403, "application/json", "{\"ok\":false}")
+
+      {"GET", ["media", "local" | parts]} ->
+        local_media(conn, Enum.join(parts, "/"))
+
+      {"POST", ["api", "media", "validate"]} ->
+        with true <- allowed_origin?(conn), true <- json_content_type?(conn) do
+          api_validate_upload(conn)
+        else
+          _ -> reply(conn, 403, "application/json", ChatOverlay.JSON.encode(%{"ok" => false}))
+        end
+
       {"POST", ["api", "media", "presign"]} ->
         with true <- allowed_origin?(conn),
              true <- json_content_type?(conn) do
@@ -213,6 +232,9 @@ defmodule ChatOverlay.Web do
               })
             )
         end
+
+      {"POST", ["api", "profiles", handle, "media", "preview"]} ->
+        api_media_preview(conn, handle)
 
       {"POST", ["api", "profiles", handle, "media"]} ->
         with true <- allowed_origin?(conn),
@@ -745,6 +767,119 @@ defmodule ChatOverlay.Web do
     end
   end
 
+  defp api_media_preview(conn, handle) do
+    authorize = fn ->
+      with {:ok, _} <- Session.fetch_session(conn),
+           :ok <- Session.authorize(conn, handle),
+           do: :ok
+    end
+
+    with [origin] <- Plug.Conn.get_req_header(conn, "origin"),
+         true <- is_binary(origin) and origin == ChatOverlay.LocalMedia.public_base(),
+         ["application/json"] <- Plug.Conn.get_req_header(conn, "content-type"),
+         :ok <- authorize.(),
+         {:ok, body, conn} <-
+           Plug.Conn.read_body(conn, length: 128, read_length: 128, read_timeout: 4000),
+         {:ok, params} <- ChatOverlay.JSON.decode(body),
+         true <- params == %{} do
+      case ChatOverlay.Profiles.preview_media(handle, authorize) do
+        :ok ->
+          reply(conn, 200, "application/json", "{\"ok\":true}")
+
+        {:error, :cooldown} ->
+          reply(
+            conn,
+            429,
+            "application/json",
+            "{\"ok\":false,\"error\":\"Espera 10 segundos entre pruebas.\"}"
+          )
+
+        _ ->
+          reply(
+            conn,
+            422,
+            "application/json",
+            "{\"ok\":false,\"error\":\"Guarda primero archivos locales normalizados.\"}"
+          )
+      end
+    else
+      _ ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          "{\"ok\":false,\"error\":\"Prueba no autorizada o petición inválida.\"}"
+        )
+    end
+  end
+
+  defp local_upload_object(conn, handle) do
+    with true <- ChatOverlay.LocalMedia.backend() == "local" and ChatOverlay.Media.configured?(),
+         :ok <- Session.authorize(conn, handle),
+         [key] <- Plug.Conn.get_req_header(conn, "x-upload-key"),
+         [token] <- Plug.Conn.get_req_header(conn, "x-upload-token"),
+         {:ok, verified} <- ChatOverlay.Media.verify_upload_token(token, handle, key),
+         %{"can_upload" => true} <- Config.profile(handle),
+         object when is_map(object) <-
+           Enum.find(
+             ChatOverlay.Profiles.media_objects(),
+             &(&1["handle"] == handle and &1["key"] == key)
+           ),
+         true <-
+           object["backend"] == "local" and object["bucket"] == "quarantine" and
+             object["state"] == "pending" and object["expires_at"] > System.system_time(:second),
+         true <- object["size"] == verified.size and object["category"] == verified.category,
+         [mime] <- Plug.Conn.get_req_header(conn, "content-type"),
+         true <- mime == object["mime"] do
+      {:ok, object}
+    else
+      _ -> {:error, :upload_rejected}
+    end
+  end
+
+  defp api_local_upload(conn, handle) do
+    with {:ok, object} <- local_upload_object(conn, handle),
+         {:ok, body, conn} <-
+           Plug.Conn.read_body(conn,
+             length: object["size"],
+             read_length: object["size"],
+             read_timeout: 4000
+           ),
+         true <- byte_size(body) == object["size"],
+         {:ok, ^object} <- local_upload_object(conn, handle),
+         {:ok, 201, _, _} <-
+           ChatOverlay.LocalMedia.request(
+             "PUT",
+             "quarantine",
+             object["key"],
+             body,
+             object["mime"]
+           ),
+         :ok <- Session.authorize(conn, handle) do
+      reply(conn, 201, "application/json", "{\"ok\":true}")
+    else
+      _ -> reply(conn, 422, "application/json", "{\"ok\":false,\"error\":\"Subida rechazada\"}")
+    end
+  end
+
+  defp local_media(conn, key) do
+    with true <- ChatOverlay.LocalMedia.backend() == "local" and byte_size(key) <= 256,
+         object when is_map(object) <-
+           Enum.find(ChatOverlay.Profiles.media_objects(), &(&1["key"] == key)),
+         true <-
+           object["backend"] == "local" and object["bucket"] == "public" and
+             object["state"] in ["ready", "active"],
+         true <- object["mime"] in ["image/png", "audio/wav"],
+         {:ok, 200, _, body} <- ChatOverlay.LocalMedia.request("GET", "public", key),
+         true <- byte_size(body) == object["size"],
+         true <-
+           Base.encode16(:crypto.hash(:sha256, body), case: :lower) == object["output_sha256"] do
+      reply(conn, 200, object["mime"], body)
+    else
+      _ -> reply(conn, 404, "text/plain", "Not found")
+    end
+  end
+
   defp api_media_presign(conn) do
     case Plug.Conn.read_body(conn, length: 65_536, read_length: 8192, read_timeout: 4000) do
       {:ok, body, conn} ->
@@ -787,7 +922,7 @@ defmodule ChatOverlay.Web do
                   case reservation do
                     {:ok, validated, object} ->
                       validated = %{validated | key: object["key"]}
-                      r2_config = ChatOverlay.Media.r2_config()
+                      r2_config = ChatOverlay.Media.quarantine_config()
 
                       case ChatOverlay.Media.generate_presigned_put(
                              Map.merge(r2_config, %{
@@ -802,7 +937,7 @@ defmodule ChatOverlay.Web do
                           resp = %{
                             "ok" => true,
                             "upload_url" => presigned.upload_url,
-                            "public_url" => presigned.public_url,
+                            "state" => "pending",
                             "key" => presigned.key,
                             "size" => validated.size,
                             "content_type" => validated.mime
@@ -814,6 +949,9 @@ defmodule ChatOverlay.Web do
                             else
                               resp
                             end
+
+                          resp =
+                            Map.put(resp, "upload_headers", presigned[:upload_headers] || %{})
 
                           reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
 
@@ -877,6 +1015,37 @@ defmodule ChatOverlay.Web do
           413,
           "application/json",
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Petición demasiado grande"})
+        )
+    end
+  end
+
+  defp api_validate_upload(conn) do
+    with {:ok, body, conn} <-
+           Plug.Conn.read_body(conn, length: 2048, read_length: 2048, read_timeout: 4000),
+         {:ok, %{"handle" => handle, "key" => key, "upload_token" => token}} <-
+           ChatOverlay.JSON.decode(body),
+         :ok <- Session.authorize(conn, handle),
+         {:ok, ready} <-
+           ChatOverlay.Profiles.validate_media_upload(handle, key, token, fn ->
+             Session.authorize(conn, handle)
+           end) do
+      reply(
+        conn,
+        200,
+        "application/json",
+        ChatOverlay.JSON.encode(%{"ok" => true, "media" => ready, "state" => "ready"})
+      )
+    else
+      _ ->
+        reply(
+          conn,
+          422,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "state" => "failed",
+            "error" => "Validación multimedia fallida; el archivo sigue sin activarse."
+          })
         )
     end
   end
@@ -967,15 +1136,15 @@ defmodule ChatOverlay.Web do
             {:halt, {:error, reason}}
         end
 
-      {"alert_sound", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
-      when is_binary(url) and url != "" ->
+      {"alert_sound", %{"source" => source, "url" => url} = item}, {:ok, acc}
+      when source in ["r2", "local"] and is_binary(url) and url != "" ->
         case validate_r2_media_item(item, handle, :audio) do
           {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_sound", verified_item)}}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
-      {"alert_image", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
-      when is_binary(url) and url != "" ->
+      {"alert_image", %{"source" => source, "url" => url} = item}, {:ok, acc}
+      when source in ["r2", "local"] and is_binary(url) and url != "" ->
         case validate_r2_media_item(item, handle, :image) do
           {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_image", verified_item)}}
           {:error, reason} -> {:halt, {:error, reason}}
@@ -1019,13 +1188,21 @@ defmodule ChatOverlay.Web do
                  ChatOverlay.Profiles.media_objects(),
                  &(&1["key"] == key and &1["handle"] == handle)
                ),
+             true <- ChatOverlay.Media.backend_matches?(object),
+             true <- item["source"] == ChatOverlay.Media.object_backend(object),
              true <-
-               object["state"] in ["pending", "active"] and object["size"] == size and
+               object["state"] in ["ready", "active"] and object["bucket"] == "public" and
+                 is_binary(object["output_sha256"]) and object["size"] == size and
                  object["category"] == verified_category,
              {:ok, url} <- ChatOverlay.Media.public_url(key),
-             true <- item["url"] == url,
-             :ok <- ChatOverlay.Media.verify_object(object) do
-          {:ok, %{"url" => url, "source" => "r2", "key" => key, "size" => size}}
+             true <- item["url"] == url do
+          {:ok,
+           %{
+             "url" => url,
+             "source" => ChatOverlay.Media.object_backend(object),
+             "key" => key,
+             "size" => size
+           }}
         else
           _ -> {:error, :invalid_upload_token}
         end
@@ -1103,6 +1280,17 @@ defmodule ChatOverlay.Web do
           ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Proveedor no soportado"})
         )
 
+      not ChatOverlay.Transport.oauth_allowed?(conn) ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "error" => "OAuth requiere origen HTTPS configurado fuera del desarrollo local"
+          })
+        )
+
       true ->
         token = extract_token_from_conn(conn)
 
@@ -1113,7 +1301,7 @@ defmodule ChatOverlay.Web do
             ChatOverlay.Crypto.verify_token(token, profile["capability_token_hash"])
 
         session_auth = Session.authorize(conn, handle)
-        session_valid? = session_auth == :ok
+        session_valid? = session_auth == :ok and match?({:ok, _}, Session.fetch_session(conn))
 
         linked_accounts = profile["linked_accounts"] || %{}
         has_linked? = linked_accounts[provider] && linked_accounts[provider]["user_id"] != nil
@@ -1159,15 +1347,48 @@ defmodule ChatOverlay.Web do
                    auth_proof: auth_proof
                  ) do
               {:ok, auth_url} ->
-                if params["redirect"] == "true" do
-                  redirect(conn, auth_url)
-                else
-                  reply(
-                    conn,
-                    200,
-                    "application/json",
-                    ChatOverlay.JSON.encode(%{"ok" => true, "url" => auth_url})
-                  )
+                state =
+                  auth_url
+                  |> URI.parse()
+                  |> Map.fetch!(:query)
+                  |> URI.decode_query()
+                  |> Map.fetch!("state")
+
+                case ChatOverlay.OAuthFlow.bind(conn, state, provider, profile) do
+                  {:ok, conn} ->
+                    if params["redirect"] == "true" do
+                      redirect(conn, auth_url)
+                    else
+                      reply(
+                        conn,
+                        200,
+                        "application/json",
+                        ChatOverlay.JSON.encode(%{"ok" => true, "url" => auth_url})
+                      )
+                    end
+
+                  {:error, :insecure_transport} ->
+                    reply(
+                      conn,
+                      403,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" => "OAuth requiere HTTPS fuera de loopback"
+                      })
+                    )
+
+                  {:error, _} ->
+                    reply(
+                      conn,
+                      429,
+                      "application/json",
+                      ChatOverlay.JSON.encode(%{
+                        "ok" => false,
+                        "error" =>
+                          "Demasiados flujos OAuth pendientes; espere e inténtelo de nuevo"
+                      })
+                    )
                 end
 
               {:error, {:unconfigured_client, prov}} ->
@@ -1198,6 +1419,15 @@ defmodule ChatOverlay.Web do
   end
 
   defp oauth_callback(conn, provider) do
+    params = URI.decode_query(conn.query_string || "")
+
+    case ChatOverlay.OAuthFlow.consume(conn, params["state"], provider) do
+      {:ok, conn} -> oauth_callback_bound(conn, provider)
+      {:error, _} -> redirect(conn, "/?error=invalid_oauth_flow")
+    end
+  end
+
+  defp oauth_callback_bound(conn, provider) do
     params = URI.decode_query(conn.query_string || "")
     code = params["code"]
     state = params["state"]
@@ -1293,6 +1523,8 @@ defmodule ChatOverlay.Web do
                   redirect(conn, "/?handle=#{result.handle}&error=unauthorized_profile_claim")
 
                 true ->
+                  :ok = ChatOverlay.RequestScope.grant(result.handle)
+
                   account_data = %{
                     username: result.username,
                     user_id: result.user_id
@@ -1302,7 +1534,10 @@ defmodule ChatOverlay.Web do
                          result.handle,
                          result.provider,
                          account_data,
-                         result.tokens
+                         result.tokens,
+                         fn current ->
+                           ChatOverlay.OAuthFlow.authorized?(conn, result.handle, current)
+                         end
                        ) do
                     {:ok, updated_profile} ->
                       linked_info = (updated_profile["linked_accounts"] || %{})[result.provider]
@@ -1427,9 +1662,7 @@ defmodule ChatOverlay.Web do
   end
 
   defp build_redirect_uri(conn, provider) do
-    host = Plug.Conn.get_req_header(conn, "host") |> List.first() || "localhost:4100"
-    proto = if String.starts_with?(host, ["localhost", "127.0.0.1"]), do: "http", else: "https"
-    "#{proto}://#{host}/oauth/callback/#{provider}"
+    "#{ChatOverlay.Transport.origin(conn)}/oauth/callback/#{provider}"
   end
 
   def redirect(conn, location) do

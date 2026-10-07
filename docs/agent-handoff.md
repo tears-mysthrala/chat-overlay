@@ -1,5 +1,13 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> 07-10-2026: preview manual #64 implementado en feat/64-obs-preview y desplegado
+> en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,
+> revisión oficial OpenAI e28c1e39 completada sin vulnerabilidades del diff.
+> PNG visto en OBS y refresh inmediato sin replay PASS. Audio audible confirmado
+> por el operador. Revocación antigua401 y recuperación con enlace nuevo PASS.
+> CI/publicación/merge pendientes; no equivale a cierre global de F2.
+> Detalle: docs/workflows/deployment/runs/2026-10-07-obs-preview.md.
+
 > Estado actual 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.
 > Las secciones iniciales son historial. Consultar las entradas fechadas al final
 > y `docs/verification.md`; SEC-13/SEC-17 no están acreditados.
@@ -422,3 +430,126 @@ Local verification:
 - Siguiente paso: revisión humana y CI de esta PR; ejecutar las pruebas sostenidas
   sobre revisión/imagen identificadas y analizar la tendencia bajo #4. No hacer
   merge ni publicar sin autorización expresa del operador.
+
+## Continuación local OAuth — 07-10-2026, Refs #42
+
+Rama `security/42-oauth-session`, worktree `D:/github/_worktrees/chat-overlay-f2-security`.
+Transacciones por navegador, consumo único, origen HTTPS configurado, cuotas por
+solicitante y revalidación serializada de permisos/identidad. Revocaciones acotadas
+con invalidación de sesiones tras reiniciar. Base64 AEAD canónico.
+
+Última imagen `sha256:523f4bf8e38cbc4b80f9461f1f10b34721159dad4ee10ba976fe2f63221586c5`:
+264/264 PASS en ambas semillas, reportes completos. Revisión Sol medium ronda 7
+limpia, estática. Ver `docs/oauth-runtime.md` y
+`docs/workflows/f2-security/runs/2026-10-07.md`.
+
+No cierra #42 ni F2: navegador/proxy/proveedores reales, CI y revisión humana
+pendientes. ADR0005 A/B permanece en ramas separadas; no integrar la cuarentena
+con siete regresiones actuales. Sin push, PR nueva, merge ni despliegue.
+## Unidad A PostgreSQL RLS — 05-10-2026, Refs #51
+
+Rama security/51-postgres-rls, worktree D:/github/_worktrees/chat-overlay-postgres,
+base 1bc715c875ebe61a63b533705b88ae9c066cf3c7. Autorización expresa A/B ADR0005
+para implementación y validación local. Esta rama solo implementa A. No push,
+PR externa, merge, despliegue ni cuentas reales. Issue #51 permanece abierta.
+
+Backend integrado en producto, roles owner/runtime/bootstrap separados,
+RLS/FORCE en perfiles/cuentas/objetos, contexto transacción derivado de servidor,
+import/export offline validados, selección explícita y sin fallback DB -> JSON.
+Ver [almacenamiento](postgres-storage.md) y [registro de pruebas/revisión](workflows/postgres-rls/runs/2026-10-05.md).
+ARCH-06/#39 sigue pendiente: pools/caché dentro de una BEAM, singleton soportado.
+
+Actualización 07-10: imagen local reconstruida `55d27537510d`, 25 pruebas PostgreSQL
+por semilla y boot/mutación/restart PASS. Exportación exclusiva con regresiones
+concurrente/symlink incorporada. Revisión estructurada Sol bloqueada por aprobación
+automática de red; inspección manual completada, revisión independiente pendiente.
+La integración con OAuth `d261ebf` se valida en otra candidata; esta unidad no
+acredita cierre de F2, CI remota o publicación.
+## Unidad B local — 07-10-2026, Refs #49
+
+security/49-media-quarantine, D:/github/_worktrees/chat-overlay-quarantine.
+Ciclo privado pending/processing, normalización aislada, promoción por hash,
+activación autenticada y ledger conectado. Diez pruebas decoder y ocho coordinator
+PASS, storage sintético; BEAM255 dual PASS más ledger16 PASS con nueva regresión.
+Decoder89432cb33a13: FFmpeg mínimo fijado, backports CPython comprobados, licencias
+incluidas. Scanner seis matches sin VEX decoder aprobado; no declarar gate verde.
+La reserva pública incierta se conserva hasta sellado, también tras retry/restart.
+Journal128 acumulado requiere mantenimiento; autorización final puede impedir
+activación dejando artefacto normalizado público pendiente de retirada, con cargo.
+Revisión Sol scoped y fix comprobado por inspección. No R2 real/OBS/CI remota,
+PR, push, merge ni despliegue. Integración candidata se valida por separado.
+Ver docs/workflows/media-quarantine/runs/2026-10-07.md.
+
+## Candidata F2 integrada y revisión oficial — 07-10-2026, Refs #55
+
+`security/55-f2-local-candidate`, D:/github/_worktrees/chat-overlay-f2-candidate.
+OAuth/A/B integrados localmente: 274 generales y 26 PostgreSQL por semilla PASS;
+10 decoder y 8 coordinator PASS; escritorio sintético login/permisos/OBS capability/
+SSE/logout PASS. Los siete fallos antiguos de B quedaron resueltos.
+OpenAI Codex Security security-diff-scan completado y sellado sobre `aab4572`:
+44 entradas fuente oficiales revisadas, cero nuevos hallazgos reportables,
+cobertura parcial con seguimientos. Solo Sol. La autorización de revisión ya
+superó el bloqueo histórico de envío; no se usó la skill personal autoreview.
+Seis matches decoder sin suppressions y cobertura FFmpeg git siguen pendientes;
+demo detrás de proxy loopback requiere evaluación de configuración. No cierre F2,
+publicación o despliegue. Registro actual: docs/workflows/f2-security/runs/2026-10-07-candidate.md.
+
+## Seguimientos y VEX aprobado — 07-10-2026, Refs #55
+
+Demo/proxy corregido en 43568fa: proxy loopback configurado y peer ausente no
+conceden excepción anónima. 278 generales y 26 PostgreSQL por semilla PASS;
+revisión nueva Sol sin bypass/regresión concreta. Ver seguimiento F2.
+Kalista aprobó explícitamente la propuesta VEX del decoder: tres fixed Python
+por backport y un not_affected Busybox limitado al launcher/imagen documentados.
+Busybox wget sigue presente; no se declara parcheado. Activación condicionada a
+digest/arquitectura/hashes de fuentes y runtime/aprobación/caducidad 2026-10-21.
+Informe bruto conservado; cobertura completa FFmpeg git y validación real/CI
+remota siguen pendientes. No merge, push ni despliegue.
+Auditoría decoder con VEX exit 0: seis coincidencias brutas conservadas,
+seis cubiertas por las declaraciones aprobadas y cero activas; igualdad CVE/PURL
+verificada. Registro: docs/workflows/f2-security/runs/2026-10-07-vex-approved.md.
+
+## Despliegue Benten autorizado — 07-10-2026, Refs #55
+
+VM9502 dedicada,192.168.1.114. Backend PostgreSQL TLS privado operativo;
+release a5c3da6a7cfc con OpenSSL3.5.9, smoke/escaneo PASS. Persistencia real y
+autostart tras reboot comprobados, perfil sintético eliminado, firewall guest.
+Publicación mysthrala.com bloqueada por cf401 y rechazo automático de búsqueda
+de perfiles/rutas de autenticación alternativas. No DNS/ingress aplicado ni
+HTTPS externo probado. OAuth/R2 sin credenciales, decoder cargado sin coordinador.
+Checkpoint local quiesced; no restore/offsite validado. Registro y siguientes
+pasos: docs/workflows/deployment/runs/2026-10-07.md. No declarar despliegue público
+terminado ni F2 cerrado.
+
+## Publicación HTTPS completada — 07-10-2026, Refs #55
+
+https://overlay.mysthrala.com llega a VM9502 mediante connector personal9501.
+Autorización específica resuelve rechazo inicial: perfil cf personal-bankmcp.
+Túnel versión2, banking y fallback preservados; CNAME overlay creado. Firewall
+permite solo UID del connector hacia guest4100; workstation LAN bloqueado.
+HTTPS root/readiness/assets PASS, API anónima401; banking /mcp mantiene401 y
+connector activo sin reinicio. OAuth/R2/propietario inicial, SSE/OBS y reserva
+DHCP pendientes; mensaje anónimo UI401 genérico y script inline bloqueado por
+CSP registrados como deuda. No F2 cerrado ni pruebas reales de plataformas.
+Ver docs/workflows/deployment/runs/2026-10-07-public.md.
+
+## Lectura Twitch real y unidad local — 07-10-2026, Refs #47, #62
+
+Readers9250d51 desplegados en VM9502 con imagena9c03ede9afe y migración del
+perfil propietario. Consentimiento Twitch con lectura de chat completado;
+mensaje autorizado de prueba recibido una vez en lector, fuente Disponible.
+Chats YouTube público/oculto y OBS confirmados, eventos después eliminados con
+confirmación explícita; multimedia OBS y revocación actual pendientes. Registro #47 actualizado en el worktree
+chat-overlay-oauth-readers, todavía sin commit documental.
+
+Worktreechat-overlay-local-media, ramafeat/62-local-media, commit860deeb:
+almacenamiento Linux privado, adaptador coordinador, relay HTTP con autorización,
+salida normalizada con hash e inventario y frontend. Ocho tests Linux/API privada
+y cuatro tests web nuevos PASS; suite290 PASS, decoder real emotes112/WAV2s PASS,
+E2E Linux completo PASS, PostgreSQL26 PASS en dos seeds. Revisión oficial
+4a10c926 completada sin vulnerabilidades reportables. Imagen a42d61be desplegada
+en Benten con coordinador privado4199 y permiso de subida tearsmysthrala;
+SBOM295 válido/escaneo0 activos4 VEX. Quedan panel upload/OBS/revocación y deuda
+operativa (registros acotados, backup externo/restore, ARCH06, CI). Chrome requiere
+acceso a file URLs de la extensión o selección manual de fixture. Continuar desde
+docs/workflows/deployment/runs/2026-10-07-local-media.md; preservar otros worktrees.

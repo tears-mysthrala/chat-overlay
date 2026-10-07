@@ -1,0 +1,37 @@
+# Local synthetic integration only. No published port, no host Docker socket.
+services:
+  postgres:
+    image: postgres:18.6-alpine@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
+    environment:
+      POSTGRES_DB: overlay_synthetic
+      POSTGRES_PASSWORD: synthetic-bootstrap-admin
+    mem_limit: 256m
+    cpus: 1
+    pids_limit: 64
+    volumes:
+      - postgres_local:/var/lib/postgresql
+      - ./test_postgres/fixtures/roles.sql:/docker-entrypoint-initdb.d/roles.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres -d overlay_synthetic]
+      interval: 1s
+      timeout: 2s
+      retries: 30
+  tests:
+    image: ${POSTGRES_TEST_IMAGE:-chat-overlay:51-postgres-validation}
+    environment:
+      MIX_ENV: test
+      PG_LOCAL_HOST: postgres
+      CI_EXUNIT_REPORT: /evidence/postgres-tests.json
+    mem_limit: 1g
+    cpus: 2
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - ./output/postgres:/evidence
+    command: [sh, scripts/ci_postgres.sh]
+volumes:
+  postgres_local:
+networks:
+  default:
+    internal: true

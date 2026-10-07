@@ -25,6 +25,11 @@ components =
         do: ["vendor/licenses/mint_web_socket-LICENSE" | files],
         else: files
 
+    files =
+      if name in [:postgrex, :db_connection],
+        do: ["vendor/licenses/#{name}-NOTICE", "vendor/licenses/Apache-2.0.txt" | files],
+        else: files
+
     if files == [], do: raise("Missing license text for #{name}")
     Enum.each(files, &File.cp!(&1, Path.join(directory, Path.basename(&1))))
 

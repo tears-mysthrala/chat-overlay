@@ -34,4 +34,32 @@ defmodule ChatOverlay.ProfileStorageTest do
     assert ChatOverlay.JSON.decode(File.read!(path)) ==
              {:ok, %{"profiles" => [], "media_objects" => []}}
   end
+
+  test "concurrent fresh exports publish once without overwriting", %{path: path, dir: dir} do
+    results =
+      1..8
+      |> Task.async_stream(fn n -> ProfileStorage.write_new(path, [%{"marker" => n}]) end,
+        max_concurrency: 8
+      )
+      |> Enum.map(fn {:ok, result} -> result end)
+
+    assert Enum.count(results, &(&1 == :ok)) == 1
+    assert Enum.count(results, &(&1 == {:error, {:persist_failed, :eexist}})) == 7
+
+    assert {:ok, %{"profiles" => [%{"marker" => winner}]}} =
+             ChatOverlay.JSON.decode(File.read!(path))
+
+    assert winner in 1..8
+    assert File.ls!(dir) == ["profiles.json"]
+    assert Bitwise.band(File.stat!(path).mode, 0o777) == 0o600
+  end
+
+  test "fresh export refuses a destination symlink", %{path: path, dir: dir} do
+    target = Path.join(dir, "unrelated")
+    File.write!(target, "keep")
+    File.ln_s!(target, path)
+    assert {:error, {:persist_failed, :eexist}} = ProfileStorage.write_new(path, [])
+    assert File.lstat!(path).type == :symlink
+    assert File.read!(target) == "keep"
+  end
 end

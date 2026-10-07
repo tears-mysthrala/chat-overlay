@@ -3,19 +3,27 @@ defmodule ChatOverlay.ProfileStorage do
   @max_bytes 65_536
 
   def write(path, profiles, objects \\ []) do
+    persist(path, profiles, objects, :replace)
+  end
+
+  def write_new(path, profiles, objects \\ []) do
+    persist(path, profiles, objects, :new)
+  end
+
+  defp persist(path, profiles, objects, mode) do
     json = ChatOverlay.JSON.encode(%{"profiles" => profiles, "media_objects" => objects})
     dir = Path.dirname(path)
 
     cond do
       not File.dir?(dir) -> {:error, {:directory_not_found, dir}}
       byte_size(json) > @max_bytes -> {:error, :profile_document_too_large}
-      true -> replace(path, dir, json)
+      true -> replace(path, dir, json, mode)
     end
   rescue
     _ -> {:error, {:persist_failed, :invalid_document}}
   end
 
-  defp replace(path, dir, json) do
+  defp replace(path, dir, json, mode) do
     staging =
       Path.join(
         dir,
@@ -29,7 +37,7 @@ defmodule ChatOverlay.ProfileStorage do
         try do
           with :ok <- File.chmod(staging, 0o700),
                :ok <- write_private(tmp, json),
-               :ok <- File.rename(tmp, path) do
+               :ok <- publish(tmp, path, mode) do
             :ok
           else
             {:error, reason} -> {:error, {:persist_failed, reason}}
@@ -43,6 +51,11 @@ defmodule ChatOverlay.ProfileStorage do
         {:error, {:persist_failed, reason}}
     end
   end
+
+  defp publish(tmp, path, :replace), do: File.rename(tmp, path)
+  # Hard-link publication is atomic and refuses existing files, including symlinks.
+  # Staging is on the same filesystem; cleanup removes only the staging link.
+  defp publish(tmp, path, :new), do: File.ln(tmp, path)
 
   defp write_private(path, json) do
     with {:ok, file} <- File.open(path, [:write, :binary, :exclusive]) do

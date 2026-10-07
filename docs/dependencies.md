@@ -1,5 +1,12 @@
 # Dependencias y cadena de suministro — issue #3
 
+La unidad B ADR0005 añade un decoder separado, aprobado el 05-10-2026: FFmpeg
+upstream mínimo fijado a `e5a08f7c0e45e6d278a394ef19c97f0b8ad3ed45`
+(versión `8.0.git`)/Python 3.14.8-r0 con backports sobre Alpine 3.24.2 por digest.
+La imagen inicial FFmpeg 8.1.2-r0 se sustituyó; no entra en la imagen
+HTTP. Ver [cuarentena](media-quarantine.md) para aislamiento, licencias y
+gates de distribución. SBOM/escaneo propio: `audit_image.py IMAGE --decoder`.
+
 La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2026. [ADR 0001](adr/0001-transporte-f1.md) recoge alternativas y motivo. No se reutilizó código de los forks Chatterino: sus implementaciones no forman parte del artefacto nuevo.
 
 ## Producción
@@ -18,7 +25,7 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 
 Son diez paquetes Hex directos/transitivos, todos fijados con hashes en mix.lock. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
 
-La imagen y builder Alpine 3.24.2 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.8-r0`, `libssl3=3.5.8-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
+La imagen y builder Alpine 3.24.2 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
 
 Los paquetes pueden ejecutar sus tareas de compilación durante el build, en un entorno sin secretos de producción. En ejecución, los permisos son los del UID 65532; ninguna dependencia obtiene privilegios extra. No hay exportador de telemetría configurado. Retirada: transporte detrás de Net/Socket/Web/Stream; cambiar componentes exige ADR, pruebas de protocolo y nueva aprobación cuando corresponda.
 
@@ -102,3 +109,40 @@ los checks compartidos/T3 y el runtime permanecen independientes. Fuentes oficia
 [paquete npm](https://www.npmjs.com/package/playwright/v/1.63.0),
 [evaluación de funciones](https://playwright.dev/docs/api/class-page#page-evaluate),
 [intercepción de rutas](https://playwright.dev/docs/api/class-browsercontext#browser-context-route).
+
+## PostgreSQL/Postgrex — unidad A aprobada 05-10-2026, Refs #51
+
+El usuario aprobó expresamente Postgrex con ADR0005 para implementación/pruebas
+locales. El árbol actualizado contiene **13** paquetes Hex: los diez anteriores,
+Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.1.1. Fijados con
+checksums en mix.lock; no Ecto, Jason ni otra dependencia directa de producción.
+Apache-2.0 en los tres, verificado en [Postgrex versionado](https://raw.githubusercontent.com/elixir-ecto/postgrex/v0.22.4/mix.exs),
+[DBConnection](https://raw.githubusercontent.com/elixir-ecto/db_connection/v2.10.2/mix.exs)
+y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.1.1/mix.exs).
+Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.4
+probado. Postgrex 0.22.4 publicado en [Hex](https://hex.pm/packages/postgrex);
+no se presume una política LTS de Postgrex que el proveedor no publica.
+
+Postgrex/DBConnection omiten LICENSE en el paquete: avisos sin cambios desde README
+de commits `7a12d0b555e9441d3dfcb8f3d55fb5916e90db2d` y
+`e5d6969651d08ee5440fba23302658bfe33b83b9`, más Apache-2.0 completo del paquete
+Decimal en vendor/licenses. inventory.exs los incorpora sin relajar su gate.
+Postgrex emite deprecación upstream `xref: [exclude: ...]` al compilar con Mix
+1.20.4; se conserva como limitación de compatibilidad, sin ocultarla ni parchear
+la dependencia unilateralmente. Compilación del producto warnings-as-errors PASS.
+
+PostgreSQL **18.6** está soportado según la [política oficial](https://www.postgresql.org/support/versioning/)
+consultada el 05-10-2026; fin de soporte major 18: 14-11-2030. Licencia
+[PostgreSQL](https://www.postgresql.org/about/licence/). Imagen oficial local
+postgres:18.6-alpine fijada por digest en compose.postgres-local.yml y versión
+real comprobada por SQL. No se introduce servidor DB en la imagen de la app.
+No se ha hecho auditoría integral de vulnerabilidades de la imagen PostgreSQL;
+el pin y las pruebas no prueban ausencia de CVE.
+
+Contrato de [RLS/FORCE](https://www.postgresql.org/docs/18/ddl-rowsecurity.html),
+[set_config transaction-local](https://www.postgresql.org/docs/18/functions-admin.html#FUNCTIONS-ADMIN-SET)
+y [Postgrex transaction/rollback](https://hexdocs.pm/postgrex/Postgrex.html)
+contrastado también con fuente del paquete resuelto. Inventario/Hex audit del
+build con Hex 2.5.1 PASS; [registro](workflows/postgres-rls/runs/2026-10-05.md).
+
+Actualización del 2026-10-07, Refs #55: runtime OpenSSL 3.5.9-r0 confirmado en APKINDEX oficial v3.24/main. El escaneo previo de 3.5.8-r0 produjo 26 matches; rebuild y re-escaneo requeridos antes de exposición en Benten.

@@ -14,7 +14,7 @@ defmodule ChatOverlay.OAuth do
       auth_url: "https://id.twitch.tv/oauth2/authorize",
       token_url: "https://id.twitch.tv/oauth2/token",
       user_url: "https://api.twitch.tv/helix/users",
-      default_scope: "user:read:email"
+      default_scope: "user:read:email user:read:chat"
     },
     "youtube" => %{
       auth_url: "https://accounts.google.com/o/oauth2/v2/auth",

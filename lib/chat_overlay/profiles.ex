@@ -17,16 +17,21 @@ defmodule ChatOverlay.Profiles do
       :ets.new(:chat_overlay_revoked_sessions, [
         :named_table,
         :set,
-        :public,
+        :protected,
         read_concurrency: true
       ])
     end
 
+    :ets.insert(
+      :chat_overlay_revoked_sessions,
+      {:epoch, Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)}
+    )
+
     {:ok, %{}}
   end
 
-  def handle_call(action, _from, state) do
-    result = execute_action(action)
+  def handle_call({:scoped_action, scope, action}, _from, state) do
+    result = ChatOverlay.RequestScope.with_scope(scope, fn -> execute_action(action) end)
     {:reply, result, state}
   end
 
@@ -36,16 +41,37 @@ defmodule ChatOverlay.Profiles do
         execute_action(action)
 
       pid ->
-        GenServer.call(pid, action, 30_000)
+        GenServer.call(pid, {:scoped_action, ChatOverlay.RequestScope.current(), action}, 30_000)
     end
   end
 
   def reserve_media_upload(handle, upload), do: call_serialized({:reserve_media, handle, upload})
 
+  def preview_media(handle, authorize), do: call_serialized({:preview_media, handle, authorize})
+
+  def validate_media_upload(handle, key, token, authorize \\ fn -> :ok end) do
+    with :ok <- authorize.(),
+         {:ok, verified} <- ChatOverlay.Media.verify_upload_token(token, handle, key) do
+      case call_serialized({:begin_media_job, handle, key, verified, authorize}) do
+        {:ready, response} ->
+          {:ok, response}
+
+        {:ok, job} ->
+          with {:ok, result} <- ChatOverlay.MediaCoordinator.request("/normalize", job),
+               :ok <- authorize.() do
+            call_serialized({:finish_media_job, job, result, authorize})
+          end
+
+        error ->
+          error
+      end
+    end
+  end
+
   def cleanup_media(key) do
     # Persist an irreversible claim before remote I/O; never block the shared writer.
     with {:ok, object} <- call_serialized({:claim_cleanup_media, key}),
-         :ok <- ChatOverlay.Media.delete_object(key) do
+         :ok <- cleanup_object(object) do
       call_serialized({:finish_cleanup_media, object})
     else
       :absent -> :ok
@@ -54,6 +80,198 @@ defmodule ChatOverlay.Profiles do
   end
 
   def media_objects, do: Application.get_env(:chat_overlay, :media_objects, [])
+
+  defp cleanup_object(%{"bucket" => bucket} = object) do
+    result =
+      if ChatOverlay.Media.backend_matches?(object),
+        do: ChatOverlay.MediaCoordinator.request("/delete", Map.take(object, ["key", "bucket"])),
+        else: {:error, :backend_migration_required}
+
+    case result do
+      {:ok, %{"state" => "deleted"}} when bucket == "public" -> :ok
+      {:ok, %{"state" => "deleted", "sealed" => true}} when bucket == "quarantine" -> :ok
+      {:ok, %{"state" => "reconcile"}} -> {:error, :storage_reconciliation_required}
+      _ -> {:error, :storage_cleanup_failed}
+    end
+  end
+
+  defp cleanup_object(object) do
+    if ChatOverlay.Media.backend_matches?(object),
+      do: ChatOverlay.Media.delete_object(object["key"]),
+      else: {:error, :backend_migration_required}
+  end
+
+  defp ready_media(ready) do
+    with {:ok, url} <- ChatOverlay.Media.public_url(ready["key"]),
+         {:ok, token} <-
+           ChatOverlay.Media.generate_upload_token(
+             ready["handle"],
+             ready["key"],
+             ready["size"],
+             ready["category"]
+           ) do
+      {:ok,
+       %{
+         "state" => "ready",
+         "url" => url,
+         "key" => ready["key"],
+         "size" => ready["size"],
+         "source" => ChatOverlay.Media.object_backend(ready),
+         "upload_token" => token
+       }}
+    end
+  end
+
+  defp execute_action({:preview_media, handle, authorize}) do
+    with :ok <- authorize.(),
+         profile when is_map(profile) <- Config.profile(handle),
+         {:ok, payload} <- ChatOverlay.MediaPreview.payload(profile, media_objects()) do
+      Store.preview(Store.name(handle), payload)
+    else
+      _ -> {:error, :preview_rejected}
+    end
+  end
+
+  defp execute_action({:begin_media_job, handle, key, verified, authorize}) do
+    objects = media_objects()
+    profile = Config.profile(handle)
+    input = Enum.find(objects, &(&1["key"] == key and &1["handle"] == handle))
+
+    with :ok <- authorize.(),
+         true <- is_map(profile) and profile["can_upload"] == true,
+         true <- is_map(input) and ChatOverlay.Media.backend_matches?(input),
+         true <-
+           input["bucket"] == "quarantine" and
+             input["state"] in ["pending", "processing", "retired"] and
+             input["expires_at"] > System.system_time(:second) and input["size"] == verified.size and
+             input["category"] == verified.category do
+      if input["job"] do
+        output = Enum.find(objects, &(&1["job"] == input["job"] and &1["bucket"] == "public"))
+
+        cond do
+          input["state"] == "retired" and is_map(output) and
+              output["state"] in ["ready", "active"] ->
+            case ready_media(output) do
+              {:ok, response} -> {:ready, response}
+              error -> error
+            end
+
+          input["state"] == "processing" and is_map(output) and output["state"] == "processing" ->
+            {:ok, Map.take(input, ["job", "handle", "key", "category", "size"])}
+
+          true ->
+            {:error, :invalid_upload_token}
+        end
+      else
+        job = :crypto.strong_rand_bytes(16) |> Base.encode16(case: :lower)
+        maximum = if input["category"] == "audio", do: 2_097_152, else: 524_288
+
+        output =
+          input
+          |> Map.put("bucket", "public")
+          |> Map.put("job", job)
+          |> Map.put("size", maximum)
+          |> Map.put("key", handle <> "/validated/" <> job <> "/pending")
+          |> Map.put("state", "processing")
+
+        claimed = input |> Map.put("job", job) |> Map.put("state", "processing")
+        updated = Enum.map(objects, fn o -> if o == input, do: claimed, else: o end) ++ [output]
+
+        cond do
+          Enum.count(updated, &(&1["handle"] == handle)) > 12 or
+              not ChatOverlay.MediaLedger.valid?(updated) ->
+            {:error, :upload_reservations_full}
+
+          ChatOverlay.MediaLedger.total_bytes(updated, profile) >
+              (profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()) ->
+            {:error, :quota_exceeded}
+
+          ChatOverlay.LocalMedia.backend() == "local" and
+              Enum.sum(Enum.map(updated, & &1["size"])) > ChatOverlay.LocalMedia.max_bytes() ->
+            {:error, :global_storage_quota_exceeded}
+
+          true ->
+            with :ok <- persist_profiles(Config.profiles(), updated) do
+              Application.put_env(:chat_overlay, :media_objects, updated)
+              {:ok, Map.take(claimed, ["job", "handle", "key", "category", "size"])}
+            end
+        end
+      end
+    else
+      _ -> {:error, :invalid_upload_token}
+    end
+  end
+
+  defp execute_action({:finish_media_job, job, result, authorize}) do
+    objects = media_objects()
+    profile = Config.profile(job["handle"])
+    output = Enum.find(objects, &(&1["job"] == job["job"] and &1["bucket"] == "public"))
+    input = Enum.find(objects, &(&1["key"] == job["key"] and &1["job"] == job["job"]))
+    extension = if job["category"] == "image", do: ".png", else: ".wav"
+    mime = if job["category"] == "image", do: "image/png", else: "audio/wav"
+
+    with :ok <- authorize.(),
+         true <- is_map(profile) and profile["can_upload"] == true,
+         true <-
+           is_map(output) and output["state"] == "processing" and is_map(input) and
+             input["state"] == "processing",
+         true <-
+           is_map(result) and result["job"] == job["job"] and result["handle"] == job["handle"] and
+             result["input_key"] == job["key"] and result["category"] == job["category"] and
+             result["state"] == "ready" and result["mime"] == mime and
+             result["extension"] == extension,
+         true <- is_integer(result["size"]) and result["size"] in 1..output["size"],
+         true <-
+           Enum.all?(~w(input_sha256 output_sha256), fn k ->
+             is_binary(result[k]) and Regex.match?(~r/\A[0-9a-f]{64}\z/, result[k])
+           end),
+         true <-
+           result["key"] ==
+             job["handle"] <>
+               "/validated/" <> job["job"] <> "/" <> result["output_sha256"] <> extension do
+      ready =
+        output
+        |> Map.merge(Map.take(result, ~w(key size mime input_sha256 output_sha256 input_key)))
+        |> Map.put("state", "ready")
+
+      updated =
+        Enum.map(objects, fn
+          ^output -> ready
+          ^input -> Map.put(input, "state", "retired")
+          other -> other
+        end)
+
+      with true <-
+             ChatOverlay.MediaLedger.valid?(updated) and
+               ChatOverlay.MediaLedger.total_bytes(updated, profile) <=
+                 (profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()),
+           {:ok, url} <- ChatOverlay.Media.public_url(ready["key"]),
+           {:ok, token} <-
+             ChatOverlay.Media.generate_upload_token(
+               job["handle"],
+               ready["key"],
+               ready["size"],
+               ready["category"]
+             ),
+           :ok <- persist_profiles(Config.profiles(), updated) do
+        Application.put_env(:chat_overlay, :media_objects, updated)
+
+        {:ok,
+         %{
+           "state" => "ready",
+           "url" => url,
+           "key" => ready["key"],
+           "size" => ready["size"],
+           "source" => ChatOverlay.Media.object_backend(ready),
+           "upload_token" => token
+         }}
+      else
+        _ -> {:error, :quota_exceeded}
+      end
+    else
+      _ -> {:error, :validation_result_rejected}
+    end
+  end
 
   defp execute_action({:reserve_media, handle, upload}) do
     with profile when is_map(profile) <- Config.profile(handle),
@@ -111,15 +329,39 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
+  defp execute_action({:save_profile, profile, opts}) do
+    expected = opts[:target_reader_binding]
+
+    current? =
+      not Keyword.has_key?(opts, :reader_account_snapshot) or
+        reader_account_snapshot(profile["handle"]) == opts[:reader_account_snapshot]
+
+    if current? and
+         (is_nil(expected) or
+            target_reader_binding(profile["handle"], elem(expected, 0)) == elem(expected, 1)),
+       do: do_save_profile(profile, opts),
+       else: {:error, :stale_reader_binding}
+  end
+
   defp execute_action({:delete, handle}), do: do_delete(handle, [])
   defp execute_action({:delete, handle, opts}), do: do_delete(handle, opts)
 
-  defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}),
-    do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
+  defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}) do
+    with :ok <- reader_resolution_current?(handle, opts),
+         do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
+  end
 
-  defp execute_action({:sync_youtube_offline, handle, yt_target, resolved_for, opts}),
-    do: do_sync_youtube_offline(handle, yt_target, resolved_for, opts)
+  defp execute_action({:sync_youtube_offline, handle, yt_target, resolved_for, opts}) do
+    with :ok <- reader_resolution_current?(handle, opts),
+         do: do_sync_youtube_offline(handle, yt_target, resolved_for, opts)
+  end
+
+  defp execute_action({:activate_oauth_readers, handle}) do
+    case Config.profile(handle) do
+      nil -> {:error, :not_found}
+      profile -> do_save_profile(profile, replace: true)
+    end
+  end
 
   defp execute_action({:update_linked_youtube, handle, yt_target}),
     do: do_update_linked_youtube(handle, yt_target)
@@ -138,6 +380,42 @@ defmodule ChatOverlay.Profiles do
 
   defp execute_action({:link_account, handle, provider, account_data, tokens}),
     do: do_link_account(handle, provider, account_data, tokens)
+
+  defp execute_action({:link_account_guarded, handle, provider, account_data, tokens, guard}) do
+    if guard.(Config.profile(handle)),
+      do: do_link_account(handle, provider, account_data, tokens),
+      else: {:error, :authorization_changed}
+  end
+
+  defp execute_action({:revoke_session, token, opts}) do
+    case ChatOverlay.Session.verify_token(token, opts) do
+      {:ok, session} ->
+        now = System.system_time(:second)
+
+        :ets.select_delete(:chat_overlay_revoked_sessions, [
+          {{:"$1", :"$2"}, [{:is_integer, :"$2"}, {:"=<", :"$2", now}], [true]}
+        ])
+
+        if :ets.info(:chat_overlay_revoked_sessions, :size) >= 4097 do
+          :ets.delete_all_objects(:chat_overlay_revoked_sessions)
+
+          :ets.insert(
+            :chat_overlay_revoked_sessions,
+            {:epoch, Base.url_encode64(:crypto.strong_rand_bytes(32), padding: false)}
+          )
+        else
+          :ets.insert(
+            :chat_overlay_revoked_sessions,
+            {:crypto.hash(:sha256, token), session["expires_at"]}
+          )
+        end
+
+      _ ->
+        :ok
+    end
+
+    :ok
+  end
 
   defp execute_action({:update_tokens, handle, provider, new_tokens}),
     do: do_update_tokens(handle, provider, new_tokens, [])
@@ -166,6 +444,7 @@ defmodule ChatOverlay.Profiles do
         "has_capability_token" => not is_nil(p["capability_token_hash"]),
         "media" => p["media"] || %{},
         "can_upload" => p["can_upload"] || false,
+        "media_storage" => ChatOverlay.LocalMedia.backend(),
         "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
         "storage_used_bytes" => p["storage_used_bytes"] || 0,
         "storage_pending_bytes" =>
@@ -249,6 +528,16 @@ defmodule ChatOverlay.Profiles do
   end
 
   def link_account(_, _, _, _), do: {:error, :invalid_params}
+
+  @doc "Rechecks authorization in the same serialized operation that persists the account."
+  def link_account(handle, provider, account_data, tokens, guard) when is_function(guard, 1) do
+    call_serialized(
+      {:link_account_guarded, handle, to_string(provider), account_data, tokens, guard}
+    )
+  end
+
+  @doc false
+  def revoke_session(token, opts), do: call_serialized({:revoke_session, token, opts})
 
   @doc "Unlinks an external platform account, removing stored encrypted credentials."
   def unlink_account(handle, provider) when is_binary(handle) do
@@ -452,7 +741,13 @@ defmodule ChatOverlay.Profiles do
     target = params["target"] || params[:target] || params["input"] || params[:input]
     raw_sources = params["sources"] || params[:sources]
 
-    with {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
+    opts =
+      opts
+      |> Keyword.put(:reader_handle, handle)
+      |> Keyword.put(:reader_account_snapshot, reader_account_snapshot(handle))
+
+    with {:ok, opts} <- target_resolution_options(handle, target, opts),
+         {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
          {:ok, clean_handle} <- determine_handle(handle, suggested_handle, sources) do
       candidate_profile =
         %{
@@ -476,10 +771,119 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
+  defp target_reader_binding(handle, provider) do
+    case Config.profile(handle) do
+      %{"linked_accounts" => accounts} when is_map(accounts) ->
+        case accounts[provider] do
+          nil -> nil
+          a -> {a["account_version"] || 1, a["status"], a["user_id"]}
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp reader_account_snapshot(handle),
+    do: Enum.map(["twitch", "youtube"], &{&1, target_reader_binding(handle, &1)})
+
+  defp target_resolution_options(handle, target, opts)
+       when is_binary(handle) and is_binary(target) do
+    opts =
+      if Enum.any?(["twitch", "youtube"], &oauth_reader_history?(slugify(handle), &1)),
+        do: Keyword.put(opts, :auto_discover_youtube, false),
+        else: opts
+
+    provider =
+      if opts[:platform] in ["twitch", "youtube"],
+        do: opts[:platform],
+        else:
+          detect_platform(target) ||
+            if(String.starts_with?(target, "@"), do: "youtube", else: "twitch")
+
+    case target_reader_binding(slugify(handle), provider) do
+      {_, "active", _} = binding ->
+        with {:ok, token} <- ChatOverlay.Tokens.get_access_token(slugify(handle), provider) do
+          options =
+            opts
+            |> Keyword.put(:platform, provider)
+            |> Keyword.put(:token, token)
+            |> Keyword.put(:target_reader_binding, {provider, binding})
+            |> Keyword.put(:auto_discover_youtube, false)
+
+          {:ok, options}
+        end
+
+      nil ->
+        if oauth_reader_history?(slugify(handle), provider),
+          do: {:error, :not_linked},
+          else: {:ok, opts}
+
+      _ ->
+        {:error, :reauth_required}
+    end
+  end
+
+  defp target_resolution_options(_, _, opts), do: {:ok, opts}
+
+  defp oauth_reader_history?(handle, provider) do
+    profile = Config.profile(handle) || %{}
+
+    provider in (profile["reader_oauth_platforms"] || []) or
+      Enum.any?(
+        profile["sources"] || [],
+        &(&1["platform"] == provider and &1["auth_handle"] != nil)
+      )
+  end
+
   @doc "Synchronizes the linked YouTube live stream for an existing profile."
   def sync_youtube(handle, opts \\ []) when is_binary(handle) do
     clean_handle = slugify(handle)
 
+    with {:ok, reader_opts} <- reader_resolution_options(clean_handle, opts),
+         do: resolve_youtube_for_reader(clean_handle, reader_opts)
+  end
+
+  @doc "Operator migration of existing linked profiles; serialized with all writers."
+  def activate_oauth_readers(handle) when is_binary(handle),
+    do: call_serialized({:activate_oauth_readers, handle})
+
+  defp reader_binding(handle) do
+    case Config.profile(handle) do
+      %{"linked_accounts" => %{"youtube" => a}} ->
+        {a["account_version"] || 1, a["status"], a["user_id"]}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp reader_resolution_options(handle, opts) do
+    binding = reader_binding(handle)
+
+    case binding do
+      {_, "active", _} ->
+        with {:ok, token} <- ChatOverlay.Tokens.get_access_token(handle, "youtube"),
+             do:
+               {:ok, opts |> Keyword.put(:token, token) |> Keyword.put(:reader_binding, binding)}
+
+      nil ->
+        if oauth_reader_history?(handle, "youtube"),
+          do: {:error, :not_linked},
+          else: {:ok, Keyword.put(opts, :reader_binding, nil)}
+
+      _ ->
+        {:error, :reauth_required}
+    end
+  end
+
+  defp reader_resolution_current?(handle, opts) do
+    if reader_binding(handle) == opts[:reader_binding],
+      do: :ok,
+      else: {:error, :stale_reader_binding}
+  end
+
+  defp resolve_youtube_for_reader(clean_handle, opts) do
     case Config.profile(clean_handle) do
       nil ->
         {:error, :not_found}
@@ -652,9 +1056,10 @@ defmodule ChatOverlay.Profiles do
           if twitch["user_id"], do: Keyword.put(opts, :user_id, twitch["user_id"]), else: opts
 
         opts =
-          if twitch["credential_env"],
-            do: Keyword.put(opts, :token, System.get_env(twitch["credential_env"])),
-            else: opts
+          case ChatOverlay.Net.token(twitch) do
+            {:ok, token} -> Keyword.put(opts, :token, token)
+            _ -> Keyword.put(opts, :token, "")
+          end
 
         opts
       else
@@ -699,13 +1104,6 @@ defmodule ChatOverlay.Profiles do
             profile["sources"]
       end
 
-    removed_sources =
-      if existing do
-        (existing["sources"] || []) -- final_sources
-      else
-        []
-      end
-
     linked_yt = profile["linked_youtube"] || (existing && existing["linked_youtube"])
 
     base_profile =
@@ -721,6 +1119,11 @@ defmodule ChatOverlay.Profiles do
       |> then(fn p ->
         if linked_yt, do: Map.put(p, "linked_youtube", linked_yt), else: p
       end)
+
+    final_profile = bind_reader_sources(final_profile, existing)
+
+    removed_sources =
+      if existing, do: (existing["sources"] || []) -- final_profile["sources"], else: []
 
     updated_profiles =
       if existing do
@@ -749,6 +1152,44 @@ defmodule ChatOverlay.Profiles do
       error ->
         error
     end
+  end
+
+  defp bind_reader_sources(profile, existing) do
+    history =
+      ((existing && existing["reader_oauth_platforms"]) || []) ++
+        Map.keys(profile["linked_accounts"] || %{}) ++
+        Enum.flat_map(((existing && existing["sources"]) || []) ++ profile["sources"], fn s ->
+          if s["auth_handle"], do: [s["platform"]], else: []
+        end)
+
+    history = Enum.uniq(history)
+
+    sources =
+      Enum.map(profile["sources"], fn source ->
+        account = (profile["linked_accounts"] || %{})[source["platform"]]
+
+        cond do
+          source["mode"] == "demo" ->
+            Map.drop(source, ~w(auth_handle auth_version auth_status))
+
+          is_map(account) ->
+            source
+            |> Map.put("auth_handle", profile["handle"])
+            |> Map.put("auth_version", account["account_version"] || 1)
+            |> Map.put("auth_status", account["status"] || "active")
+
+          source["platform"] in history ->
+            source
+            |> Map.put("auth_handle", profile["handle"])
+            |> Map.put("auth_version", 0)
+            |> Map.put("auth_status", "unlinked")
+
+          true ->
+            source
+        end
+      end)
+
+    profile |> Map.put("sources", sources) |> Map.put("reader_oauth_platforms", history)
   end
 
   defp sync_profile_supervisors(final_profile, clean_handle, removed_sources, valid_profiles) do
@@ -839,7 +1280,7 @@ defmodule ChatOverlay.Profiles do
               Enum.flat_map(["alert_sound", "alert_image"], fn k ->
                 item = media[k]
 
-                if is_map(item) and item["source"] == "r2" and is_binary(item["key"]) and
+                if is_map(item) and item["source"] in ["r2", "local"] and is_binary(item["key"]) and
                      byte_size(item["key"]) > 0 do
                   [item["key"]]
                 else
@@ -905,7 +1346,7 @@ defmodule ChatOverlay.Profiles do
             new_item = cleaned_media[key]
 
             old_key =
-              if is_map(old_item) and old_item["source"] == "r2" and
+              if is_map(old_item) and old_item["source"] in ["r2", "local"] and
                    is_binary(old_item["key"]) and byte_size(old_item["key"]) > 0 do
                 old_item["key"]
               else
@@ -913,7 +1354,7 @@ defmodule ChatOverlay.Profiles do
               end
 
             new_key =
-              if is_map(new_item) and new_item["source"] == "r2" and
+              if is_map(new_item) and new_item["source"] in ["r2", "local"] and
                    is_binary(new_item["key"]) and byte_size(new_item["key"]) > 0 do
                 new_item["key"]
               else
@@ -930,7 +1371,7 @@ defmodule ChatOverlay.Profiles do
         # Calculate new storage used across active R2 media
         new_storage_used =
           Enum.reduce(cleaned_media, 0, fn {_k, v}, sum ->
-            if is_map(v) and v["source"] == "r2" do
+            if is_map(v) and v["source"] in ["r2", "local"] do
               sum + max(0, v["size"] || 0)
             else
               sum
@@ -1164,6 +1605,18 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp do_mark_reauth_required(handle, provider, reason, opts) do
+    expected_version = opts[:expected_version]
+    current = target_reader_binding(handle, to_string(provider))
+
+    if not is_nil(expected_version) and
+         (is_nil(current) or elem(current, 0) != expected_version) do
+      {:error, :stale_binding}
+    else
+      do_mark_current_reauth_required(handle, provider, reason, opts)
+    end
+  end
+
+  defp do_mark_current_reauth_required(handle, provider, reason, opts) do
     current_profiles = Config.profiles()
 
     case Enum.find(current_profiles, &(&1["handle"] == handle)) do
@@ -1280,6 +1733,8 @@ defmodule ChatOverlay.Profiles do
         results =
           Enum.reduce_while(raw_sources, {:ok, []}, fn
             %{"platform" => plat, "channel" => _} = src, {:ok, acc} ->
+              src = Map.drop(src, ~w(auth_handle auth_version auth_status))
+
               cleaned_src =
                 if src["mode"] == "demo" do
                   Map.delete(src, "credential_env")
@@ -1301,7 +1756,12 @@ defmodule ChatOverlay.Profiles do
             %{"target" => tgt} = item, {:ok, acc} ->
               item_opts = Keyword.merge(opts, platform: item["platform"])
 
-              case resolve_target(tgt, item_opts) do
+              result =
+                with {:ok, item_opts} <-
+                       target_resolution_options(opts[:reader_handle], tgt, item_opts),
+                     do: resolve_target(tgt, item_opts)
+
+              case result do
                 {:ok, src, _} -> {:cont, {:ok, [src | acc]}}
                 {:error, reason} -> {:halt, {:error, reason}}
               end
@@ -1400,6 +1860,17 @@ defmodule ChatOverlay.Profiles do
         System.get_env("CHAT_CONFIG") ||
         "config/local-profiles.json"
 
-    ChatOverlay.ProfileStorage.write(path, profiles, objects || media_objects())
+    case ChatOverlay.Persistence.backend() do
+      :json_demo ->
+        ChatOverlay.ProfileStorage.write(path, profiles, objects || media_objects())
+
+      :postgres ->
+        ChatOverlay.Postgres.replace(
+          %{"profiles" => Config.profiles(), "media_objects" => media_objects()},
+          %{"profiles" => profiles, "media_objects" => objects || media_objects()},
+          ChatOverlay.Postgres.Runtime,
+          ChatOverlay.RequestScope.current()
+        )
+    end
   end
 end

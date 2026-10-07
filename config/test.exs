@@ -27,3 +27,9 @@ config :chat_overlay,
   r2_access_key_id: "mock_access_key",
   r2_secret_access_key: "mock_secret_key",
   r2_public_cdn: "https://media.chat-overlay.example.com"
+
+config :chat_overlay,
+  r2_quarantine_bucket: "chat-overlay-quarantine",
+  r2_quarantine_access_key_id: "synthetic-private-key",
+  r2_quarantine_secret_access_key: "synthetic-private-secret",
+  media_coordinator_token: String.duplicate("t", 43)

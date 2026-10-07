@@ -113,4 +113,23 @@ defmodule ChatOverlay.CryptoTest do
       assert {:error, :expired} = Crypto.verify_oauth_state(signed, secret, -1)
     end
   end
+
+  test "AEAD accepts only canonical URL base64" do
+    key = String.duplicate("k", 32)
+    {:ok, "v1:" <> encoded} = Crypto.encrypt_aead("a", key, "canonical-test")
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+    last = String.last(encoded)
+    {index, 1} = :binary.match(alphabet, last)
+
+    alternative =
+      binary_part(encoded, 0, byte_size(encoded) - 1) <> binary_part(alphabet, index + 1, 1)
+
+    assert Base.url_decode64(alternative, padding: false) ==
+             Base.url_decode64(encoded, padding: false)
+
+    assert {:error, :invalid_payload} =
+             Crypto.decrypt_aead("v1:" <> alternative, key, "canonical-test")
+
+    assert {:ok, "a"} = Crypto.decrypt_aead("v1:" <> encoded, key, "canonical-test")
+  end
 end

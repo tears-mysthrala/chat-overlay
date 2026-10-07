@@ -108,7 +108,7 @@
         <!-- Cuota de almacenamiento R2 -->
         <div id="storage-quota-card" class="storage-quota-card">
           <div class="quota-header">
-            <span class="quota-title">Almacenamiento multimedia (Cloudflare R2)</span>
+            <span class="quota-title">Almacenamiento multimedia</span>
             <span id="storage-quota-text" class="quota-usage-text">0 KB / 10 MB (0%)</span>
           </div>
           <div class="quota-bar-wrapper">
@@ -129,7 +129,7 @@
             </label>
             <label class="radio-toggle">
               <input type="radio" name="audio-source-type" id="audio-type-upload" value="upload">
-              <span>Subir archivo (Cloudflare R2)</span>
+              <span>Subir archivo</span>
             </label>
           </div>
 
@@ -189,6 +189,8 @@
         <!-- Guardar alertas -->
         <div class="form-actions">
           <button type="button" id="save-alerts-btn" class="btn-primary">Guardar alertas</button>
+          <button type="button" id="preview-obs-btn" class="btn-secondary">Probar alerta en OBS</button>
+          <p id="preview-obs-feedback" role="status"></p>
           <div id="save-alerts-feedback" class="feedback-msg" role="alert" hidden></div>
         </div>
       </section>

@@ -56,6 +56,8 @@ defmodule ChatOverlay.WebOAuthTest do
     assert data["url"] =~ "client_id="
     assert data["url"] =~ "state="
     assert data["url"] =~ "code_challenge="
+    state = URI.decode_query(URI.parse(data["url"]).query)["state"]
+    assert {:ok, %{"auth_proof" => "demo"}} = ChatOverlay.OAuth.verify_state(state)
   end
 
   test "GET /api/oauth/authorize/:provider rejects unconfigured provider credentials", %{
@@ -92,11 +94,17 @@ defmodule ChatOverlay.WebOAuthTest do
   test "GET /oauth/callback/:provider redirects on upstream error", %{port: port} do
     state = ChatOverlay.OAuth.generate_state("streamer", "twitch", "verifier")
 
+    {:ok, conn} =
+      ChatOverlay.OAuthFlow.bind(Plug.Test.conn(:get, "http://localhost/"), state, "twitch")
+
+    cookie = conn.resp_cookies[ChatOverlay.OAuthFlow.cookie_name(state)].value
+
     {302, headers, _} =
       request(
         port,
         "GET",
-        "/oauth/callback/twitch?error=access_denied&state=#{URI.encode_www_form(state)}"
+        "/oauth/callback/twitch?error=access_denied&state=#{URI.encode_www_form(state)}",
+        [{"cookie", "#{ChatOverlay.OAuthFlow.cookie_name(state)}=#{cookie}"}]
       )
 
     {_, location} = List.keyfind(headers, "location", 0)
@@ -141,5 +149,57 @@ defmodule ChatOverlay.WebOAuthTest do
 
     profile = Profiles.get("streamer")
     refute Map.has_key?(profile["linked_accounts"], "twitch")
+  end
+
+  test "callback rejects copied state before contacting upstream and denial consumes the flow", %{
+    port: port
+  } do
+    original = Application.get_env(:chat_overlay, :oauth_http_client)
+    parent = self()
+
+    Application.put_env(:chat_overlay, :oauth_http_client, fn _, _, _, _ ->
+      send(parent, :upstream_called)
+      {:error, :unexpected_upstream}
+    end)
+
+    on_exit(fn ->
+      if original,
+        do: Application.put_env(:chat_overlay, :oauth_http_client, original),
+        else: Application.delete_env(:chat_overlay, :oauth_http_client)
+    end)
+
+    {200, headers, body} = request(port, "GET", "/api/oauth/authorize/twitch?handle=streamer")
+    {:ok, data} = JSON.decode(body)
+
+    state =
+      data["url"]
+      |> URI.parse()
+      |> Map.fetch!(:query)
+      |> URI.decode_query()
+      |> Map.fetch!("state")
+
+    {_, cookie} = List.keyfind(headers, "set-cookie", 0)
+    browser = [{"cookie", cookie |> String.split(";") |> hd()}]
+    path = "/oauth/callback/twitch?state=#{URI.encode_www_form(state)}"
+    {302, rejected, _} = request(port, "GET", path <> "&code=synthetic")
+    assert elem(List.keyfind(rejected, "location", 0), 1) == "/?error=invalid_oauth_flow"
+    refute_received :upstream_called
+
+    {302, denied, _} = request(port, "GET", path <> "&error=access_denied", browser)
+    assert elem(List.keyfind(denied, "location", 0), 1) =~ "error=access_denied"
+    {302, replay, _} = request(port, "GET", path <> "&code=synthetic", browser)
+    assert elem(List.keyfind(replay, "location", 0), 1) == "/?error=invalid_oauth_flow"
+    refute_received :upstream_called
+  end
+
+  test "HTTPS on localhost builds an HTTPS callback URI" do
+    conn =
+      Plug.Test.conn(:get, "https://localhost/api/oauth/authorize/twitch?handle=streamer")
+      |> ChatOverlay.Web.call([])
+
+    assert conn.status == 200
+    {:ok, data} = JSON.decode(conn.resp_body)
+    params = data["url"] |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+    assert params["redirect_uri"] == "https://localhost/oauth/callback/twitch"
   end
 end

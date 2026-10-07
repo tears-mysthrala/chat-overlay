@@ -9,6 +9,20 @@ defmodule ChatOverlay.WebF2Test do
   end
 
   setup do
+    coordinator = Application.get_env(:chat_overlay, :media_coordinator_client)
+
+    Application.put_env(
+      :chat_overlay,
+      :media_coordinator_client,
+      &ChatOverlay.TestMediaCoordinator.request/2
+    )
+
+    on_exit(fn ->
+      if coordinator,
+        do: Application.put_env(:chat_overlay, :media_coordinator_client, coordinator),
+        else: Application.delete_env(:chat_overlay, :media_coordinator_client)
+    end)
+
     original_client = Application.get_env(:chat_overlay, :media_http_client)
 
     Application.put_env(:chat_overlay, :media_http_client, fn "HEAD", url ->
@@ -159,7 +173,9 @@ defmodule ChatOverlay.WebF2Test do
     assert String.contains?(data["upload_url"], "X-Amz-Signature=")
     assert String.contains?(data["upload_url"], "X-Amz-Credential=")
     assert String.starts_with?(data["key"], "streamer/audio/")
-    assert String.contains?(data["public_url"], data["key"])
+    refute Map.has_key?(data, "public_url")
+    assert data["state"] == "pending"
+    assert data["upload_url"] =~ "chat-overlay-quarantine"
   end
 
   test "upload permission and object binding reject unauthorized or mismatched media", %{
@@ -176,7 +192,7 @@ defmodule ChatOverlay.WebF2Test do
 
     {200, _, body} = request(port, "POST", "/api/media/presign", headers, JSON.encode(payload))
     {:ok, signed} = JSON.decode(body)
-    assert URI.decode(signed["upload_url"]) =~ "content-length;content-type;host"
+    assert URI.decode(signed["upload_url"]) =~ "content-length;content-type;host;if-none-match"
 
     item = %{
       "source" => "r2",
@@ -372,15 +388,16 @@ defmodule ChatOverlay.WebF2Test do
     assert presign_data["size"] == 100_000
     assert is_binary(presign_data["upload_token"])
 
-    # 2. Update media with valid upload_token computes storage_used_bytes
+    ready = normalize(port, headers, presign_data)
+    # Only normalized output can be associated; private input stays charged.
     update_payload =
       JSON.encode(%{
         "alert_sound" => %{
-          "url" => presign_data["public_url"],
+          "url" => ready["url"],
           "source" => "r2",
-          "key" => presign_data["key"],
+          "key" => ready["key"],
           "size" => 100_000,
-          "upload_token" => presign_data["upload_token"]
+          "upload_token" => ready["upload_token"]
         }
       })
 
@@ -390,7 +407,7 @@ defmodule ChatOverlay.WebF2Test do
     assert {:ok, update_data} = JSON.decode(update_body)
     assert update_data["ok"] == true
     assert update_data["storage_used_bytes"] == 100_000
-    assert update_data["storage_pending_bytes"] == 0
+    assert update_data["storage_pending_bytes"] == 100_000
     refute Map.has_key?(update_data, "cleanup_urls")
 
     # 3. Replacing media keeps the old object charged until server cleanup.
@@ -407,14 +424,16 @@ defmodule ChatOverlay.WebF2Test do
 
     assert {:ok, presign2_data} = JSON.decode(presign2_body)
 
+    ready2 = normalize(port, headers, presign2_data)
+
     update2_payload =
       JSON.encode(%{
         "alert_sound" => %{
-          "url" => presign2_data["public_url"],
+          "url" => ready2["url"],
           "source" => "r2",
-          "key" => presign2_data["key"],
+          "key" => ready2["key"],
           "size" => 150_000,
-          "upload_token" => presign2_data["upload_token"]
+          "upload_token" => ready2["upload_token"]
         }
       })
 
@@ -424,21 +443,21 @@ defmodule ChatOverlay.WebF2Test do
     assert {:ok, update2_data} = JSON.decode(update2_body)
     assert update2_data["ok"] == true
     assert update2_data["storage_used_bytes"] == 150_000
-    assert update2_data["storage_pending_bytes"] == 100_000
+    assert update2_data["storage_pending_bytes"] == 350_000
     refute Map.has_key?(update2_data, "cleanup_urls")
 
     assert Enum.any?(
              Profiles.media_objects(),
-             &(&1["key"] == presign_data["key"] and &1["state"] == "retired")
+             &(&1["key"] == ready["key"] and &1["state"] == "retired")
            )
 
     # 4. Reject tampered upload_token (422)
     tampered_payload =
       JSON.encode(%{
         "alert_sound" => %{
-          "url" => presign2_data["public_url"],
+          "url" => ready2["url"],
           "source" => "r2",
-          "key" => presign2_data["key"],
+          "key" => ready2["key"],
           "upload_token" => "tampered.token.signature"
         }
       })
@@ -738,5 +757,23 @@ defmodule ChatOverlay.WebF2Test do
     assert Registry.lookup(ChatOverlay.SSERegistry, "streamer") == []
 
     ChatOverlay.TestClient.close(conn)
+  end
+
+  defp normalize(port, headers, signed) do
+    {200, _, body} =
+      request(
+        port,
+        "POST",
+        "/api/media/validate",
+        headers,
+        JSON.encode(%{
+          "handle" => "streamer",
+          "key" => signed["key"],
+          "upload_token" => signed["upload_token"]
+        })
+      )
+
+    {:ok, %{"state" => "ready", "media" => ready}} = JSON.decode(body)
+    ready
   end
 end

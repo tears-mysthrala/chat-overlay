@@ -21,7 +21,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: python3 scripts/check_traceability.py
       - name: Verify CI evidence validator
-        run: python3 -m unittest discover -s scripts/tests
+        run: |
+          python3 -m unittest discover -s scripts/tests
+          python3 scripts/test_decoder_vex.py
+          python3 -O scripts/test_decoder_vex.py
       - name: Project static checks
         run: |
           python3 scripts/security_static.py
@@ -43,7 +46,7 @@ jobs:
         if: ${{ always() && steps.exunit.outcome != 'skipped' }}
         run: python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json
       - name: Install pinned browser test tooling (development only)
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
           npm ci --ignore-scripts --no-fund
@@ -65,6 +68,39 @@ jobs:
             output/browser/result.json
             output/secrets/gitleaks.json
           retention-days: 14
+  postgres-rls:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      POSTGRES_TEST_PROJECT: overlay51-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build PostgreSQL integration tooling
+        run: docker build --target validation -t chat-overlay:51-postgres-validation .
+      - name: Isolated synthetic database and restricted migration identity
+        run: |
+          mkdir -p output/postgres
+          # The validation container is root with ALL capabilities dropped;
+          # it cannot bypass the runner-owned directory's write permissions.
+          sudo chown 0:0 output/postgres
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" up -d --wait postgres
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" cp priv/postgres/001_rls.sql postgres:/tmp/001_rls.sql
+          docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" exec -T -e PGPASSWORD=synthetic-migration postgres psql -h 127.0.0.1 -U overlay_migrator -d overlay_synthetic -v ON_ERROR_STOP=1 -f /tmp/001_rls.sql
+      - name: Real RLS, pool reuse, product persistence and restart
+        run: docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" run --rm tests
+      - name: Reject omitted or failed PostgreSQL tests
+        if: always()
+        run: python3 scripts/check_test_report.py output/postgres/postgres-0.json output/postgres/postgres-424242.json
+      - name: Remove only this run's synthetic resources
+        if: always()
+        run: docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" down --volumes
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: postgres-evidence
+          path: output/postgres/*.json
+          retention-days: 14
+
   image-security:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -88,9 +124,47 @@ jobs:
             output/audit/*.json
           retention-days: 14
 
+  media-decoder:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - name: Build pinned decoder and run isolated pipeline tests
+        run: |
+          docker build -f Dockerfile.media-validator -t chat-overlay:media-validator .
+          export MEDIA_VALIDATOR_IMAGE=$(docker image inspect --format '{{.Id}}' chat-overlay:media-validator)
+          python3 scripts/test_media_sandbox.py -v
+          python3 scripts/test_media_coordinator.py -v
+          python3 scripts/test_local_media_store.py -v
+          python3 scripts/test_local_media_e2e.py -v
+      - name: Load and test the exact human-approved decoder artifact
+        run: |
+          curl --fail --location --proto '=https' --tlsv1.2 --output "$RUNNER_TEMP/decoder-89432cb3.tar" https://github.com/tears-mysthrala/chat-overlay/releases/download/decoder-89432cb3-20261007/decoder-89432cb3.tar
+          printf '%s  %s\n' '1dc0c8e7da9a6fb11b449a22f1a36da9f44aad824b25a3075f8b044b68a00ae5' "$RUNNER_TEMP/decoder-89432cb3.tar" | sha256sum --check --strict
+          docker load --input "$RUNNER_TEMP/decoder-89432cb3.tar"
+          export MEDIA_VALIDATOR_IMAGE=sha256:89432cb33a13415bb42558259ccf1ea299118d0163547555f8644ae11b0f8bff
+          test "$(docker image inspect --format '{{.Id}}' "$MEDIA_VALIDATOR_IMAGE")" = "$MEDIA_VALIDATOR_IMAGE"
+          docker tag "$MEDIA_VALIDATOR_IMAGE" chat-overlay:media-validator
+          python3 scripts/test_media_sandbox.py -v
+          python3 scripts/test_media_coordinator.py -v
+          python3 scripts/test_local_media_store.py -v
+          python3 scripts/test_local_media_e2e.py -v
+      - name: Install pinned SBOM validation tooling (development only)
+        run: |
+          python3 -m venv "$RUNNER_TEMP/decoder-audit"
+          "$RUNNER_TEMP/decoder-audit/bin/python" -m pip install jsonschema==4.26.0 referencing==0.37.0
+      - name: Audit exact decoder image with all-severity gate
+        run: '"$RUNNER_TEMP/decoder-audit/bin/python" scripts/audit_image.py chat-overlay:media-validator --decoder'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: media-decoder-evidence
+          path: output/audit/decoder/*.json
+          retention-days: 14
+
   quality-gate:
     if: ${{ always() }}
-    needs: [source-and-tests, image-security]
+    needs: [source-and-tests, postgres-rls, image-security, media-decoder]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
@@ -98,6 +172,10 @@ jobs:
         env:
           SOURCE_RESULT: ${{ needs.source-and-tests.result }}
           IMAGE_RESULT: ${{ needs.image-security.result }}
+          POSTGRES_RESULT: ${{ needs.postgres-rls.result }}
+          DECODER_RESULT: ${{ needs.media-decoder.result }}
         run: |
           test "$SOURCE_RESULT" = success
           test "$IMAGE_RESULT" = success
+          test "$POSTGRES_RESULT" = success
+          test "$DECODER_RESULT" = success

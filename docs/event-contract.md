@@ -21,6 +21,20 @@ SSE emite `event: batch`, `id: <epoch>:<sequence>` y JSON con `events`. El clien
 
 `overlay_platforms` filtra mensajes y estados en snapshots y deltas para la vista de emisión. El lector conserva las fuentes configuradas. Ambos siguen siendo públicos.
 
+### Preview manual multimedia (extensión aprobada #64)
+
+El SSE separado `event: media_preview` contiene `version: 1`, `id` aleatorio,
+`expires_at` (UTC Unix milisegundos) y `image_url` y/o `audio_url`. Solo rutas
+del mismo origen `/media/local/<handle>/validated/<job>/<sha256>.png|wav`,
+derivadas del inventario activo normalizado. No permite URLs del cliente.
+No tiene `id:` SSE ni entra en batch, ring, cursor de chat o snapshot.
+Cada conexión toma el cursor actual del preview y omite eventos anteriores;
+caduca tras10s, cooldown10s y máximo un evento retenido por perfil.
+Solo lo recibe el overlay protegido, con capability y archivos revalidados.
+El cliente deduplica32 IDs, detiene imagen/audio al desconectar y limita
+reproducción a la caducidad con volumen35%. La petición exige sesión del
+propietario, origen permitido y JSON vacío. No genera eventos automáticos.
+
 ### Fragmentos de mensaje (extensión retrocompatible)
 
 El payload de `message` puede incluir opcionalmente `fragments`: una lista ordenada de fragmentos que compone el texto del mensaje. Cuando no está presente, el cliente renderiza `text` como texto plano. Cada fragmento es un mapa cerrado de uno de los tipos:

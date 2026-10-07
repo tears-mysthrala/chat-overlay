@@ -163,7 +163,7 @@
 
       if (sound && sound.url) {
         audioUrlInput.value = sound.url;
-        if (sound.source === "r2") {
+        if (["r2", "local"].includes(sound.source)) {
           audioTypeUpload.checked = true;
           audioExternalGroup.hidden = true;
           audioUploadGroup.hidden = false;
@@ -184,7 +184,7 @@
         imagePreviewImg.src = img.url;
         imagePreviewImg.hidden = false;
         previewNoneText.hidden = true;
-        if (img.source === "r2") {
+        if (["r2", "local"].includes(img.source)) {
           imageTypeUpload.checked = true;
           imageExternalGroup.hidden = true;
           imageUploadGroup.hidden = false;
@@ -398,6 +398,23 @@
       });
     }
 
+    const previewObsBtn = document.getElementById("preview-obs-btn");
+    if (previewObsBtn) {
+      previewObsBtn.addEventListener("click", async () => {
+        const feedback = document.getElementById("preview-obs-feedback");
+        previewObsBtn.disabled = true;
+        try {
+          const p = getSelectedProfile();
+          if (!p) throw new Error("Selecciona un perfil.");
+          const response = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/media/preview`, {method: "POST", headers: {"content-type": "application/json"}, body: "{}"});
+          const result = await response.json();
+          if (!response.ok || !result.ok) throw new Error(result.error || "No se pudo enviar la prueba.");
+          feedback.textContent = "Prueba enviada a los overlays conectados. No se repite al reconectar.";
+        } catch (error) { feedback.textContent = error.message; }
+        finally { previewObsBtn.disabled = false; }
+      });
+    }
+
     if (testAudioBtn) {
       testAudioBtn.addEventListener("click", () => {
         let playUrl = null;
@@ -511,7 +528,7 @@
           // 1. Process Sound
           if (audioTypeUpload && audioTypeUpload.checked && audioFileInput && audioFileInput.files && audioFileInput.files[0]) {
             const file = audioFileInput.files[0];
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para audio…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a cuarentena privada para audio…";
             const presignRes = await fetch("/api/media/presign", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -524,25 +541,27 @@
             });
             const presignData = await presignRes.json();
             if (!presignRes.ok || !presignData.ok) {
-              throw new Error(presignData.error || "Error al solicitar subida de audio a R2");
+              throw new Error(presignData.error || "Error al solicitar subida de audio");
             }
 
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo audio directamente a Cloudflare R2…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo audio a cuarentena privada…";
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*", ...(presignData.upload_headers || {}) }
             });
             if (!uploadRes.ok) {
-              throw new Error("Fallo al subir el archivo de audio a R2");
+              throw new Error("Fallo al subir el archivo de audio");
             }
-            soundResult = {
-              url: presignData.public_url,
-              source: "r2",
-              key: presignData.key,
-              size: presignData.size || file.size,
-              upload_token: presignData.upload_token
-            };
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
+            const validation = await fetch("/api/media/validate", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: p.handle, key: presignData.key, upload_token: presignData.upload_token })
+            });
+            const validated = await validation.json();
+            if (!validation.ok || validated.state !== "ready") throw new Error(validated.error || "Archivo rechazado; no se ha activado.");
+            soundResult = validated.media;
           } else if (audioTypeUpload && audioTypeUpload.checked && p.media && p.media.alert_sound) {
             soundResult = p.media.alert_sound;
           } else if (audioUrlInput && audioUrlInput.value.trim()) {
@@ -557,7 +576,7 @@
             if (file.name.toLowerCase().endsWith(".svg") || (file.type && file.type.includes("svg"))) {
               throw new Error("Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF)");
             }
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para imagen…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a cuarentena privada para imagen…";
             const presignRes = await fetch("/api/media/presign", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -570,25 +589,27 @@
             });
             const presignData = await presignRes.json();
             if (!presignRes.ok || !presignData.ok) {
-              throw new Error(presignData.error || "Error al solicitar subida de imagen a R2");
+              throw new Error(presignData.error || "Error al solicitar subida de imagen");
             }
 
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo imagen directamente a Cloudflare R2…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo imagen a cuarentena privada…";
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*", ...(presignData.upload_headers || {}) }
             });
             if (!uploadRes.ok) {
-              throw new Error("Fallo al subir el archivo de imagen a R2");
+              throw new Error("Fallo al subir el archivo de imagen");
             }
-            imageResult = {
-              url: presignData.public_url,
-              source: "r2",
-              key: presignData.key,
-              size: presignData.size || file.size,
-              upload_token: presignData.upload_token
-            };
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
+            const validation = await fetch("/api/media/validate", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ handle: p.handle, key: presignData.key, upload_token: presignData.upload_token })
+            });
+            const validated = await validation.json();
+            if (!validation.ok || validated.state !== "ready") throw new Error(validated.error || "Archivo rechazado; no se ha activado.");
+            imageResult = validated.media;
           } else if (imageTypeUpload && imageTypeUpload.checked && p.media && p.media.alert_image) {
             imageResult = p.media.alert_image;
           } else if (imageUrlInput && imageUrlInput.value.trim()) {
@@ -1103,7 +1124,35 @@
   if (token) streamQuery.set("token", token);
   const stream = new EventSource(`/events/${encodeURIComponent(handle)}?${streamQuery.toString()}`);
   stream.onopen = () => { connected = true; renderStatus(); };
-  stream.onerror = () => { connected = false; renderStatus(); };
+  let previewAudio = null, previewNode = null, previewTimer = null;
+  const previewIds = new Set();
+  function stopPreview() {
+    if (previewAudio) { previewAudio.pause(); previewAudio.src = ""; previewAudio = null; }
+    if (previewNode) { previewNode.remove(); previewNode = null; }
+    clearTimeout(previewTimer);
+  }
+  const previewURL = (value, extension) => typeof value === "string" && new RegExp(`^/media/local/${handle}/validated/[a-f0-9]{32}/[a-f0-9]{64}\\.${extension}$`).test(value);
+  stream.addEventListener("media_preview", event => {
+    if (!overlay) return;
+    try {
+      const p = JSON.parse(event.data);
+      const remaining = p.expires_at - Date.now();
+      if (p.version !== 1 || typeof p.id !== "string" || p.id.length > 64 || !Number.isSafeInteger(p.expires_at) || remaining <= 0 || remaining > 10000 || previewIds.has(p.id)) return;
+      if ((p.image_url !== undefined && !previewURL(p.image_url, "png")) || (p.audio_url !== undefined && !previewURL(p.audio_url, "wav"))) return;
+      stopPreview();
+      previewIds.add(p.id);
+      if (previewIds.size > 32) previewIds.delete(previewIds.values().next().value);
+      if (p.image_url) {
+        previewNode = element("img", "media-preview");
+        previewNode.alt = "Prueba manual de alerta";
+        previewNode.src = p.image_url;
+        document.body.appendChild(previewNode);
+      }
+      if (p.audio_url) { previewAudio = new Audio(p.audio_url); previewAudio.volume = 0.35; previewAudio.play().catch(() => {}); }
+      previewTimer = setTimeout(stopPreview, remaining);
+    } catch { stopPreview(); }
+  });
+  stream.onerror = () => { stopPreview(); connected = false; renderStatus(); };
   stream.addEventListener("batch", event => {
     try {
       const batch = JSON.parse(event.data);
@@ -1120,5 +1169,5 @@
     else renderStatus();
   }, 10000);
   window.addEventListener("pageshow", event => { if (event.persisted) location.reload(); });
-  window.addEventListener("pagehide", () => { clearInterval(clock); stream.close(); }, {once:true});
+  window.addEventListener("pagehide", () => { stopPreview(); clearInterval(clock); stream.close(); }, {once:true});
 })();

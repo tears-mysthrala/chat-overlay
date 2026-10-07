@@ -1,10 +1,15 @@
 # ADR 0005 — Propuesta para cerrar SEC-13 y SEC-17 (#51, #49)
 
-**Estado: propuesto, pendiente de aprobación de Kalista.** No cambia el contrato,
-no acredita controles implementados ni autoriza merge/despliegue. #56 corrige
+**Estado: A y B aprobadas expresamente por el usuario el 05-10-2026 para implementación y pruebas locales.**
+La autorización incluye Postgrex y las dependencias/restricciones descritas; excluye
+infraestructura y cuentas reales, push, PR externa, merge y despliegue. Esta rama
+integra localmente A (#51), B (#49) y OAuth en la candidata #55. Las unidades
+originales se conservan en ramas independientes. La aprobación
+no acredita controles terminados. #56 corrige
 persistencia JSON; #57 corrige inventario/cuota. Ninguna satisface por sí sola RLS
 o validación de formatos. Se solicita aprobación de implementación local en dos
-unidades separadas; los datos y servicios reales quedan fuera.
+unidades separadas; los datos y servicios reales quedan fuera. Ver la implementación
+y sus límites en [almacenamiento PostgreSQL](../postgres-storage.md).
 
 ## A. Almacenamiento privado con PostgreSQL RLS (#51)
 

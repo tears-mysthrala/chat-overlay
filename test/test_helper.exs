@@ -1,4 +1,5 @@
 Code.require_file("support/http_client.ex", __DIR__)
+Code.require_file("support/media_coordinator.ex", __DIR__)
 ExUnit.start()
 
 # CI consumes the actual ExUnit result rather than counting test declarations.

@@ -78,7 +78,8 @@ defmodule ChatOverlay.SessionTest do
       assert {:ok, "v1:" <> encoded} = Session.create_token(payload, key: @test_key)
 
       # Tamper with the base64 content
-      tampered = "v1:" <> "A" <> binary_part(encoded, 1, byte_size(encoded) - 1)
+      replacement = if String.starts_with?(encoded, "A"), do: "B", else: "A"
+      tampered = "v1:" <> replacement <> binary_part(encoded, 1, byte_size(encoded) - 1)
       assert {:error, :invalid_or_tampered_token} = Session.verify_token(tampered, key: @test_key)
 
       # Non-v1 prefix
@@ -131,7 +132,7 @@ defmodule ChatOverlay.SessionTest do
       assert cookie_https =~ "SameSite=Lax"
       assert cookie_https =~ "secure"
 
-      # HTTP with x-forwarded-proto: https -> Secure is true
+      # An untrusted peer cannot make its forwarded header authoritative.
       conn_forwarded =
         conn(:get, "/")
         |> Plug.Conn.put_req_header("x-forwarded-proto", "https")
@@ -139,7 +140,7 @@ defmodule ChatOverlay.SessionTest do
 
       resp_forwarded = Plug.Conn.send_resp(conn_forwarded, 200, "ok")
       [cookie_fwd] = Plug.Conn.get_resp_header(resp_forwarded, "set-cookie")
-      assert cookie_fwd =~ "secure"
+      refute cookie_fwd =~ "secure"
     end
 
     test "delete_session invalidates cookie with max-age=0" do
@@ -296,7 +297,7 @@ defmodule ChatOverlay.SessionTest do
       {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
       assert {:ok, _} = Session.verify_token(token, key: @test_key)
 
-      assert :ok = Session.revoke_token(token)
+      assert :ok = Session.revoke_token(token, key: @test_key)
       assert Session.revoked?(token)
       assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
@@ -308,7 +309,7 @@ defmodule ChatOverlay.SessionTest do
         conn(:post, "/api/auth/logout")
         |> put_req_header("cookie", "chat_overlay_session=#{token}")
 
-      _conn = Session.delete_session(conn)
+      _conn = Session.delete_session(conn, key: @test_key)
       assert Session.revoked?(token)
       assert {:error, :revoked} = Session.verify_token(token, key: @test_key)
     end
@@ -367,5 +368,67 @@ defmodule ChatOverlay.SessionTest do
       assert {:error, :unauthorized} =
                Session.authorize(conn, "streamer-linked", key: @test_key)
     end
+  end
+
+  test "a trusted loopback proxy never receives anonymous demo authority" do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+    peers = [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}]
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, peers)
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+    params = %{"handle" => "new-demo", "sources" => [%{"mode" => "demo"}]}
+
+    for peer <- peers,
+        forwarded <- [nil, "198.51.100.1", "127.0.0.1", "invalid", "127.0.0.1,198.51.100.1"] do
+      proxy = %{conn(:post, "https://localhost/api/profiles") | remote_ip: peer}
+      proxy = if forwarded, do: put_req_header(proxy, "x-forwarded-for", forwarded), else: proxy
+      proxy = put_req_header(proxy, "x-forwarded-proto", "https")
+      refute Session.loopback?(proxy)
+      assert {:error, :unauthorized} = Session.authorize(proxy, "streamer-demo")
+      assert {:error, :unauthorized} = Session.authorize(proxy, "nonexistent")
+      assert {:error, :unauthorized} = Session.authorize_profile_creation(proxy, params)
+      assert {:error, :unauthorized} = Session.scope_profiles(proxy, [])
+    end
+
+    {:ok, token} = Session.create_token(%{"handle" => "streamer-demo"}, key: @test_key)
+
+    owner =
+      conn(:post, "https://localhost/")
+      |> put_req_header("cookie", "chat_overlay_session=#{token}")
+
+    assert :ok = Session.authorize(owner, "streamer-demo", key: @test_key)
+    assert {:error, :forbidden} = Session.authorize(owner, "streamer-prod", key: @test_key)
+  end
+
+  test "direct IPv4 and IPv6 demo access remains available but an unknown peer is denied" do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, [])
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+
+    for peer <- [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}] do
+      direct = %{conn(:get, "http://localhost/") | remote_ip: peer}
+      assert Session.loopback?(direct)
+      assert :ok = Session.authorize(direct, "streamer-demo")
+      assert {:error, :unauthorized} = Session.authorize(direct, "streamer-prod")
+    end
+
+    unknown = %{conn(:get, "http://localhost/") | remote_ip: nil}
+    refute Session.loopback?(unknown)
+    assert {:error, :unauthorized} = Session.authorize(unknown, "streamer-demo")
+  end
+
+  test "invalid revocation inputs cannot grow the table" do
+    before = :ets.info(:chat_overlay_revoked_sessions, :size)
+    Enum.each(1..100, fn n -> Session.revoke_token("v1:invalid-#{n}") end)
+    assert :ets.info(:chat_overlay_revoked_sessions, :size) == before
+  end
+
+  test "owner restart invalidates previously issued sessions" do
+    {:ok, token} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+    assert {:ok, _} = Session.verify_token(token, key: @test_key)
+    :ok = Supervisor.terminate_child(ChatOverlay.Application.Supervisor, ChatOverlay.Profiles)
+    {:ok, _} = Supervisor.restart_child(ChatOverlay.Application.Supervisor, ChatOverlay.Profiles)
+    assert {:error, _} = Session.verify_token(token, key: @test_key)
+    {:ok, fresh} = Session.create_token(%{"handle" => "streamer"}, key: @test_key)
+    assert {:ok, _} = Session.verify_token(fresh, key: @test_key)
   end
 end

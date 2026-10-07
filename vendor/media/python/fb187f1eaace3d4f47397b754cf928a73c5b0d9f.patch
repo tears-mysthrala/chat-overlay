@@ -1,0 +1,33 @@
+From fb187f1eaace3d4f47397b754cf928a73c5b0d9f Mon Sep 17 00:00:00 2001
+From: Petr Viktorin <encukou@gmail.com>
+Date: Wed, 30 Sep 2026 09:21:20 +0200
+Subject: [PATCH] Add root user checks to test.support
+
+This partially backports commit 86b8617747699416fcf9cd4ce6ea1da58a66f70e
+(GH-146195); making existing tests use the helper is omitted.
+---
+ Lib/test/support/__init__.py | 7 ++++++-
+ 1 file changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/Lib/test/support/__init__.py b/Lib/test/support/__init__.py
+index 64924a4b5a7eefc..62ac4e24f1e1cf7 100644
+--- a/Lib/test/support/__init__.py
++++ b/Lib/test/support/__init__.py
+@@ -71,7 +71,8 @@
+     "BrokenIter",
+     "in_systemd_nspawn_sync_suppressed",
+     "run_no_yield_async_fn", "run_yielding_async_fn", "async_yield",
+-    "reset_code", "on_github_actions"
++    "reset_code", "on_github_actions",
++    "requires_root_user", "requires_non_root_user",
+     ]
+ 
+ 
+@@ -3376,3 +3377,7 @@ def skip_on_low_desktop_heap_memory_subprocess(returncode):
+     if returncode == STATUS_DLL_INIT_FAILED:
+         raise unittest.SkipTest('gh-150436: DLL init failed, likely because '
+                                 'of low desktop heap memory')
++
++_ROOT_IN_POSIX = hasattr(os, 'geteuid') and os.geteuid() == 0
++requires_root_user = unittest.skipUnless(_ROOT_IN_POSIX, "test needs root privilege")
++requires_non_root_user = unittest.skipIf(_ROOT_IN_POSIX, "test needs non-root account")

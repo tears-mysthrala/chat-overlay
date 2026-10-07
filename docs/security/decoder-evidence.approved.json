@@ -1,0 +1,51 @@
+{
+  "status": "approved",
+  "image": "sha256:89432cb33a13415bb42558259ccf1ea299118d0163547555f8644ae11b0f8bff",
+  "architecture": "amd64",
+  "issue": "#55",
+  "review_due": "2026-10-21",
+  "runtime_sha256": {
+    "/bin/busybox": "01a989eb4d1d04b0d146c790ac536abd88f374ec74a2e110c58910b840d42045",
+    "/usr/lib/python3.14/poplib.py": "a6ffff188814b56d95b043c31d9e0dfee51ac6d6e92afe74ab070cb6136b076f",
+    "/usr/lib/python3.14/tarfile.py": "82ac045a2d97396a295405268a5f14393620b0ebf50e9305e56f34731e1d89ea",
+    "/usr/lib/python3.14/tempfile.py": "5e2a8c5539e2aa3f4d39a364c701711ba54eeca88c17e95d31ebb83ea84de27d",
+    "/usr/lib/python3.14/shutil.py": "b6e01921d7f8a6dcac774c07d1d7f858b2d536ee9535ae576120503fcc559261",
+    "/validator.py": "794c58cdd76078991d51ce9d61f8b553d8d006ba001785600626adf6f2dbaad0",
+    "/usr/local/bin/ffmpeg": "6fd8caaed1f94e819168d78c6b635bd7add28aab8a7286c44449430dbbb986b3",
+    "/usr/local/bin/ffprobe": "7f9df1a1bad89ff1e8ff6772bbad73f19fb17990f18d376a7c3537e248054b44"
+  },
+  "repository_sha256": {
+    "scripts/media_validator.py": "794c58cdd76078991d51ce9d61f8b553d8d006ba001785600626adf6f2dbaad0",
+    "scripts/media_sandbox.py": "c482ecd0a551483790dc22350025b6e2fa743d48de1174b7b16e80597e98a9b8",
+    "scripts/media_coordinator.py": "8de3f358b52c2cbdc57f50ae93b1e99eb79028095a7ad251e38c0315d1b4c572",
+    "Dockerfile.media-validator": "9e157f45d0432f76b3269bda4d82ae4772d08dbc779b5d27de79c4cc365b9068",
+    "vendor/media/python/SHA256SUMS": "62b3e9d974d5bb5055aaf711759da6506e7c13d7173409aa8fabe514b456f247"
+  },
+  "required_execution": {
+    "entrypoint": [
+      "python3",
+      "-I",
+      "/validator.py"
+    ],
+    "network": "none",
+    "user": "65532:65532",
+    "readonly": true,
+    "cap_drop": [
+      "ALL"
+    ],
+    "no_new_privileges": true,
+    "pids": 32,
+    "memory": 268435456,
+    "memory_swap": 268435456,
+    "nano_cpus": 1000000000,
+    "devices": [],
+    "credential_env": false,
+    "bind_inputs_only": "/input/blob readonly"
+  },
+  "limitations": [
+    "Raw scanner findings retained separately; approved VEX dispositions do not remove evidence.",
+    "No assertion FFmpeg git has full automated CVE release coverage.",
+    "No real R2/provider/TLS/CI/OBS test.",
+    "Activation requires separate image and source digest checks before the scanner uses any statement. PURL matching alone is insufficient."
+  ]
+}

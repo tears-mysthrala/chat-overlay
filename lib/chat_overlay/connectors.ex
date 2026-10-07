@@ -188,7 +188,9 @@ defmodule ChatOverlay.Connectors do
   defp twitch_loop(s, token, socket, timeout, ready, previous, validated, deadline) do
     remaining = deadline - System.monotonic_time(:millisecond)
 
-    if remaining <= 0 do
+    current_token = if s["auth_handle"], do: Net.token(s), else: {:ok, token}
+
+    if remaining <= 0 or current_token != {:ok, token} do
       {:retry, 5000}
     else
       case ChatOverlay.Socket.recv(socket, remaining) do
