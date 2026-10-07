@@ -370,6 +370,52 @@ defmodule ChatOverlay.SessionTest do
     end
   end
 
+  test "a trusted loopback proxy never receives anonymous demo authority" do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+    peers = [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}]
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, peers)
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+    params = %{"handle" => "new-demo", "sources" => [%{"mode" => "demo"}]}
+
+    for peer <- peers,
+        forwarded <- [nil, "198.51.100.1", "127.0.0.1", "invalid", "127.0.0.1,198.51.100.1"] do
+      proxy = %{conn(:post, "https://localhost/api/profiles") | remote_ip: peer}
+      proxy = if forwarded, do: put_req_header(proxy, "x-forwarded-for", forwarded), else: proxy
+      proxy = put_req_header(proxy, "x-forwarded-proto", "https")
+      refute Session.loopback?(proxy)
+      assert {:error, :unauthorized} = Session.authorize(proxy, "streamer-demo")
+      assert {:error, :unauthorized} = Session.authorize(proxy, "nonexistent")
+      assert {:error, :unauthorized} = Session.authorize_profile_creation(proxy, params)
+      assert {:error, :unauthorized} = Session.scope_profiles(proxy, [])
+    end
+
+    {:ok, token} = Session.create_token(%{"handle" => "streamer-demo"}, key: @test_key)
+
+    owner =
+      conn(:post, "https://localhost/")
+      |> put_req_header("cookie", "chat_overlay_session=#{token}")
+
+    assert :ok = Session.authorize(owner, "streamer-demo", key: @test_key)
+    assert {:error, :forbidden} = Session.authorize(owner, "streamer-prod", key: @test_key)
+  end
+
+  test "direct IPv4 and IPv6 demo access remains available but an unknown peer is denied" do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, [])
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+
+    for peer <- [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}] do
+      direct = %{conn(:get, "http://localhost/") | remote_ip: peer}
+      assert Session.loopback?(direct)
+      assert :ok = Session.authorize(direct, "streamer-demo")
+      assert {:error, :unauthorized} = Session.authorize(direct, "streamer-prod")
+    end
+
+    unknown = %{conn(:get, "http://localhost/") | remote_ip: nil}
+    refute Session.loopback?(unknown)
+    assert {:error, :unauthorized} = Session.authorize(unknown, "streamer-demo")
+  end
+
   test "invalid revocation inputs cannot grow the table" do
     before = :ets.info(:chat_overlay_revoked_sessions, :size)
     Enum.each(1..100, fn n -> Session.revoke_token("v1:invalid-#{n}") end)

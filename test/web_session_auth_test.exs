@@ -122,6 +122,43 @@ defmodule ChatOverlay.WebSessionAuthTest do
     {state, {"cookie", "#{ChatOverlay.OAuthFlow.cookie_name(state)}=#{cookie}"}}
   end
 
+  test "real HTTP through a trusted local proxy rejects anonymous demo mutations", %{port: port} do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, [
+      {127, 0, 0, 1},
+      {0, 0, 0, 0, 0, 0, 0, 1}
+    ])
+
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+    profile = ChatOverlay.Config.profile("streamer")
+
+    headers = [
+      {"origin", "http://localhost:#{port}"},
+      {"content-type", "application/json"},
+      {"x-forwarded-proto", "https"},
+      {"x-forwarded-for", "127.0.0.1"}
+    ]
+
+    for {method, path, body} <- [
+          {"DELETE", "/api/profiles/streamer", ""},
+          {"POST", "/api/profiles/streamer/token/regenerate", "{}"},
+          {"POST", "/api/profiles/streamer/media", "{}"}
+        ] do
+      {401, _, _} = request(port, method, path, headers, body)
+      assert ChatOverlay.Config.profile("streamer") == profile
+    end
+
+    {200, _, _} =
+      request(
+        port,
+        "POST",
+        "/api/profiles/streamer/media",
+        [session_cookie_header("streamer") | headers],
+        "{}"
+      )
+  end
+
   test "GET /api/auth/me returns unauthenticated status without session", %{port: port} do
     {200, headers, body} = request(port, "GET", "/api/auth/me")
     assert Enum.any?(headers, fn {k, v} -> k == "content-type" and v =~ "application/json" end)

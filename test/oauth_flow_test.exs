@@ -160,6 +160,29 @@ defmodule ChatOverlay.OAuthFlowTest do
     assert {:error, :insecure_transport} = OAuthFlow.bind(conn, state, "twitch")
   end
 
+  test "demo authorization expires when the loopback peer becomes a trusted proxy" do
+    previous = Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, [])
+    on_exit(fn -> Application.put_env(:chat_overlay, :trusted_proxy_ips, previous) end)
+    profile = %{"handle" => "demo", "sources" => [%{"mode" => "demo"}]}
+    state = OAuth.generate_state("demo", "twitch", "verifier", %{"auth_proof" => "demo"})
+
+    {:ok, issued} =
+      OAuthFlow.bind(Plug.Test.conn(:get, "https://localhost/"), state, "twitch", profile)
+
+    browser =
+      Plug.Test.conn(:get, "https://localhost/")
+      |> Plug.Conn.put_req_header(
+        "cookie",
+        "#{OAuthFlow.cookie_name(state, true)}=#{issued.resp_cookies[OAuthFlow.cookie_name(state, true)].value}"
+      )
+
+    {:ok, consumed} = OAuthFlow.consume(browser, state, "twitch")
+    assert OAuthFlow.authorized?(consumed, "demo", profile)
+    Application.put_env(:chat_overlay, :trusted_proxy_ips, [{127, 0, 0, 1}])
+    refute OAuthFlow.authorized?(consumed, "demo", profile)
+  end
+
   test "authorization snapshot rejects a changed capability" do
     profile = %{"handle" => "snapshot", "capability_token_hash" => "original"}
 

@@ -1,4 +1,5 @@
 """Mandatory real-container validation; run with MEDIA_VALIDATOR_IMAGE=sha256:... ."""
+import hashlib
 import io
 import os
 import struct
@@ -105,13 +106,24 @@ class SandboxTests(unittest.TestCase):
                 result = original(command, **kwargs)
                 state = json.loads(original(["docker", "inspect", name], capture_output=True, check=True).stdout)[0]
                 host = state["HostConfig"]
+                self.assertEqual(state["Image"], self.image)
+                self.assertEqual(state["Config"]["Entrypoint"], ["python3", "-I", "/validator.py"])
+                self.assertEqual(state["Config"]["Cmd"], ["image", hashlib.sha256(png()).hexdigest(), "--hold"])
                 self.assertEqual(host["NetworkMode"], "none")
                 self.assertTrue(host["ReadonlyRootfs"])
+                self.assertFalse(host["Privileged"])
+                self.assertFalse(host["Devices"])
+                self.assertFalse(host["DeviceRequests"])
+                self.assertFalse(host["CapAdd"])
                 self.assertEqual(state["Config"]["User"], "65532:65532")
                 self.assertEqual(host["CapDrop"], ["ALL"])
                 self.assertIn("no-new-privileges", host["SecurityOpt"])
                 self.assertEqual(host["PidsLimit"], 32)
                 self.assertEqual(host["Memory"], 256 * 1024 * 1024)
+                self.assertEqual(host["MemorySwap"], 256 * 1024 * 1024)
+                self.assertEqual(host["NanoCpus"], 1_000_000_000)
+                self.assertFalse(any(entry.startswith(("AWS_", "R2_", "COORD_", "MEDIA_COORDINATOR_TOKEN="))
+                                     for entry in state["Config"]["Env"]))
                 self.assertEqual(host["LogConfig"]["Config"]["max-size"], "64k")
                 mounts = [mount for mount in state["Mounts"] if mount["Type"] == "bind"]
                 self.assertEqual(len(mounts), 1)

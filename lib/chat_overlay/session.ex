@@ -222,16 +222,13 @@ defmodule ChatOverlay.Session do
   end
 
   @doc """
-  Determines whether a connection is from a local loopback interface (127.0.0.1 or ::1).
+  Determines whether the verified peer is direct local loopback, not a configured proxy.
+  Forwarded client addresses and Host cannot grant the anonymous demo exception.
   """
   @spec loopback?(Plug.Conn.t()) :: boolean()
   def loopback?(%Plug.Conn{} = conn) do
-    case conn.remote_ip do
-      {127, 0, 0, 1} -> true
-      {0, 0, 0, 0, 0, 0, 0, 1} -> true
-      nil -> conn.host in ["localhost", "127.0.0.1", "::1"]
-      _ -> false
-    end
+    conn.remote_ip in [{127, 0, 0, 1}, {0, 0, 0, 0, 0, 0, 0, 1}] and
+      conn.remote_ip not in Application.get_env(:chat_overlay, :trusted_proxy_ips, [])
   end
 
   @doc """
