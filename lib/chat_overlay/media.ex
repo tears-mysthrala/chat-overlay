@@ -106,6 +106,14 @@ defmodule ChatOverlay.Media do
   """
   @spec generate_presigned_put(map()) :: {:ok, map()} | {:error, term()}
   def generate_presigned_put(config) when is_map(config) do
+    case ChatOverlay.LocalMedia.backend() do
+      "local" -> ChatOverlay.LocalMedia.upload_description(config)
+      "r2" -> generate_r2_put(config)
+      _ -> {:error, :invalid_storage_backend}
+    end
+  end
+
+  defp generate_r2_put(config) do
     endpoint = config[:endpoint] || config["endpoint"]
     bucket = config[:bucket] || config["bucket"]
     key = config[:key] || config["key"]
@@ -267,6 +275,32 @@ defmodule ChatOverlay.Media do
   end
 
   def configured? do
+    inventory_matches?() and storage_configured?()
+  end
+
+  def object_backend(object), do: object["backend"] || "r2"
+  def backend_matches?(object), do: object_backend(object) == ChatOverlay.LocalMedia.backend()
+
+  defp inventory_matches?,
+    do: Enum.all?(ChatOverlay.Profiles.media_objects(), &backend_matches?/1)
+
+  defp storage_configured? do
+    case ChatOverlay.LocalMedia.backend() do
+      "local" ->
+        System.get_env("MEDIA_UPLOADS_SEALED") != "1" and
+          https_base?(ChatOverlay.LocalMedia.public_base()) and
+          ChatOverlay.LocalMedia.max_bytes() > 0 and
+          ChatOverlay.MediaCoordinator.configured?()
+
+      "r2" ->
+        r2_configured?()
+
+      _ ->
+        false
+    end
+  end
+
+  defp r2_configured? do
     config = r2_config()
     quarantine = quarantine_config()
 
@@ -472,6 +506,18 @@ defmodule ChatOverlay.Media do
   def verify_upload_token(_, _, _), do: {:error, :invalid_upload_token}
 
   def public_url(key) when is_binary(key) do
+    if ChatOverlay.LocalMedia.backend() == "local" do
+      base = ChatOverlay.LocalMedia.public_base()
+
+      if https_base?(base),
+        do: {:ok, base <> "/media/local/" <> URI.encode(key)},
+        else: {:error, :invalid_storage_configuration}
+    else
+      r2_public_url(key)
+    end
+  end
+
+  defp r2_public_url(key) do
     config = r2_config()
     base = config[:public_cdn_base]
 
@@ -484,6 +530,24 @@ defmodule ChatOverlay.Media do
 
   # HEAD checks the stored size and declared type, not its actual format.
   def verify_object(object) do
+    if object["backend"] == "local" do
+      with true <- ChatOverlay.LocalMedia.backend() == "local",
+           {:ok, 200, headers, _} <-
+             ChatOverlay.LocalMedia.request("HEAD", "public", object["key"]),
+           true <-
+             List.keyfind(headers, "content-length", 0) ==
+               {"content-length", to_string(object["size"])},
+           true <- List.keyfind(headers, "content-type", 0) == {"content-type", object["mime"]} do
+        :ok
+      else
+        _ -> {:error, :stored_object_mismatch}
+      end
+    else
+      verify_r2_object(object)
+    end
+  end
+
+  defp verify_r2_object(object) do
     with {:ok, signed} <-
            generate_presigned_metadata(Map.put(r2_config(), :key, object["key"]), "HEAD"),
          {:ok, 200, headers, _} <- storage_request("HEAD", signed.delete_url),

@@ -524,3 +524,18 @@ connector activo sin reinicio. OAuth/R2/propietario inicial, SSE/OBS y reserva
 DHCP pendientes; mensaje anónimo UI401 genérico y script inline bloqueado por
 CSP registrados como deuda. No F2 cerrado ni pruebas reales de plataformas.
 Ver docs/workflows/deployment/runs/2026-10-07-public.md.
+
+## Lectura Twitch real y unidad local — 07-10-2026, Refs #47, #62
+
+Readers9250d51 desplegados en VM9502 con imagena9c03ede9afe y migración del
+perfil propietario. Consentimiento Twitch con lectura de chat completado;
+mensaje autorizado de prueba recibido una vez en lector, fuente Disponible.
+YouTube/OBS actual pendientes. Registro #47 actualizado en el worktree
+chat-overlay-oauth-readers, todavía sin commit documental.
+
+Worktreechat-overlay-local-media, ramafeat/62-local-media, cambios sin commit:
+almacenamiento Linux privado, adaptador coordinador, relay HTTP con autorización,
+salida normalizada con hash e inventario y frontend. Ocho tests Linux/API privada
+y cuatro tests web nuevos PASS. No desplegar todavía: faltan decoder real,
+revisión oficial, integración PG y pruebas de entrega/OBS. Continuar desde
+docs/workflows/deployment/runs/2026-10-07-local-media.md; preservar otros worktrees.

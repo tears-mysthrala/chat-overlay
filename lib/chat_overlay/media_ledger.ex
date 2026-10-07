@@ -7,7 +7,9 @@ defmodule ChatOverlay.MediaLedger do
   def valid?(objects) when is_list(objects) and length(objects) <= @limit do
     Enum.all?(objects, fn o ->
       is_map(o) and Enum.all?(@fields, &Map.has_key?(o, &1)) and
-        Map.keys(o) -- (@fields ++ ~w(bucket job input_sha256 output_sha256 input_key)) == [] and
+        Map.keys(o) -- (@fields ++ ~w(bucket job input_sha256 output_sha256 input_key backend)) ==
+          [] and
+        o["backend"] in [nil, "r2", "local"] and
         valid_binding?(o) and
         ChatOverlay.Config.handle?(o["handle"]) and is_binary(o["key"]) and
         byte_size(o["key"]) <= 256 and String.starts_with?(o["key"], o["handle"] <> "/") and
@@ -46,6 +48,11 @@ defmodule ChatOverlay.MediaLedger do
 
     object = Map.put(object, "bucket", "quarantine")
 
+    object =
+      if ChatOverlay.LocalMedia.backend() == "local",
+        do: Map.put(object, "backend", "local"),
+        else: object
+
     cond do
       profile["can_upload"] != true ->
         {:error, :uploads_not_allowed}
@@ -65,6 +72,11 @@ defmodule ChatOverlay.MediaLedger do
       total_bytes(objects, profile) + upload.size > (profile["storage_quota_bytes"] || 10_485_760) ->
         {:error, :quota_exceeded}
 
+      ChatOverlay.LocalMedia.backend() == "local" and
+          Enum.sum(Enum.map(objects, & &1["size"])) + upload.size >
+            ChatOverlay.LocalMedia.max_bytes() ->
+        {:error, :global_storage_quota_exceeded}
+
       true ->
         {:ok, objects ++ [object], object}
     end
@@ -72,7 +84,7 @@ defmodule ChatOverlay.MediaLedger do
 
   def tracked?(objects, profile) do
     Enum.all?(Map.values(profile["media"] || %{}), fn item ->
-      item["source"] != "r2" or
+      item["source"] not in ["r2", "local"] or
         Enum.any?(objects, fn o ->
           o["handle"] == profile["handle"] and o["key"] == item["key"] and
             o["size"] == item["size"] and o["state"] == "active"
@@ -91,12 +103,14 @@ defmodule ChatOverlay.MediaLedger do
   def activatable?(objects, profile, media) do
     tracked?(objects, profile) and
       Enum.all?(media, fn {slot, item} ->
-        item["source"] != "r2" or item == (profile["media"] || %{})[slot] or
+        item["source"] not in ["r2", "local"] or item == (profile["media"] || %{})[slot] or
           (profile["can_upload"] == true and
              Enum.any?(objects, fn o ->
                o["key"] == item["key"] and o["handle"] == profile["handle"] and
                  o["size"] == item["size"] and o["state"] in ["ready", "active"] and
-                 o["bucket"] == "public" and is_binary(o["output_sha256"])
+                 o["bucket"] == "public" and is_binary(o["output_sha256"]) and
+                 ChatOverlay.Media.backend_matches?(o) and
+                 item["source"] == ChatOverlay.Media.object_backend(o)
              end))
       end)
   end
@@ -138,7 +152,8 @@ defmodule ChatOverlay.MediaLedger do
     (profile["media"] || %{})
     |> Map.values()
     |> Enum.filter(fn item ->
-      is_map(item) and item["source"] == "r2" and is_integer(item["size"]) and item["size"] >= 0
+      is_map(item) and item["source"] in ["r2", "local"] and is_integer(item["size"]) and
+        item["size"] >= 0
     end)
   end
 end

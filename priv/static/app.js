@@ -163,7 +163,7 @@
 
       if (sound && sound.url) {
         audioUrlInput.value = sound.url;
-        if (sound.source === "r2") {
+        if (["r2", "local"].includes(sound.source)) {
           audioTypeUpload.checked = true;
           audioExternalGroup.hidden = true;
           audioUploadGroup.hidden = false;
@@ -184,7 +184,7 @@
         imagePreviewImg.src = img.url;
         imagePreviewImg.hidden = false;
         previewNoneText.hidden = true;
-        if (img.source === "r2") {
+        if (["r2", "local"].includes(img.source)) {
           imageTypeUpload.checked = true;
           imageExternalGroup.hidden = true;
           imageUploadGroup.hidden = false;
@@ -511,7 +511,7 @@
           // 1. Process Sound
           if (audioTypeUpload && audioTypeUpload.checked && audioFileInput && audioFileInput.files && audioFileInput.files[0]) {
             const file = audioFileInput.files[0];
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para audio…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a cuarentena privada para audio…";
             const presignRes = await fetch("/api/media/presign", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -524,17 +524,17 @@
             });
             const presignData = await presignRes.json();
             if (!presignRes.ok || !presignData.ok) {
-              throw new Error(presignData.error || "Error al solicitar subida de audio a R2");
+              throw new Error(presignData.error || "Error al solicitar subida de audio");
             }
 
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo audio directamente a Cloudflare R2…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo audio a cuarentena privada…";
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*" }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*", ...(presignData.upload_headers || {}) }
             });
             if (!uploadRes.ok) {
-              throw new Error("Fallo al subir el archivo de audio a R2");
+              throw new Error("Fallo al subir el archivo de audio");
             }
             if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
             const validation = await fetch("/api/media/validate", {
@@ -559,7 +559,7 @@
             if (file.name.toLowerCase().endsWith(".svg") || (file.type && file.type.includes("svg"))) {
               throw new Error("Archivos SVG estrictamente prohibidos por seguridad (XSS en CEF)");
             }
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a Cloudflare R2 para imagen…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Solicitando subida a cuarentena privada para imagen…";
             const presignRes = await fetch("/api/media/presign", {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -572,17 +572,17 @@
             });
             const presignData = await presignRes.json();
             if (!presignRes.ok || !presignData.ok) {
-              throw new Error(presignData.error || "Error al solicitar subida de imagen a R2");
+              throw new Error(presignData.error || "Error al solicitar subida de imagen");
             }
 
-            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo imagen directamente a Cloudflare R2…";
+            if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Subiendo imagen a cuarentena privada…";
             const uploadRes = await fetch(presignData.upload_url, {
               method: "PUT",
               body: file,
-              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*" }
+              headers: { "Content-Type": presignData.content_type, "If-None-Match": "*", ...(presignData.upload_headers || {}) }
             });
             if (!uploadRes.ok) {
-              throw new Error("Fallo al subir el archivo de imagen a R2");
+              throw new Error("Fallo al subir el archivo de imagen");
             }
             if (saveAlertsFeedback) saveAlertsFeedback.textContent = "Pendiente: comprobando y normalizando el archivo…";
             const validation = await fetch("/api/media/validate", {

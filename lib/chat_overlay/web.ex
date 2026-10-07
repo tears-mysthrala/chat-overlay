@@ -193,6 +193,14 @@ defmodule ChatOverlay.Web do
             )
         end
 
+      {"PUT", ["api", "media", "upload", handle]} ->
+        if allowed_origin?(conn) == true,
+          do: api_local_upload(conn, handle),
+          else: reply(conn, 403, "application/json", "{\"ok\":false}")
+
+      {"GET", ["media", "local" | parts]} ->
+        local_media(conn, Enum.join(parts, "/"))
+
       {"POST", ["api", "media", "validate"]} ->
         with true <- allowed_origin?(conn), true <- json_content_type?(conn) do
           api_validate_upload(conn)
@@ -756,6 +764,73 @@ defmodule ChatOverlay.Web do
     end
   end
 
+  defp local_upload_object(conn, handle) do
+    with true <- ChatOverlay.LocalMedia.backend() == "local" and ChatOverlay.Media.configured?(),
+         :ok <- Session.authorize(conn, handle),
+         [key] <- Plug.Conn.get_req_header(conn, "x-upload-key"),
+         [token] <- Plug.Conn.get_req_header(conn, "x-upload-token"),
+         {:ok, verified} <- ChatOverlay.Media.verify_upload_token(token, handle, key),
+         %{"can_upload" => true} <- Config.profile(handle),
+         object when is_map(object) <-
+           Enum.find(
+             ChatOverlay.Profiles.media_objects(),
+             &(&1["handle"] == handle and &1["key"] == key)
+           ),
+         true <-
+           object["backend"] == "local" and object["bucket"] == "quarantine" and
+             object["state"] == "pending" and object["expires_at"] > System.system_time(:second),
+         true <- object["size"] == verified.size and object["category"] == verified.category,
+         [mime] <- Plug.Conn.get_req_header(conn, "content-type"),
+         true <- mime == object["mime"] do
+      {:ok, object}
+    else
+      _ -> {:error, :upload_rejected}
+    end
+  end
+
+  defp api_local_upload(conn, handle) do
+    with {:ok, object} <- local_upload_object(conn, handle),
+         {:ok, body, conn} <-
+           Plug.Conn.read_body(conn,
+             length: object["size"],
+             read_length: object["size"],
+             read_timeout: 4000
+           ),
+         true <- byte_size(body) == object["size"],
+         {:ok, ^object} <- local_upload_object(conn, handle),
+         {:ok, 201, _, _} <-
+           ChatOverlay.LocalMedia.request(
+             "PUT",
+             "quarantine",
+             object["key"],
+             body,
+             object["mime"]
+           ),
+         :ok <- Session.authorize(conn, handle) do
+      reply(conn, 201, "application/json", "{\"ok\":true}")
+    else
+      _ -> reply(conn, 422, "application/json", "{\"ok\":false,\"error\":\"Subida rechazada\"}")
+    end
+  end
+
+  defp local_media(conn, key) do
+    with true <- ChatOverlay.LocalMedia.backend() == "local" and byte_size(key) <= 256,
+         object when is_map(object) <-
+           Enum.find(ChatOverlay.Profiles.media_objects(), &(&1["key"] == key)),
+         true <-
+           object["backend"] == "local" and object["bucket"] == "public" and
+             object["state"] in ["ready", "active"],
+         true <- object["mime"] in ["image/png", "audio/wav"],
+         {:ok, 200, _, body} <- ChatOverlay.LocalMedia.request("GET", "public", key),
+         true <- byte_size(body) == object["size"],
+         true <-
+           Base.encode16(:crypto.hash(:sha256, body), case: :lower) == object["output_sha256"] do
+      reply(conn, 200, object["mime"], body)
+    else
+      _ -> reply(conn, 404, "text/plain", "Not found")
+    end
+  end
+
   defp api_media_presign(conn) do
     case Plug.Conn.read_body(conn, length: 65_536, read_length: 8192, read_timeout: 4000) do
       {:ok, body, conn} ->
@@ -825,6 +900,9 @@ defmodule ChatOverlay.Web do
                             else
                               resp
                             end
+
+                          resp =
+                            Map.put(resp, "upload_headers", presigned[:upload_headers] || %{})
 
                           reply(conn, 200, "application/json", ChatOverlay.JSON.encode(resp))
 
@@ -1009,15 +1087,15 @@ defmodule ChatOverlay.Web do
             {:halt, {:error, reason}}
         end
 
-      {"alert_sound", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
-      when is_binary(url) and url != "" ->
+      {"alert_sound", %{"source" => source, "url" => url} = item}, {:ok, acc}
+      when source in ["r2", "local"] and is_binary(url) and url != "" ->
         case validate_r2_media_item(item, handle, :audio) do
           {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_sound", verified_item)}}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
-      {"alert_image", %{"source" => "r2", "url" => url} = item}, {:ok, acc}
-      when is_binary(url) and url != "" ->
+      {"alert_image", %{"source" => source, "url" => url} = item}, {:ok, acc}
+      when source in ["r2", "local"] and is_binary(url) and url != "" ->
         case validate_r2_media_item(item, handle, :image) do
           {:ok, verified_item} -> {:cont, {:ok, Map.put(acc, "alert_image", verified_item)}}
           {:error, reason} -> {:halt, {:error, reason}}
@@ -1061,13 +1139,21 @@ defmodule ChatOverlay.Web do
                  ChatOverlay.Profiles.media_objects(),
                  &(&1["key"] == key and &1["handle"] == handle)
                ),
+             true <- ChatOverlay.Media.backend_matches?(object),
+             true <- item["source"] == ChatOverlay.Media.object_backend(object),
              true <-
                object["state"] in ["ready", "active"] and object["bucket"] == "public" and
                  is_binary(object["output_sha256"]) and object["size"] == size and
                  object["category"] == verified_category,
              {:ok, url} <- ChatOverlay.Media.public_url(key),
              true <- item["url"] == url do
-          {:ok, %{"url" => url, "source" => "r2", "key" => key, "size" => size}}
+          {:ok,
+           %{
+             "url" => url,
+             "source" => ChatOverlay.Media.object_backend(object),
+             "key" => key,
+             "size" => size
+           }}
         else
           _ -> {:error, :invalid_upload_token}
         end

@@ -110,7 +110,7 @@ defmodule ChatOverlay.Config do
 
     is_binary(url) and byte_size(url) in 1..2048 and
       String.starts_with?(url, "https://") and
-      (is_nil(source) or source in ["r2", "external"])
+      (is_nil(source) or source in ["r2", "local", "external"])
   end
 
   defp media_item?(_), do: false

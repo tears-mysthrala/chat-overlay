@@ -80,7 +80,12 @@ defmodule ChatOverlay.Profiles do
   def media_objects, do: Application.get_env(:chat_overlay, :media_objects, [])
 
   defp cleanup_object(%{"bucket" => bucket} = object) do
-    case ChatOverlay.MediaCoordinator.request("/delete", Map.take(object, ["key", "bucket"])) do
+    result =
+      if ChatOverlay.Media.backend_matches?(object),
+        do: ChatOverlay.MediaCoordinator.request("/delete", Map.take(object, ["key", "bucket"])),
+        else: {:error, :backend_migration_required}
+
+    case result do
       {:ok, %{"state" => "deleted"}} when bucket == "public" -> :ok
       {:ok, %{"state" => "deleted", "sealed" => true}} when bucket == "quarantine" -> :ok
       {:ok, %{"state" => "reconcile"}} -> {:error, :storage_reconciliation_required}
@@ -88,7 +93,11 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp cleanup_object(object), do: ChatOverlay.Media.delete_object(object["key"])
+  defp cleanup_object(object) do
+    if ChatOverlay.Media.backend_matches?(object),
+      do: ChatOverlay.Media.delete_object(object["key"]),
+      else: {:error, :backend_migration_required}
+  end
 
   defp ready_media(ready) do
     with {:ok, url} <- ChatOverlay.Media.public_url(ready["key"]),
@@ -105,7 +114,7 @@ defmodule ChatOverlay.Profiles do
          "url" => url,
          "key" => ready["key"],
          "size" => ready["size"],
-         "source" => "r2",
+         "source" => ChatOverlay.Media.object_backend(ready),
          "upload_token" => token
        }}
     end
@@ -118,8 +127,9 @@ defmodule ChatOverlay.Profiles do
 
     with :ok <- authorize.(),
          true <- is_map(profile) and profile["can_upload"] == true,
+         true <- is_map(input) and ChatOverlay.Media.backend_matches?(input),
          true <-
-           is_map(input) and input["bucket"] == "quarantine" and
+           input["bucket"] == "quarantine" and
              input["state"] in ["pending", "processing", "retired"] and
              input["expires_at"] > System.system_time(:second) and input["size"] == verified.size and
              input["category"] == verified.category do
@@ -163,6 +173,10 @@ defmodule ChatOverlay.Profiles do
           ChatOverlay.MediaLedger.total_bytes(updated, profile) >
               (profile["storage_quota_bytes"] || ChatOverlay.Media.default_quota()) ->
             {:error, :quota_exceeded}
+
+          ChatOverlay.LocalMedia.backend() == "local" and
+              Enum.sum(Enum.map(updated, & &1["size"])) > ChatOverlay.LocalMedia.max_bytes() ->
+            {:error, :global_storage_quota_exceeded}
 
           true ->
             with :ok <- persist_profiles(Config.profiles(), updated) do
@@ -236,7 +250,7 @@ defmodule ChatOverlay.Profiles do
            "url" => url,
            "key" => ready["key"],
            "size" => ready["size"],
-           "source" => "r2",
+           "source" => ChatOverlay.Media.object_backend(ready),
            "upload_token" => token
          }}
       else
@@ -418,6 +432,7 @@ defmodule ChatOverlay.Profiles do
         "has_capability_token" => not is_nil(p["capability_token_hash"]),
         "media" => p["media"] || %{},
         "can_upload" => p["can_upload"] || false,
+        "media_storage" => ChatOverlay.LocalMedia.backend(),
         "storage_quota_bytes" => p["storage_quota_bytes"] || 10_485_760,
         "storage_used_bytes" => p["storage_used_bytes"] || 0,
         "storage_pending_bytes" =>
@@ -1253,7 +1268,7 @@ defmodule ChatOverlay.Profiles do
               Enum.flat_map(["alert_sound", "alert_image"], fn k ->
                 item = media[k]
 
-                if is_map(item) and item["source"] == "r2" and is_binary(item["key"]) and
+                if is_map(item) and item["source"] in ["r2", "local"] and is_binary(item["key"]) and
                      byte_size(item["key"]) > 0 do
                   [item["key"]]
                 else
@@ -1319,7 +1334,7 @@ defmodule ChatOverlay.Profiles do
             new_item = cleaned_media[key]
 
             old_key =
-              if is_map(old_item) and old_item["source"] == "r2" and
+              if is_map(old_item) and old_item["source"] in ["r2", "local"] and
                    is_binary(old_item["key"]) and byte_size(old_item["key"]) > 0 do
                 old_item["key"]
               else
@@ -1327,7 +1342,7 @@ defmodule ChatOverlay.Profiles do
               end
 
             new_key =
-              if is_map(new_item) and new_item["source"] == "r2" and
+              if is_map(new_item) and new_item["source"] in ["r2", "local"] and
                    is_binary(new_item["key"]) and byte_size(new_item["key"]) > 0 do
                 new_item["key"]
               else
@@ -1344,7 +1359,7 @@ defmodule ChatOverlay.Profiles do
         # Calculate new storage used across active R2 media
         new_storage_used =
           Enum.reduce(cleaned_media, 0, fn {_k, v}, sum ->
-            if is_map(v) and v["source"] == "r2" do
+            if is_map(v) and v["source"] in ["r2", "local"] do
               sum + max(0, v["size"] || 0)
             else
               sum

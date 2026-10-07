@@ -7,30 +7,43 @@ defmodule ChatOverlay.MediaCoordinator do
   end
 
   def configured? do
-    token =
-      System.get_env("MEDIA_COORDINATOR_TOKEN") ||
-        Application.get_env(:chat_overlay, :media_coordinator_token)
+    token = token()
 
     is_binary(token) and Regex.match?(~r/\A[A-Za-z0-9_-]{43,128}\z/, token)
   end
 
-  defp local_request(path, metadata) do
-    token =
+  def token,
+    do:
       System.get_env("MEDIA_COORDINATOR_TOKEN") ||
         Application.get_env(:chat_overlay, :media_coordinator_token)
 
+  def connect do
+    host =
+      case System.get_env("MEDIA_COORDINATOR_HOST", "127.0.0.1") do
+        "127.0.0.1" -> {127, 0, 0, 1}
+        "172.30.96.1" -> {172, 30, 96, 1}
+        _ -> nil
+      end
+
     port = Application.get_env(:chat_overlay, :media_coordinator_port, 4199)
 
-    with true <- configured?(),
-         true <- is_integer(port) and port in 1024..65535,
-         {:ok, conn} <-
-           Mint.HTTP.connect(:http, {127, 0, 0, 1}, port,
-             hostname: "localhost",
-             protocols: [:http1],
-             mode: :passive,
-             max_header_list_size: 4096,
-             transport_opts: [timeout: 1000, send_timeout: 1000, send_timeout_close: true]
-           ) do
+    if configured?() and host != nil and is_integer(port) and port in 1024..65535 do
+      Mint.HTTP.connect(:http, host, port,
+        hostname: "localhost",
+        protocols: [:http1],
+        mode: :passive,
+        max_header_list_size: 4096,
+        transport_opts: [timeout: 1000, send_timeout: 1000, send_timeout_close: true]
+      )
+    else
+      {:error, :coordinator_unavailable}
+    end
+  end
+
+  defp local_request(path, metadata) do
+    token = token()
+
+    with {:ok, conn} <- connect() do
       try do
         with {:ok, conn, ref} <-
                Mint.HTTP.request(
