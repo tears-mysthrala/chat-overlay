@@ -110,6 +110,10 @@ jobs:
         run: docker build -t chat-overlay:review .
       - name: Verify hardened runtime
         run: python3 scripts/smoke_image.py chat-overlay:review
+      - name: Build synthetic custodian fixture tools
+        run: docker build --target validation -t chat-overlay:custodian-fixtures .
+      - name: Verify separated release processes
+        run: python3 scripts/check_custodian_isolation.py --image chat-overlay:review --validation chat-overlay:custodian-fixtures --output output/audit/custodian-isolation.json
       - name: Install SBOM schema validator (development only)
         run: |
           python3 -m venv "$RUNNER_TEMP/overlay-audit"

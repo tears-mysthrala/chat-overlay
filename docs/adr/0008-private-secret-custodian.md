@@ -1,6 +1,8 @@
 # ADR 0008 — Custodio privado de secretos — Refs #39
 
-Estado: propuesta concreta; no implementada ni aprobada por este ADR.
+Estado: implementación y pruebas aprobadas explícitamente por Kalista el
+07-10-2026 en la conversación del proyecto. Separación implementada en candidata
+y probada con dos releases sintéticas; todavía no acreditada en producción.
 
 ## Problema y decisión propuesta
 
@@ -37,10 +39,12 @@ límites de tamaño y backpressure, red sin acceso desde LAN/Internet.
 ## Contratos y aceptación antes de implementar
 
 El protocolo privado es un contrato nuevo y la separación cambia arquitectura
-y permisos efectivos. Requiere decisión explícita del propietario según
-WHAT_WE_ARE_BUILDING.md: «Cambiar [...] la retención, las fronteras entre clientes
-o las condiciones de publicación exige issue, justificación y aprobación».
-La continuación general autoriza preparar el diseño, no acredita el protocolo.
+y permisos efectivos. Según WHAT_WE_ARE_BUILDING.md, esos cambios requieren
+issue, justificación y aprobación explícita del propietario. Durante la
+preparación inicial solo estaba autorizado el diseño. Kalista aprobó después,
+el 07-10-2026, la implementación y las pruebas de la separación y del protocolo
+privado tipado, como recoge el estado de este ADR. Esa aprobación no acredita
+la candidata en producción ni elimina las puertas de revisión, CI y corte.
 
 Primera unidad: matriz de operaciones de sesión/perfil/OAuth y eventos por
 versión; fixtures negativas de handle cruzado, revocación y replay. Segunda:
@@ -56,8 +60,26 @@ desarrollo ni una ruta alternativa local. Un frente comprometido aún puede
 robar sesiones que circulen por él; esta arquitectura limita exposición de
 secretos, no promete inmunidad a todas las acciones del usuario autorizado.
 
-## Pendiente de decisión
+## Autenticación interna y siguiente unidad
 
-Aprobar la separación y el protocolo privado tipado para implementación y
-pruebas, manteniendo bots/F3 y nuevas dependencias fuera del alcance. El diseño
-detallado debe especificar autenticación interna antes de activar cualquier RPC.
+La aprobación cubre la separación y el protocolo privado tipado, manteniendo
+bots/F3 y nuevas dependencias fuera del alcance. El canal será TLS mutuo con una
+CA dedicada al protocolo, usando OTP SSL, Bandit y Mint ya presentes. El
+custodio requiere certificado de cliente; el frente verifica CA y hostname del
+custodio. Certificados de transporte separados de la CA PostgreSQL y de las
+credenciales OAuth. No se acepta TLS sin verificación ni un secreto Bearer como
+sustituto. El certificado del frente identifica el transporte, no al usuario:
+cada operación sigue requiriendo la autorización vigente del usuario.
+
+El frente necesariamente conserva su clave privada de transporte. La ausencia
+de secretos exigida por ARCH06 se refiere a la clave maestra, contraseñas DB,
+client secrets OAuth, credenciales del coordinador y tokens de plataforma.
+Comprometer el frente permite invocar las operaciones públicas como ese frente;
+no concede acceso genérico al custodio ni una identidad administrativa.
+
+El protocolo v1 se documenta en `docs/custodian-protocol.md`. La candidata incluye
+listener mTLS, roles y Compose separado. La red frontal ruteada fue aprobada
+expresamente después de comprobar que Docker internal impide publicar HTTP;
+requiere aplicar y verificar el bloqueo de salida con harden.sh custodian antes
+de arrancar. El corte espera revisión/CI y verificación de firewall y flujos
+OAuth/OBS/multimedia reales. No extrapolar los fixtures a producción.

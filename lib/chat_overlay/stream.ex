@@ -135,6 +135,11 @@ defmodule ChatOverlay.Stream do
       end
 
     cond do
+      conn.private[:custodian_reader] == true and
+          ChatOverlay.Session.authorize(conn, handle) != :ok ->
+        _ = Plug.Conn.chunk(conn, "event: error\ndata: {\"error\":\"unauthorized\"}\n\n")
+        conn
+
       result == :capability_revoked ->
         _ =
           Plug.Conn.chunk(
@@ -202,6 +207,12 @@ defmodule ChatOverlay.Stream do
                 conn
 
               {:tcp_error, _, _} ->
+                conn
+
+              {:ssl_closed, _} ->
+                conn
+
+              {:ssl_error, _, _} ->
                 conn
 
               {:capability_token_revoked, ^handle} ->

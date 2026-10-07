@@ -7,7 +7,11 @@ defmodule ChatOverlay.HTTP do
   def init(_) do
     {:ok, pid} =
       Bandit.start_link(
-        plug: ChatOverlay.Web,
+        plug:
+          if(ChatOverlay.Custodian.Role.current() == :frontend,
+            do: ChatOverlay.Custodian.Frontend,
+            else: ChatOverlay.Web
+          ),
         scheme: :http,
         port: Application.fetch_env!(:chat_overlay, :port),
         ip: Application.fetch_env!(:chat_overlay, :bind),
