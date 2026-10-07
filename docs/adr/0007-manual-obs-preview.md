@@ -18,5 +18,6 @@ al desconectar y caduca a los 10 segundos, con volumen 35%.
 No garantiza recepción en un overlay desconectado ni reproducción audible si el
 navegador/OBS bloquea audio. No añade bots, follows/subs, escritura en plataformas,
 dependencias ni retención durable. Reiniciar Store reinicia el cooldown; no hay
-garantía de entrega exactamente una vez. Un cambio de archivos descarta el preview
-pendiente y un archivo retirado deja de servirse por el endpoint local.
+garantía de entrega exactamente una vez. Antes de enviar se compara la selección
+actual; un preview pendiente con selección distinta se omite, sin invalidación
+irreversible del mapa. Un archivo retirado deja de servirse por el endpoint local.
