@@ -137,6 +137,7 @@ jobs:
           python3 scripts/test_media_coordinator.py -v
           python3 scripts/test_local_media_store.py -v
           python3 scripts/test_local_media_e2e.py -v
+          python3 scripts/test_compact_local_media.py -v
       - name: Load and test the exact human-approved decoder artifact
         run: |
           curl --fail --location --proto '=https' --tlsv1.2 --output "$RUNNER_TEMP/decoder-89432cb3.tar" https://github.com/tears-mysthrala/chat-overlay/releases/download/decoder-89432cb3-20261007/decoder-89432cb3.tar
@@ -149,6 +150,7 @@ jobs:
           python3 scripts/test_media_coordinator.py -v
           python3 scripts/test_local_media_store.py -v
           python3 scripts/test_local_media_e2e.py -v
+          python3 scripts/test_compact_local_media.py -v
       - name: Install pinned SBOM validation tooling (development only)
         run: |
           python3 -m venv "$RUNNER_TEMP/decoder-audit"
