@@ -1,8 +1,9 @@
 $ErrorActionPreference = 'Stop'
 $taskRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-if ($taskRoot -ne 'D:\github\_worktrees\chat-overlay-postgres') { throw 'Unexpected worktree' }
+if ($taskRoot -notin @('D:\github\_worktrees\chat-overlay-postgres', 'D:\github\_worktrees\chat-overlay-f2-candidate')) { throw 'Unexpected worktree' }
 Set-Location -LiteralPath $taskRoot
-if ((git branch --show-current) -ne 'security/51-postgres-rls') { throw 'Unexpected branch' }
+if ((git branch --show-current) -notin @('security/51-postgres-rls', 'security/55-f2-local-candidate')) { throw 'Unexpected branch' }
+if ($taskRoot -eq 'D:\github\_worktrees\chat-overlay-f2-candidate' -and $env:POSTGRES_TEST_IMAGE -notmatch '^sha256:[0-9a-f]{64}$') { throw 'Candidate requires an immutable validation image ID' }
 $project = 'overlay51-' + [guid]::NewGuid().ToString('N').Substring(0,12)
 New-Item -ItemType Directory -Force -Path output/postgres | Out-Null
 function Invoke-Docker([string[]]$Arguments) {

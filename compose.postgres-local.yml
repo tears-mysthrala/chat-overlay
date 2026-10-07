@@ -17,7 +17,7 @@ services:
       timeout: 2s
       retries: 30
   tests:
-    image: chat-overlay:51-postgres-validation
+    image: ${POSTGRES_TEST_IMAGE:-chat-overlay:51-postgres-validation}
     environment:
       MIX_ENV: test
       PG_LOCAL_HOST: postgres
