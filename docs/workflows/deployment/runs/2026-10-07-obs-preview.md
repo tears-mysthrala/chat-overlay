@@ -54,3 +54,13 @@ inmediato produjo captura transparente output/obs/preview-newlink-reconnected.pn
 sin replay. No streaming/grabación. La fuente antigua se conservó, ya revocada.
 Prueba local de sesión revocada PASS.
 CI, publicación/merge y deuda operativa siguen separados.
+
+PR #65 publicada desde feat/64-obs-preview. CI remoto 37648370619:
+postgres-rls falló al escribir /evidence/postgres-0.json (permission denied).
+La imagen de validación ejecuta root sin capabilities; el bind mount era del
+runner y no permite bypass DAC. Se asigna solo output/postgres a UID/GID 0 en CI,
+sin cambiar usuario ni capabilities del contenedor ni producción. Escritura con
+ALL capabilities eliminadas y no-new-privileges comprobada localmente PASS.
+El resultado RLS remoto sigue pendiente hasta la siguiente ejecución.
+Codex cloud revisando 7834a91; CodeRabbit omitido por tamaño/capacidad y Copilot
+omitido por cuota. Ninguna omisión se considera aprobación.

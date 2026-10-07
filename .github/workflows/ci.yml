@@ -80,6 +80,9 @@ jobs:
       - name: Isolated synthetic database and restricted migration identity
         run: |
           mkdir -p output/postgres
+          # The validation container is root with ALL capabilities dropped;
+          # it cannot bypass the runner-owned directory's write permissions.
+          sudo chown 0:0 output/postgres
           docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" up -d --wait postgres
           docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" cp priv/postgres/001_rls.sql postgres:/tmp/001_rls.sql
           docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" exec -T -e PGPASSWORD=synthetic-migration postgres psql -h 127.0.0.1 -U overlay_migrator -d overlay_synthetic -v ON_ERROR_STOP=1 -f /tmp/001_rls.sql
