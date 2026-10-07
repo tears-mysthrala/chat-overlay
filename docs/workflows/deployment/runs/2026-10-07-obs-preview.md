@@ -26,4 +26,21 @@ Los archivos normalizados publicados son públicos por URL; el evento es protegi
 El fallback sin escritor registrado no serializa, pero la supervisión normal inicia
 Profiles registrado. ARCH06 y mantenimiento de inventario son deuda heredada separada.
 
-Despliegue y prueba multimedia en OBS: pendientes, no acreditados por la subida #62.
+Grype runtime: cero hallazgos activos, cuatro cubiertos por VEX aprobado vigente.
+Desplegado digest43ed8a7a en Benten9502 con backup privado
+/var/lib/chat-overlay/backups/preview-64-ffc0161: compose/runtime.env/pg_dump.
+No se cambiaron datos, tokens, coordinator, firewall ni túnel. Readiness y POST
+anónimo403 PASS. App65532:65532/rootfs readonly; coordinador systemd sigue activo.
+Sesión renovada por OAuth Twitch existente sin ampliar scopes.
+
+Panel real: botón devuelve prueba enviada. OBS32.2.2: emote PNG mostrado en fuente
+protegida; captura output/obs/preview-observed.png. Refreshnocache inmediatamente
+tras observar la imagen; captura3s después output/obs/preview-reconnected.png
+completamente transparente, sin replay mientras el preview original aún caduca.
+No streaming ni grabación activos. Los intentos iniciales de captura acabaron
+antes del envío por latencia de herramientas; no se contaron como PASS. Chrome
+CDP presentaba timeout antes de dispatch en pestañas reutilizadas; nueva pestaña
+y acción/observación en una llamada completaron envío, sin duplicar a ciegas.
+Audio audible: pendiente de confirmación del operador. Revocación de capability
+actual: pendiente de paso manual del propietario; prueba local de sesión revocada PASS.
+CI, publicación/merge y deuda operativa siguen separados.
