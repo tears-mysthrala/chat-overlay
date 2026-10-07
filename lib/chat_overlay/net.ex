@@ -154,6 +154,24 @@ defmodule ChatOverlay.Net do
   def body_limit("www.googleapis.com"), do: 2_097_152
   def body_limit(_), do: 262_144
 
+  def token(
+        %{"auth_handle" => handle, "auth_version" => version, "platform" => provider} = source
+      ) do
+    with %{"sources" => sources, "linked_accounts" => accounts} <-
+           ChatOverlay.Config.profile(handle),
+         true <- source in sources,
+         %{"account_version" => ^version, "status" => "active"} <- accounts[provider],
+         {:ok, token} <- ChatOverlay.Tokens.get_access_token(handle, provider),
+         %{"linked_accounts" => current} <- ChatOverlay.Config.profile(handle),
+         %{"account_version" => ^version, "status" => "active"} <- current[provider] do
+      {:ok, token}
+    else
+      _ -> {:error, :configuration_error}
+    end
+  end
+
+  def token(%{"auth_handle" => _}), do: {:error, :configuration_error}
+
   def token(source) do
     value = System.get_env(source["credential_env"] || "")
 

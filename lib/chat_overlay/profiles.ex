@@ -303,15 +303,34 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
-  defp execute_action({:save_profile, profile, opts}), do: do_save_profile(profile, opts)
+  defp execute_action({:save_profile, profile, opts}) do
+    expected = opts[:target_reader_binding]
+
+    if is_nil(expected) or
+         target_reader_binding(profile["handle"], elem(expected, 0)) == elem(expected, 1),
+       do: do_save_profile(profile, opts),
+       else: {:error, :stale_reader_binding}
+  end
+
   defp execute_action({:delete, handle}), do: do_delete(handle, [])
   defp execute_action({:delete, handle, opts}), do: do_delete(handle, opts)
 
-  defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}),
-    do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
+  defp execute_action({:sync_youtube, handle, yt_source, yt_target, resolved_for, opts}) do
+    with :ok <- reader_resolution_current?(handle, opts),
+         do: do_sync_youtube(handle, yt_source, yt_target, resolved_for, opts)
+  end
 
-  defp execute_action({:sync_youtube_offline, handle, yt_target, resolved_for, opts}),
-    do: do_sync_youtube_offline(handle, yt_target, resolved_for, opts)
+  defp execute_action({:sync_youtube_offline, handle, yt_target, resolved_for, opts}) do
+    with :ok <- reader_resolution_current?(handle, opts),
+         do: do_sync_youtube_offline(handle, yt_target, resolved_for, opts)
+  end
+
+  defp execute_action({:activate_oauth_readers, handle}) do
+    case Config.profile(handle) do
+      nil -> {:error, :not_found}
+      profile -> do_save_profile(profile, replace: true)
+    end
+  end
 
   defp execute_action({:update_linked_youtube, handle, yt_target}),
     do: do_update_linked_youtube(handle, yt_target)
@@ -690,7 +709,8 @@ defmodule ChatOverlay.Profiles do
     target = params["target"] || params[:target] || params["input"] || params[:input]
     raw_sources = params["sources"] || params[:sources]
 
-    with {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
+    with {:ok, opts} <- target_resolution_options(handle, target, opts),
+         {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
          {:ok, clean_handle} <- determine_handle(handle, suggested_handle, sources) do
       candidate_profile =
         %{
@@ -714,10 +734,102 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
+  defp target_reader_binding(handle, provider) do
+    case Config.profile(handle) do
+      %{"linked_accounts" => accounts} when is_map(accounts) ->
+        case accounts[provider] do
+          nil -> nil
+          a -> {a["account_version"] || 1, a["status"], a["user_id"]}
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp target_resolution_options(handle, target, opts)
+       when is_binary(handle) and is_binary(target) do
+    provider =
+      if opts[:platform] in ["twitch", "youtube"],
+        do: opts[:platform],
+        else:
+          detect_platform(target) ||
+            if(String.starts_with?(target, "@"), do: "youtube", else: "twitch")
+
+    case target_reader_binding(slugify(handle), provider) do
+      {_, "active", _} = binding ->
+        with {:ok, token} <- ChatOverlay.Tokens.get_access_token(slugify(handle), provider) do
+          options =
+            opts
+            |> Keyword.put(:platform, provider)
+            |> Keyword.put(:token, token)
+            |> Keyword.put(:target_reader_binding, {provider, binding})
+            |> Keyword.put(:auto_discover_youtube, false)
+
+          {:ok, options}
+        end
+
+      nil ->
+        {:ok, opts}
+
+      _ ->
+        {:error, :reauth_required}
+    end
+  end
+
+  defp target_resolution_options(_, _, opts), do: {:ok, opts}
+
   @doc "Synchronizes the linked YouTube live stream for an existing profile."
   def sync_youtube(handle, opts \\ []) when is_binary(handle) do
     clean_handle = slugify(handle)
 
+    with {:ok, reader_opts} <- reader_resolution_options(clean_handle, opts),
+         do: resolve_youtube_for_reader(clean_handle, reader_opts)
+  end
+
+  @doc "Operator migration of existing linked profiles; serialized with all writers."
+  def activate_oauth_readers(handle) when is_binary(handle),
+    do: call_serialized({:activate_oauth_readers, handle})
+
+  defp reader_binding(handle) do
+    case Config.profile(handle) do
+      %{"linked_accounts" => %{"youtube" => a}} ->
+        {a["account_version"] || 1, a["status"], a["user_id"]}
+
+      _ ->
+        nil
+    end
+  end
+
+  defp reader_resolution_options(handle, opts) do
+    binding = reader_binding(handle)
+
+    case binding do
+      {_, "active", _} ->
+        with {:ok, token} <- ChatOverlay.Tokens.get_access_token(handle, "youtube"),
+             do:
+               {:ok, opts |> Keyword.put(:token, token) |> Keyword.put(:reader_binding, binding)}
+
+      nil ->
+        profile = Config.profile(handle) || %{}
+
+        if Enum.any?(
+             profile["sources"] || [],
+             &(&1["platform"] == "youtube" and &1["auth_handle"] != nil)
+           ), do: {:error, :not_linked}, else: {:ok, Keyword.put(opts, :reader_binding, nil)}
+
+      _ ->
+        {:error, :reauth_required}
+    end
+  end
+
+  defp reader_resolution_current?(handle, opts) do
+    if reader_binding(handle) == opts[:reader_binding],
+      do: :ok,
+      else: {:error, :stale_reader_binding}
+  end
+
+  defp resolve_youtube_for_reader(clean_handle, opts) do
     case Config.profile(clean_handle) do
       nil ->
         {:error, :not_found}
@@ -937,13 +1049,6 @@ defmodule ChatOverlay.Profiles do
             profile["sources"]
       end
 
-    removed_sources =
-      if existing do
-        (existing["sources"] || []) -- final_sources
-      else
-        []
-      end
-
     linked_yt = profile["linked_youtube"] || (existing && existing["linked_youtube"])
 
     base_profile =
@@ -959,6 +1064,11 @@ defmodule ChatOverlay.Profiles do
       |> then(fn p ->
         if linked_yt, do: Map.put(p, "linked_youtube", linked_yt), else: p
       end)
+
+    final_profile = bind_reader_sources(final_profile, existing)
+
+    removed_sources =
+      if existing, do: (existing["sources"] || []) -- final_profile["sources"], else: []
 
     updated_profiles =
       if existing do
@@ -987,6 +1097,38 @@ defmodule ChatOverlay.Profiles do
       error ->
         error
     end
+  end
+
+  defp bind_reader_sources(profile, existing) do
+    sources =
+      Enum.map(profile["sources"], fn source ->
+        account = (profile["linked_accounts"] || %{})[source["platform"]]
+
+        cond do
+          source["mode"] == "demo" ->
+            Map.drop(source, ~w(auth_handle auth_version auth_status))
+
+          is_map(account) ->
+            source
+            |> Map.put("auth_handle", profile["handle"])
+            |> Map.put("auth_version", account["account_version"] || 1)
+            |> Map.put("auth_status", account["status"] || "active")
+
+          source["auth_handle"] != nil or
+              Enum.any?((existing && existing["sources"]) || [], fn old ->
+                old["platform"] == source["platform"] and old["auth_handle"] != nil
+              end) ->
+            source
+            |> Map.put("auth_handle", profile["handle"])
+            |> Map.put("auth_version", 0)
+            |> Map.put("auth_status", "unlinked")
+
+          true ->
+            source
+        end
+      end)
+
+    Map.put(profile, "sources", sources)
   end
 
   defp sync_profile_supervisors(final_profile, clean_handle, removed_sources, valid_profiles) do
@@ -1518,6 +1660,8 @@ defmodule ChatOverlay.Profiles do
         results =
           Enum.reduce_while(raw_sources, {:ok, []}, fn
             %{"platform" => plat, "channel" => _} = src, {:ok, acc} ->
+              src = Map.drop(src, ~w(auth_handle auth_version auth_status))
+
               cleaned_src =
                 if src["mode"] == "demo" do
                   Map.delete(src, "credential_env")
