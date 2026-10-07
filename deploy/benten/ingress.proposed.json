@@ -1,0 +1,18 @@
+{
+  "status": "blocked_cf_401_not_applied",
+  "hostname": "overlay.mysthrala.com",
+  "existing_tunnel": "b5117854-bf72-4eee-8201-8dac7334dd91",
+  "rule_to_append_before_fallback": {
+    "hostname": "overlay.mysthrala.com",
+    "service": "http://192.168.1.114:4100"
+  },
+  "preconditions": [
+    "Read effective existing tunnel configuration with authorized cf credentials; preserve all existing rules.",
+    "Verify connector location and its source IP; do not assume the banking connector is the user's intended shared connector.",
+    "Publish guest port 4100 only after firewall allows that verified connector and rejects other LAN traffic.",
+    "Pin DHCP leases or use a verified stable guest/connector address before activation.",
+    "Origin HTTP is private LAN; external HTTPS is provided by Cloudflare Tunnel, not end-to-end TLS to the application.",
+    "Create proxied CNAME only if hostname is free; verify public HTTPS and unauthenticated write rejection.",
+    "Provision OAuth app credentials/callbacks before claiming linked chat is operational. R2 remains disabled without its scoped configuration."
+  ]
+}

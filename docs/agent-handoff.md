@@ -500,3 +500,15 @@ remota siguen pendientes. No merge, push ni despliegue.
 Auditoría decoder con VEX exit 0: seis coincidencias brutas conservadas,
 seis cubiertas por las declaraciones aprobadas y cero activas; igualdad CVE/PURL
 verificada. Registro: docs/workflows/f2-security/runs/2026-10-07-vex-approved.md.
+
+## Despliegue Benten autorizado — 07-10-2026, Refs #55
+
+VM9502 dedicada,192.168.1.114. Backend PostgreSQL TLS privado operativo;
+release a5c3da6a7cfc con OpenSSL3.5.9, smoke/escaneo PASS. Persistencia real y
+autostart tras reboot comprobados, perfil sintético eliminado, firewall guest.
+Publicación mysthrala.com bloqueada por cf401 y rechazo automático de búsqueda
+de perfiles/rutas de autenticación alternativas. No DNS/ingress aplicado ni
+HTTPS externo probado. OAuth/R2 sin credenciales, decoder cargado sin coordinador.
+Checkpoint local quiesced; no restore/offsite validado. Registro y siguientes
+pasos: docs/workflows/deployment/runs/2026-10-07.md. No declarar despliegue público
+terminado ni F2 cerrado.

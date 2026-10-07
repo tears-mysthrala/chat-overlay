@@ -29,8 +29,8 @@ RUN apk add --no-cache \
   ca-certificates=20260909-r0 \
   libstdc++=15.2.0-r5 \
   ncurses-libs=6.6_p20260516-r0 \
-  libcrypto3=3.5.8-r0 \
-  libssl3=3.5.8-r0
+  libcrypto3=3.5.9-r0 \
+  libssl3=3.5.9-r0
 WORKDIR /app
 COPY --from=build --chown=65532:65532 /build/_build/prod/rel/chat_overlay ./
 COPY mix.lock /app/share/mix.lock
