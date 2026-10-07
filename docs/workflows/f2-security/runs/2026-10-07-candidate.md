@@ -46,6 +46,9 @@ Un primer montaje apuntaba /app en lugar de /build: se corrigió antes del PASS.
 El CI Linux conserva su red interna y conexión directa a IP del fixture;
 no se ejecutó GitHub Actions ni la variante móvil en esta continuación.
 No se probó la subida positiva completa desde navegador contra R2 real.
+`mix format --check-formatted scripts/browser_fixture.exs`, Node syntax y
+`wsl bash -n scripts/ci_browser.sh` PASS. Bash no estaba en la imagen de
+validación; se comprobó con WSL. Fixture, red y proceso proxy propios retirados.
 
 ## Gate del decoder: seis matches activos
 
