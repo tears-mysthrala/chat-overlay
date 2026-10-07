@@ -31,11 +31,22 @@ subida. La resincronización retiró fuente del evento YouTube eliminado, conser
 cuenta vinculada y fuente Twitch. Ambos eventos de prueba fueron eliminados con
 confirmación explícita de borrado permanente; no se comenzó emisión de vídeo.
 
-Pendiente: selector de archivos Chrome bloqueó la automatización; se solicitó
-habilitar acceso a file URLs o seleccionar manualmente fixture PNG112. No hay
-todavía PASS de flujo panel/PUT/decoder/publicación ni representación multimedia
-OBS ni revocación de capability actual. Mantenimiento de índice4096/journal128,
-backup externo/restore, ARCH06 y CI/publicación siguen separados.
+Flujo real del panel PASS: el usuario seleccionó manualmente PNG112 y WAV2s;
+Guardar alertas devolvió éxito. PUT privado, decoder aislado y publicación local
+completaron el flujo. PNG público 28741 bytes/SHA256
+8410bff123f60c3ef16c4c6818d557f696682d802f210909016b1ff5dcfd591c;
+WAV público SHA256 c98983a5c992f58ff3ded93c69154e01188c70b0407a58fe33c7bebf9214a358.
+Ambos archivos descargados coinciden con fixtures normalizados. Cuota panel430.7KB,
+pendientes215.1KB. Puerto privado4199 inaccesible por LAN; original cuarentena404.
+El permiso file URLs estaba activo; falló el selector de la herramienta, resuelto
+con selección manual, no mediante rebajar controles.
+
+La prueba de sonido del panel no envía multimedia a OBS. Preview manual #64
+propuesto y aprobado expresamente, en rama separada feat/64-obs-preview.
+OBS tras refresh real muestra Twitch: conectando (SSE recuperado); la sonda Python
+403 de Cloudflare no prueba revocación. Sin streaming/grabación activos.
+Revocación actual, representación multimedia OBS, mantenimiento índice4096/journal128,
+backup externo/restore, ARCH06 y CI/publicación permanecen separados.
 
 Rama `feat/62-local-media`, worktree `chat-overlay-local-media`, base9250d51.
 Autorización: almacenamiento inicial en disco de Benten, sin contratar S3/R2;
