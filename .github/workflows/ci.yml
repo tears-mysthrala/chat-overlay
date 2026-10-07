@@ -46,7 +46,7 @@ jobs:
         if: ${{ always() && steps.exunit.outcome != 'skipped' }}
         run: python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json
       - name: Install pinned browser test tooling (development only)
-        timeout-minutes: 5
+        timeout-minutes: 10
         run: |
           node -e 'if (Number(process.versions.node.split(".")[0]) < 20) process.exit(1)'
           npm ci --ignore-scripts --no-fund

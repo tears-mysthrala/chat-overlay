@@ -83,3 +83,8 @@ GitHub confirmó asset uploaded y checksum idéntico. CI conserva el build y sus
 pruebas y añade descarga con checksum e identidad exactos, pruebas del artefacto
 aprobado y escaneo fresco con los controles VEX y caducidad intactos.
 Controles estáticos y test VEX normal/optimizado PASS. Producción no cambia.
+
+CI 37651650995 sobre 5569771: source-and-tests agotó los 5 minutos de
+instalación de dependencias de Playwright/Chromium; no llegó a ejecutar browser
+ni load. Se amplía únicamente ese paso a 10 minutos, conservando pins, pruebas,
+gates y timeout global. No se interpreta el timeout como regresión de producto.
