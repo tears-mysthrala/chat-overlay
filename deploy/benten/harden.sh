@@ -28,6 +28,7 @@ table inet chat_overlay_guard {
   }
   chain forward {
     type filter hook forward priority -20; policy accept;
+    ip saddr 192.168.1.112 ip daddr { 172.30.96.0/28, 172.30.97.0/28 } tcp dport 4100 accept
     # Also block LAN access to Docker loopback-published ports on older engines.
     iifname "eth0" ct state new drop
   }

@@ -512,3 +512,15 @@ HTTPS externo probado. OAuth/R2 sin credenciales, decoder cargado sin coordinado
 Checkpoint local quiesced; no restore/offsite validado. Registro y siguientes
 pasos: docs/workflows/deployment/runs/2026-10-07.md. No declarar despliegue público
 terminado ni F2 cerrado.
+
+## Publicación HTTPS completada — 07-10-2026, Refs #55
+
+https://overlay.mysthrala.com llega a VM9502 mediante connector personal9501.
+Autorización específica resuelve rechazo inicial: perfil cf personal-bankmcp.
+Túnel versión2, banking y fallback preservados; CNAME overlay creado. Firewall
+permite solo UID del connector hacia guest4100; workstation LAN bloqueado.
+HTTPS root/readiness/assets PASS, API anónima401; banking /mcp mantiene401 y
+connector activo sin reinicio. OAuth/R2/propietario inicial, SSE/OBS y reserva
+DHCP pendientes; mensaje anónimo UI401 genérico y script inline bloqueado por
+CSP registrados como deuda. No F2 cerrado ni pruebas reales de plataformas.
+Ver docs/workflows/deployment/runs/2026-10-07-public.md.

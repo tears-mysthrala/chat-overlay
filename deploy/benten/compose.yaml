@@ -33,12 +33,13 @@ services:
       CHAT_DB_HOST: postgres
       CHAT_DB_NAME: overlay
       CHAT_PUBLIC_ORIGIN: https://overlay.mysthrala.com
-      CHAT_TRUSTED_PROXY_IPS: 172.30.96.1
+      CHAT_TRUSTED_PROXY_IPS: 192.168.1.112
       ERL_FLAGS: '+S 2:2 +P 32768 +Q 8192'
     volumes:
       - /etc/chat-overlay/tls/ca-bundle.crt:/etc/ssl/cert.pem:ro
       - /etc/chat-overlay/tls/ca-bundle.crt:/etc/ssl/certs/ca-certificates.crt:ro
-    ports: ['127.0.0.1:4100:4100']
+    # Guest firewall permits only the verified cloudflared connector.
+    ports: ['192.168.1.114:4100:4100', '127.0.0.1:4100:4100']
     networks: [database, egress]
     depends_on:
       postgres: {condition: service_healthy}
