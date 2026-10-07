@@ -89,10 +89,12 @@ defmodule ChatOverlay.Tokens do
     force? = Keyword.get(opts, :force_refresh, false)
 
     cached = Map.get(state.cache, key)
+    binding = active_binding(handle, provider_str)
 
     cond do
       # 1. Valid cached token in memory and not forcing refresh
-      not force? and is_map(cached) and cached.expires_at - now > margin ->
+      not force? and is_map(cached) and cached[:account_version] == binding and
+        binding != nil and cached.expires_at - now > margin ->
         {:reply, {:ok, cached.access_token}, state}
 
       # 2. Upstream refresh already in-flight for this key -> coalesce caller
@@ -124,6 +126,7 @@ defmodule ChatOverlay.Tokens do
                 new_cache =
                   Map.put(state.cache, key, %{
                     access_token: stored_token,
+                    account_version: expected_version,
                     expires_at: stored_expires_at
                   })
 
@@ -225,6 +228,17 @@ defmodule ChatOverlay.Tokens do
 
   @impl true
   def handle_info({:worker_done, pid, key, result}, state) do
+    result =
+      case result do
+        {:success, _, _, version} ->
+          if active_binding(elem(key, 0), elem(key, 1)) == version,
+            do: result,
+            else: {:failed, {:error, :stale_binding}}
+
+        _ ->
+          result
+      end
+
     case Map.pop(state.tasks, pid) do
       {nil, _} ->
         {:noreply, state}
@@ -237,7 +251,7 @@ defmodule ChatOverlay.Tokens do
         new_in_flight = Map.delete(state.in_flight, key)
 
         case result do
-          {:success, access_token, expires_at} ->
+          {:success, access_token, expires_at, version} ->
             Enum.each(waiting, fn caller ->
               GenServer.reply(caller, {:ok, access_token})
             end)
@@ -245,6 +259,7 @@ defmodule ChatOverlay.Tokens do
             new_cache =
               Map.put(state.cache, key, %{
                 access_token: access_token,
+                account_version: version,
                 expires_at: expires_at
               })
 
@@ -319,6 +334,19 @@ defmodule ChatOverlay.Tokens do
     :ok
   end
 
+  defp active_binding(handle, provider) do
+    case ChatOverlay.Config.profile(handle) do
+      %{"linked_accounts" => accounts} ->
+        case accounts[provider] do
+          %{"status" => "active"} = account -> account["account_version"] || 1
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
   # Background Worker
 
   defp do_background_refresh(
@@ -347,7 +375,7 @@ defmodule ChatOverlay.Tokens do
               expires_in = new_tokens["expires_in"] || new_tokens[:expires_in] || 3600
               now = System.system_time(:second)
               expires_at = now + expires_in
-              {:success, access_token, expires_at}
+              {:success, access_token, expires_at, expected_version}
 
             {:error, :stale_binding} ->
               {:failed, {:error, :stale_binding}}

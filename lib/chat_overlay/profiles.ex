@@ -306,8 +306,13 @@ defmodule ChatOverlay.Profiles do
   defp execute_action({:save_profile, profile, opts}) do
     expected = opts[:target_reader_binding]
 
-    if is_nil(expected) or
-         target_reader_binding(profile["handle"], elem(expected, 0)) == elem(expected, 1),
+    current? =
+      not Keyword.has_key?(opts, :reader_account_snapshot) or
+        reader_account_snapshot(profile["handle"]) == opts[:reader_account_snapshot]
+
+    if current? and
+         (is_nil(expected) or
+            target_reader_binding(profile["handle"], elem(expected, 0)) == elem(expected, 1)),
        do: do_save_profile(profile, opts),
        else: {:error, :stale_reader_binding}
   end
@@ -709,6 +714,11 @@ defmodule ChatOverlay.Profiles do
     target = params["target"] || params[:target] || params["input"] || params[:input]
     raw_sources = params["sources"] || params[:sources]
 
+    opts =
+      opts
+      |> Keyword.put(:reader_handle, handle)
+      |> Keyword.put(:reader_account_snapshot, reader_account_snapshot(handle))
+
     with {:ok, opts} <- target_resolution_options(handle, target, opts),
          {:ok, sources, suggested_handle, meta} <- resolve_sources(target, raw_sources, opts),
          {:ok, clean_handle} <- determine_handle(handle, suggested_handle, sources) do
@@ -747,6 +757,9 @@ defmodule ChatOverlay.Profiles do
     end
   end
 
+  defp reader_account_snapshot(handle),
+    do: Enum.map(["twitch", "youtube"], &{&1, target_reader_binding(handle, &1)})
+
   defp target_resolution_options(handle, target, opts)
        when is_binary(handle) and is_binary(target) do
     provider =
@@ -770,7 +783,9 @@ defmodule ChatOverlay.Profiles do
         end
 
       nil ->
-        {:ok, opts}
+        if oauth_reader_history?(slugify(handle), provider),
+          do: {:error, :not_linked},
+          else: {:ok, opts}
 
       _ ->
         {:error, :reauth_required}
@@ -778,6 +793,16 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp target_resolution_options(_, _, opts), do: {:ok, opts}
+
+  defp oauth_reader_history?(handle, provider) do
+    profile = Config.profile(handle) || %{}
+
+    provider in (profile["reader_oauth_platforms"] || []) or
+      Enum.any?(
+        profile["sources"] || [],
+        &(&1["platform"] == provider and &1["auth_handle"] != nil)
+      )
+  end
 
   @doc "Synchronizes the linked YouTube live stream for an existing profile."
   def sync_youtube(handle, opts \\ []) when is_binary(handle) do
@@ -811,12 +836,9 @@ defmodule ChatOverlay.Profiles do
                {:ok, opts |> Keyword.put(:token, token) |> Keyword.put(:reader_binding, binding)}
 
       nil ->
-        profile = Config.profile(handle) || %{}
-
-        if Enum.any?(
-             profile["sources"] || [],
-             &(&1["platform"] == "youtube" and &1["auth_handle"] != nil)
-           ), do: {:error, :not_linked}, else: {:ok, Keyword.put(opts, :reader_binding, nil)}
+        if oauth_reader_history?(handle, "youtube"),
+          do: {:error, :not_linked},
+          else: {:ok, Keyword.put(opts, :reader_binding, nil)}
 
       _ ->
         {:error, :reauth_required}
@@ -1002,9 +1024,10 @@ defmodule ChatOverlay.Profiles do
           if twitch["user_id"], do: Keyword.put(opts, :user_id, twitch["user_id"]), else: opts
 
         opts =
-          if twitch["credential_env"],
-            do: Keyword.put(opts, :token, System.get_env(twitch["credential_env"])),
-            else: opts
+          case ChatOverlay.Net.token(twitch) do
+            {:ok, token} -> Keyword.put(opts, :token, token)
+            _ -> Keyword.put(opts, :token, "")
+          end
 
         opts
       else
@@ -1100,6 +1123,15 @@ defmodule ChatOverlay.Profiles do
   end
 
   defp bind_reader_sources(profile, existing) do
+    history =
+      ((existing && existing["reader_oauth_platforms"]) || []) ++
+        Map.keys(profile["linked_accounts"] || %{}) ++
+        Enum.flat_map(((existing && existing["sources"]) || []) ++ profile["sources"], fn s ->
+          if s["auth_handle"], do: [s["platform"]], else: []
+        end)
+
+    history = Enum.uniq(history)
+
     sources =
       Enum.map(profile["sources"], fn source ->
         account = (profile["linked_accounts"] || %{})[source["platform"]]
@@ -1114,10 +1146,7 @@ defmodule ChatOverlay.Profiles do
             |> Map.put("auth_version", account["account_version"] || 1)
             |> Map.put("auth_status", account["status"] || "active")
 
-          source["auth_handle"] != nil or
-              Enum.any?((existing && existing["sources"]) || [], fn old ->
-                old["platform"] == source["platform"] and old["auth_handle"] != nil
-              end) ->
+          source["platform"] in history ->
             source
             |> Map.put("auth_handle", profile["handle"])
             |> Map.put("auth_version", 0)
@@ -1128,7 +1157,7 @@ defmodule ChatOverlay.Profiles do
         end
       end)
 
-    Map.put(profile, "sources", sources)
+    profile |> Map.put("sources", sources) |> Map.put("reader_oauth_platforms", history)
   end
 
   defp sync_profile_supervisors(final_profile, clean_handle, removed_sources, valid_profiles) do
@@ -1683,7 +1712,12 @@ defmodule ChatOverlay.Profiles do
             %{"target" => tgt} = item, {:ok, acc} ->
               item_opts = Keyword.merge(opts, platform: item["platform"])
 
-              case resolve_target(tgt, item_opts) do
+              result =
+                with {:ok, item_opts} <-
+                       target_resolution_options(opts[:reader_handle], tgt, item_opts),
+                     do: resolve_target(tgt, item_opts)
+
+              case result do
                 {:ok, src, _} -> {:cont, {:ok, [src | acc]}}
                 {:error, reason} -> {:halt, {:error, reason}}
               end

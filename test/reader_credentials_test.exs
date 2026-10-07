@@ -93,4 +93,37 @@ defmodule ChatOverlay.ReaderCredentialsTest do
     assert {:ok, _} = Profiles.activate_oauth_readers("readera")
     assert {:ok, "token-a"} = Net.token(hd(Config.profile("readera")["sources"]))
   end
+
+  test "revocation survives demo transitions and rejects target resolution", %{source: source} do
+    assert {:ok, _} = link("readera", "token-a")
+    assert {:ok, _} = Profiles.unlink_account("readera", "twitch")
+
+    assert {:ok, _} =
+             Profiles.create_or_update(%{
+               "handle" => "readera",
+               "sources" => [Map.put(source, "mode", "demo")]
+             })
+
+    assert {:ok, _} = Profiles.create_or_update(%{"handle" => "readera", "sources" => [source]})
+    assert {:error, :configuration_error} = Net.token(hd(Config.profile("readera")["sources"]))
+
+    assert {:error, :not_linked} =
+             Profiles.create_or_update(%{"handle" => "readera", "target" => "readera"})
+
+    assert {:error, :not_linked} =
+             Profiles.create_or_update(%{
+               "handle" => "readera",
+               "sources" => [%{"platform" => "twitch", "target" => "readera"}]
+             })
+  end
+
+  test "fresh cache from previous binding cannot supply a new reader" do
+    assert {:ok, _} = link("readera", "token-old")
+    assert {:ok, "token-old"} = Net.token(hd(Config.profile("readera")["sources"]))
+    old_cache = :sys.get_state(Tokens).cache
+    assert {:ok, _} = link("readera", "token-new")
+    # Model the cache-publication interleaving before post-save invalidation.
+    :sys.replace_state(Tokens, &%{&1 | cache: old_cache})
+    assert {:ok, "token-new"} = Net.token(hd(Config.profile("readera")["sources"]))
+  end
 end

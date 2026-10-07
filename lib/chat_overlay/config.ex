@@ -51,7 +51,7 @@ defmodule ChatOverlay.Config do
   def handle?(x),
     do: is_binary(x) and byte_size(x) <= 40 and Regex.match?(~r/\A[a-z0-9][a-z0-9_-]{0,39}\z/, x)
 
-  @f2_profile_keys ~w(handle sources overlay_platforms linked_youtube capability_token_hash media can_upload storage_quota_bytes storage_used_bytes linked_accounts)
+  @f2_profile_keys ~w(handle sources overlay_platforms linked_youtube capability_token_hash media can_upload storage_quota_bytes storage_used_bytes linked_accounts reader_oauth_platforms)
 
   defp profile?(%{"handle" => handle, "sources" => sources} = p) when is_list(sources) do
     Enum.all?(Map.keys(p), &(&1 in @f2_profile_keys)) and
@@ -64,11 +64,18 @@ defmodule ChatOverlay.Config do
       capability_token_hash?(p) and
       media?(p) and
       upload_quota?(p) and
-      linked_accounts?(p) and
+      linked_accounts?(p) and reader_oauth_platforms?(p) and
       unique?(sources, & &1["platform"])
   end
 
   defp profile?(_), do: false
+
+  defp reader_oauth_platforms?(p) do
+    platforms = p["reader_oauth_platforms"] || []
+
+    is_list(platforms) and length(platforms) <= 2 and
+      Enum.all?(platforms, &(&1 in ["twitch", "youtube"])) and unique?(platforms, & &1)
+  end
 
   defp capability_token_hash?(p) do
     case p["capability_token_hash"] do
