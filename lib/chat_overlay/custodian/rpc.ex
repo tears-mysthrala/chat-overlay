@@ -52,6 +52,8 @@ defmodule ChatOverlay.Custodian.RPC do
         conn = %{
           conn
           | query_string: URI.encode_query(query),
+            # The mTLS peer identifies the frontend, not a local demo user.
+            remote_ip: {192, 0, 2, 1},
             req_headers: if(args["cursor"], do: [{"last-event-id", args["cursor"]}], else: []),
             req_cookies: %{"chat_overlay_session" => args["session"]},
             cookies: %{"chat_overlay_session" => args["session"]}

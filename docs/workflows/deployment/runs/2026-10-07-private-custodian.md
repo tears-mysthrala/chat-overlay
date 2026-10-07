@@ -105,3 +105,37 @@ acotado de readiness incluye ese error, sin reintentar mutaciones.
 Release8f4b1a79bcb5: aislamiento dos contenedores y smoke PASS;
 SBOM295 schema válido, cero pendientes y cuatro coincidencias cubiertas por
 VEX aprobado. Falta CI de las correcciones, revisión de su delta y producción.
+
+## Seguimiento local del fallo CI — 07-10-2026
+
+CI 2e96ed3: diez checks PASS. CodeRabbit pidió dos correcciones documentales,
+publicadas en 825866a y confirmadas en ambos hilos. Su revisión global del nuevo
+head quedó limitada por cuota. CI 37691378402/job113032126902: seed0 327 PASS;
+seed424242 326/327 PASS, fallo de liberación en la prueba de 100 streams mTLS.
+
+La reproducción local con lectura explícita del cierre también falló. El
+contexto SSE conservaba el peer del transporte, mientras las operaciones privadas
+reconstruyen un contexto sin excepción de acceso local. Se alineó ese contexto.
+La regresión ahora exige unauthorized y final HTTP de cada uno de los 100 streams
+tras revocar, con deadline compartido de 10 segundos, y mantiene la comprobación
+original de liberación natural. No reinicia ni vacía Admission.
+
+Validación local Linux/Docker, sin proveedores ni datos reales:
+- Suite completa: 327 PASS con seed0/max_cases1 y seed424242/max_cases16;
+  reportes en output/tests/local-sse-fixed, validador sin omisiones PASS.
+- Suite mTLS: 12 PASS; regresión de 100 streams PASS en seeds0/424242/910561.
+- Formato, compilación del producto sin warnings, diff, trazabilidad, estática
+  limitada y secretos PASS. Doce tests Python y VEX normal/optimizado PASS en
+  Linux; el intento Windows falló por ausencia de sh, no se cuenta como PASS.
+- Release90e3de9b3f2a: smoke y aislamiento de dos contenedores PASS; SBOM295
+  válido, cero hallazgos activos y cuatro coincidencias con VEX previo aprobado.
+- Validationce28f9786763: PostgreSQL26 PASS por seed, boot/write/restart PASS.
+
+El build conserva un warning heredado de Postgrex por xref deprecated; no es
+un warning del producto ni se ha suprimido. CodeRabbit CLI no está instalado.
+La terminal restringida falló antes del proceso; ejecución local autorizada
+fuera de ese helper funcionó. Los gates del pre-push se ejecutaron con Docker
+y Python por separado; no se declara ejecutado el hook bash del clon.
+CI y revisión del nuevo commit, firewall guest y OAuth/OBS/media reales quedan
+pendientes. No merge ni despliegue. Siguiente: publicar el ajuste y comprobar
+CI/revisión, resolviendo los hallazgos antes del corte.

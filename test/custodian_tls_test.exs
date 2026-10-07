@@ -309,19 +309,48 @@ defmodule ChatOverlay.Custodian.TLSTest do
 
         {:ok, conn, responses} = Mint.HTTP.recv(conn, 0, 3000)
         assert Enum.any?(responses, &match?({:status, ^ref, 200}, &1))
-        conn
+        {conn, ref}
       end)
 
     try do
       for _ <- 1..3 do
         assert {:ok, %{"kind" => "readiness", "ready" => true}} = Client.call(request())
       end
-    after
-      # Closing a socket is asynchronous; exercise the real revocation path and
-      # wait for these leases to disappear before the next test acquires slots.
+
       :ok = ChatOverlay.Session.revoke_token(session)
-      Enum.each(clients, &Mint.HTTP.close/1)
+      deadline = System.monotonic_time(:millisecond) + 10_000
+
+      for {conn, ref} <- clients do
+        assert revoked_stream_closed?(conn, ref, "", deadline)
+      end
+    after
+      # Drain the real revocation response before closing clients: otherwise
+      # server writes can still be in flight when admission is inspected.
+      Enum.each(clients, fn {conn, _ref} -> Mint.HTTP.close(conn) end)
       assert admission_released?(initial_leases, 100)
+    end
+  end
+
+  defp revoked_stream_closed?(conn, ref, received, deadline) do
+    remaining = deadline - System.monotonic_time(:millisecond)
+
+    if remaining <= 0 do
+      false
+    else
+      case Mint.HTTP.recv(conn, 0, remaining) do
+        {:ok, conn, responses} ->
+          bytes = for {:data, ^ref, bytes} <- responses, do: bytes
+          received = received <> IO.iodata_to_binary(bytes)
+
+          if Enum.any?(responses, &match?({:done, ^ref}, &1)) do
+            String.contains?(received, "unauthorized")
+          else
+            revoked_stream_closed?(conn, ref, received, deadline)
+          end
+
+        _ ->
+          false
+      end
     end
   end
 
