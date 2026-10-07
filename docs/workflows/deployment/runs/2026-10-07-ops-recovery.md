@@ -67,3 +67,12 @@ la prueba anterior en Docker Desktop no acreditaba esos permisos Linux. Se
 elimina el montaje completo y se envían únicamente metadatos de cuentas cifradas
 por stdin al proceso no root. El directorio privado no cambia permisos.
 Restore real con stdin: DB/conteos/RLS/medios/descifrado PASS; 8tests scripts PASS.
+
+CodeRabbit196a12d: confirmado residuo en claro del backup en Benten. El trap
+ahora retira los siete temporales propios en éxito/fallo y conserva ciphertext
+solo tras cifrado completo. Diez tests Linux PASS, incluidos éxito y fallo de
+cifrado con reanudación y limpieza. La copia real ya creada se verificó por
+SHA256 y sus temporales en Benten se retiraron; backup.cms conservado y readiness
+PASS. No se borraron datos activos ni copias cifradas. Comentarios adicionales:
+ADR anclado a rutas reales de supervisor/configuración/lectura de secretos;
+manifiestos malformados reciben error uniforme, sin ampliar formatos admitidos.

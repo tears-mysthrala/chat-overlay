@@ -9,6 +9,16 @@ credenciales PostgreSQL y coordinación de tokens. RLS y el proxy Cloudflare no
 separan esa superficie de la custodia de secretos. Un compromiso de ese proceso
 puede acceder a todos ellos. No se declara ARCH06 cerrado.
 
+Evidencia del checkout196a12d: `Application.start/2` en
+`lib/chat_overlay/application.ex` supervisa Bandit/Web, Profiles y Tokens en la
+misma aplicación/BEAM; `config/runtime.exs` configura los pools PostgreSQL desde
+CHAT_DB_RUNTIME_PASSWORD/CHAT_DB_BOOTSTRAP_PASSWORD; `OAuth.encryption_key/0`
+lee CHAT_ENCRYPTION_KEY, y `Profiles.get_linked_account_auth/2` descifra tokens
+en esa BEAM. Los OAuth client secrets se leen en `lib/chat_overlay/oauth.ex`.
+`deploy/benten/compose.yaml` entrega runtime.env a ese único servicio overlay.
+El coordinador multimedia sí es otro proceso systemd, con credencial separada;
+no conserva los client secrets OAuth ni sustituye la custodia del backend.
+
 Separar dos roles usando el mismo repo y las dependencias Elixir existentes:
 
 - Frente público: parsers HTTP acotados, frontend, SSE y eventos normalizados.

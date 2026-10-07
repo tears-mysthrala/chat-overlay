@@ -44,7 +44,10 @@ def check(bundle, work):
         raise ValueError('Incomplete manifest')
     checked = set()
     for line in entries:
-        digest, name = line.split('  ', 1)
+        parts = line.split('  ', 1)
+        if len(parts) != 2 or not re.fullmatch(r'[a-f0-9]{64}', parts[0]):
+            raise ValueError('Backup checksum mismatch')
+        digest, name = parts
         if name in checked or name not in FILES - {'SHA256SUMS'} or hashlib.sha256((work/name).read_bytes()).hexdigest() != digest:
             raise ValueError('Backup checksum mismatch')
         checked.add(name)
