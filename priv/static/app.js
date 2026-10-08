@@ -475,7 +475,7 @@
           if (regenerateStatus) {
             regenerateStatus.hidden = false;
             regenerateStatus.className = "feedback-msg";
-            regenerateStatus.textContent = "Regenerando capability token…";
+            regenerateStatus.textContent = "Preparando el nuevo enlace…";
           }
 
           const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/token/regenerate`, {
@@ -652,13 +652,25 @@
     async function loadProfiles() {
       try {
         const res = await fetch("/api/profiles");
+        if (res.status === 401 || res.status === 403) {
+          dashboard.hidden = true;
+          document.querySelector(".dashboard-nav").hidden = true;
+          document.getElementById("signin-section").hidden = false;
+          return;
+        }
         if (!res.ok) throw new Error("Error cargando perfiles");
+        dashboard.hidden = false;
+        document.querySelector(".dashboard-nav").hidden = false;
+        document.getElementById("signin-section").hidden = true;
         const data = await res.json();
         currentProfiles = data.profiles || [];
         renderProfiles(currentProfiles);
         updateObsSelect(currentProfiles);
       } catch {
-        if (loadingProfiles) loadingProfiles.textContent = "Error al conectar con la API.";
+        if (loadingProfiles) {
+          loadingProfiles.hidden = false;
+          loadingProfiles.textContent = "No se pudo cargar el panel. Comprueba tu conexión y vuelve a cargar la página.";
+        }
       }
     }
 
@@ -717,16 +729,23 @@
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
         copyBtn.className = "btn-action";
-        copyBtn.textContent = "Copiar Overlay OBS";
+        copyBtn.textContent = sessionStorage.getItem(`obs_token_${profile.handle}`) ? "Copiar enlace OBS" : "Gestionar enlace OBS";
         copyBtn.addEventListener("click", async () => {
           const cachedToken = sessionStorage.getItem(`obs_token_${profile.handle}`);
-          const fullUrl = cachedToken
-            ? `${location.origin}${profile.overlay_url}?token=${encodeURIComponent(cachedToken)}`
-            : `${location.origin}${profile.overlay_url}`;
+          if (!cachedToken) {
+            obsProfileSelect.value = profile.handle;
+            syncProfileSelection();
+            document.getElementById("obs-management-section").scrollIntoView({ block: "start" });
+            regenerateObsTokenBtn.focus();
+            obsCopyStatus.hidden = false;
+            obsCopyStatus.textContent = "Este navegador no conserva el enlace privado. Si necesitas uno nuevo, regenera el enlace y actualiza la fuente de OBS.";
+            return;
+          }
+          const fullUrl = `${location.origin}${profile.overlay_url}?token=${encodeURIComponent(cachedToken)}`;
           try {
             await navigator.clipboard.writeText(fullUrl);
             copyBtn.textContent = "¡Copiado!";
-            setTimeout(() => { copyBtn.textContent = "Copiar Overlay OBS"; }, 2000);
+            setTimeout(() => { copyBtn.textContent = "Copiar enlace OBS"; }, 2000);
           } catch {
             prompt("Copia la URL del overlay:", fullUrl);
           }
@@ -994,6 +1013,25 @@
       }
     }
 
+    document.getElementById("signin-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const feedback = document.getElementById("signin-feedback");
+      const handle = document.getElementById("signin-handle").value.trim().toLowerCase();
+      const provider = event.submitter?.value;
+      if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(handle) || !["twitch", "youtube"].includes(provider)) return;
+      const buttons = [...event.currentTarget.querySelectorAll("button")];
+      buttons.forEach(button => { button.disabled = true; });
+      feedback.textContent = "Preparando el acceso…";
+      try {
+        const response = await fetch(`/api/oauth/authorize/${provider}?handle=${encodeURIComponent(handle)}`);
+        const result = await response.json();
+        if (!response.ok || !result.ok || !result.url) throw new Error("No se pudo iniciar el acceso. Comprueba el perfil y que esa cuenta esté vinculada.");
+        location.assign(result.url);
+      } catch (error) {
+        feedback.textContent = error.message;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    });
     loadSession();
     loadProfiles();
   }

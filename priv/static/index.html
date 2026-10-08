@@ -8,10 +8,11 @@
   <script src="/assets/app.js" defer></script>
 </head>
 <body class="home">
-  <main class="welcome">
+  <a class="skip-link" href="#main-content">Ir al contenido</a>
+  <main class="welcome" id="main-content" tabindex="-1">
     <div class="wordmark"><span class="mark" aria-hidden="true">≋</span> Chat Overlay</div>
     <h1>La conversación,<br>en un solo lugar.</h1>
-    <p class="intro">Twitch, YouTube y Kick. Detección automática en caliente, sin editar JSON ni reiniciar el servidor.</p>
+    <p class="intro">Reúne el chat de Twitch y YouTube y llévalo a tu directo con OBS.</p>
 
     <div id="session-banner" class="session-banner" hidden>
       <span class="session-user-icon" aria-hidden="true">👤</span>
@@ -19,11 +20,22 @@
       <button type="button" id="session-logout-btn" class="btn-secondary btn-sm">Cerrar sesión</button>
     </div>
 
+    <nav class="dashboard-nav" aria-label="Secciones del panel"><a href="#profiles-section">Canales</a><a href="#obs-management-section">OBS</a><a href="#accounts-management-section">Cuentas</a><a href="#alerts-management-section">Alertas</a></nav>
+    <section id="signin-section" class="dashboard-section" hidden>
+      <h2 class="section-title">Entra en tu panel</h2>
+      <p class="hint">Indica tu perfil y entra con una de sus cuentas vinculadas. Para abrir el chat, usa el enlace privado que ya tienes.</p>
+      <form id="signin-form">
+        <label for="signin-handle">Nombre del perfil</label>
+        <input id="signin-handle" required pattern="[a-z0-9][a-z0-9_\-]{0,39}" maxlength="40" autocomplete="username">
+        <div class="form-actions account-actions"><button name="provider" value="twitch" class="btn-primary">Entrar con Twitch</button><button name="provider" value="youtube">Entrar con YouTube</button></div>
+        <p id="signin-feedback" role="status"></p>
+      </form>
+    </section>
     <div id="dashboard">
-      <section class="dashboard-section">
+      <section class="dashboard-section" id="profiles-section">
         <h2 class="section-title">Canales y Perfiles Activos</h2>
         <div id="profiles-container">
-          <p id="loading-profiles" class="hint">Cargando canales...</p>
+          <p id="loading-profiles" class="hint" role="status">Cargando canales...</p>
           <div id="empty-profiles" class="empty-state" hidden>
             No hay canales configurados en este momento. Añade uno a continuación para empezar.
           </div>
@@ -33,7 +45,7 @@
 
       <section class="dashboard-section profile-management" id="obs-management-section">
         <h2 class="section-title">Enlace para OBS Studio</h2>
-        <p class="hint">Fuente de navegador protegida con capability token único (SEC-14). Mantén este enlace seguro.</p>
+        <p class="hint">Pega este enlace privado en una fuente Navegador de OBS. Quien lo tenga podrá leer el chat.</p>
 
         <div class="form-group" id="profile-selector-group">
           <label for="obs-profile-select">Perfil a gestionar:</label>
@@ -41,7 +53,7 @@
         </div>
 
         <div class="obs-url-card">
-          <label for="obs-overlay-url">URL del Overlay con Capability Token</label>
+          <label for="obs-overlay-url">Enlace privado del overlay</label>
           <div class="input-row">
             <input id="obs-overlay-url" type="text" readonly placeholder="https://.../overlay/canal?token=..." autocomplete="off" spellcheck="false">
             <button type="button" id="copy-obs-link-btn" class="btn-primary">Copiar enlace para OBS</button>
@@ -63,8 +75,8 @@
       </section>
 
       <section class="dashboard-section accounts-section" id="accounts-management-section">
-        <h2 class="section-title">Cuentas de Plataformas Vinculadas (OAuth 2.0 PKCE)</h2>
-        <p class="hint">Vincula interactivamente tus cuentas oficiales de Twitch y YouTube. Las credenciales se custodian cifradas con AEAD (AES-256-GCM) sin secretos en plano (SEC-14, SEC-15).</p>
+        <h2 class="section-title">Cuentas vinculadas</h2>
+        <p class="hint">Vincula tus cuentas de Twitch y YouTube para leer sus chats.</p>
 
         <div class="accounts-grid">
           <!-- Tarjeta Twitch -->
@@ -237,7 +249,7 @@
       </section>
     </div>
 
-    <div class="platform-key"><span>Twitch</span><span>YouTube</span><span>Kick</span></div>
+    <div class="platform-key"><span>Twitch</span><span>YouTube</span></div>
     <p class="privacy-note">Chat de solo lectura. Cuentas vinculadas y ajustes privados; historial de chat temporal en memoria.</p>
   </main>
 </body>

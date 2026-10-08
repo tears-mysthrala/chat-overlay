@@ -52,6 +52,7 @@ const deadline = setTimeout(() => {
         page.setDefaultNavigationTimeout(15_000);
         stage = `${viewport.width}:login`;
         await page.goto(origin, { waitUntil: "domcontentloaded" });
+        const anonymous = await page.evaluate(checks, "anonymous");
         const login = await page.evaluate(checks, "login");
         if (login.login !== true) throw new Error("login");
         await page.reload({ waitUntil: "domcontentloaded" });
@@ -65,7 +66,7 @@ const deadline = setTimeout(() => {
         ]);
         stage = `${viewport.width}:logged-out-checks`;
         const logout = await page.evaluate(checks, "logged-out");
-        evidence.scenarios.push({ viewport, login, checks: result, logout, pageErrors, cspViolations, externalRequests });
+        evidence.scenarios.push({ viewport, anonymous, login, checks: result, logout, pageErrors, cspViolations, externalRequests });
         stage = `${viewport.width}:runtime-and-isolation`;
         if (pageErrors || cspViolations || externalRequests) throw new Error("browser isolation or runtime failure");
       } finally {

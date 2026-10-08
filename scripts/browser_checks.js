@@ -11,6 +11,15 @@ async function f2BrowserChecks(stage) {
     throw new Error("UI did not settle within five seconds");
   };
   assert(location.hostname === "localhost" && location.port === "4143", "Isolated fixture origin required");
+  if (stage === "anonymous") {
+    await wait(() => !document.getElementById("signin-section").hidden);
+    assert(document.getElementById("dashboard").hidden, "Private controls shown without session");
+    assert(document.querySelector(".dashboard-nav").hidden, "Private navigation shown without session");
+    assert(document.getElementById("signin-form").checkValidity() === false, "Profile required for sign-in");
+    assert(!document.body.innerText.includes("Error al conectar con la API"), "Signed-out state treated as API error");
+    assert(document.documentElement.scrollWidth <= innerWidth, "Anonymous horizontal overflow");
+    return { signedOutState: true, privateControlsHidden: true };
+  }
   if (stage === "login") {
     const auth = await (await fetch("/api/oauth/authorize/twitch?handle=alice")).json();
     assert(auth.ok, "Synthetic OAuth start failed");
@@ -31,6 +40,14 @@ async function f2BrowserChecks(stage) {
   const handles = [...document.querySelectorAll("#obs-profile-select option")].map(x => x.value);
   assert(JSON.stringify(handles) === '["alice"]', "Profile isolation failed in UI");
   assert(!document.cookie.includes("chat_overlay_session"), "Session cookie exposed to script");
+  if (!sessionStorage.getItem("obs_token_alice")) {
+    const manage = [...document.querySelectorAll("#profiles-list button")].find(button => button.textContent === "Gestionar enlace OBS");
+    assert(manage, "Missing OBS management action without cached capability");
+    manage.click();
+    assert(document.activeElement.id === "regenerate-obs-token-btn", "OBS management did not focus next action");
+    assert(!document.getElementById("obs-copy-status").hidden, "Missing private-link recovery explanation");
+  }
+
   const forbidden = await fetch("/api/profiles/bob/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   assert(forbidden.status === 403, "Cross-profile mutation allowed");
   for (const id of ["audio-type-upload", "image-type-upload", "audio-file-input", "image-file-input"]) {
