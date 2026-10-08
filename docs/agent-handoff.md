@@ -1,5 +1,11 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> Candidata UI actual: Refs #39/#43, PR #68,
+> rama `chore/39-custodian-cutover-ui`. `mix check`:327 PASS;
+> HTTP/F2/sesiones/API:42 PASS; scripts de trazabilidad/secretos/estática PASS;
+> smoke/auditoría de imagen y navegador sintético desktop/móvil PASS.
+> CI y revisión del último head pendientes; diseño todavía no desplegado.
+>
 > 08-10-2026: PR #67 integrada (cf2d3d3), CodeRabbit APPROVED y diez checks
 > PASS sobre 2ea6f1e. Custodio/frontend desplegados en Benten9502 con imagen
 > revisada90e3de9b; secretos/red/procesos del frontend aislados y comprobados,

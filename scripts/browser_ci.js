@@ -50,6 +50,15 @@ const deadline = setTimeout(() => {
         page.on("pageerror", () => pageErrors++);
         page.setDefaultTimeout(10_000);
         page.setDefaultNavigationTimeout(15_000);
+        for (const fault of ["network", "server", "invalid-json"]) {
+          stage = `${viewport.width}:load-error:${fault}`;
+          await page.route("**/api/profiles", route => fault === "network" ? route.abort("failed") : route.fulfill({ status: fault === "server" ? 503 : 200, contentType: "application/json", body: "not-json" }));
+          await page.goto(origin, { waitUntil: "domcontentloaded" });
+          await page.evaluate(checks, "load-error");
+          await page.unroute("**/api/profiles");
+          await page.locator("#retry-dashboard").click();
+          await page.evaluate(checks, "anonymous");
+        }
         stage = `${viewport.width}:login`;
         await page.goto(origin, { waitUntil: "domcontentloaded" });
         const anonymous = await page.evaluate(checks, "anonymous");

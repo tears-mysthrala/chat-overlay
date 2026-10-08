@@ -11,11 +11,23 @@ async function f2BrowserChecks(stage) {
     throw new Error("UI did not settle within five seconds");
   };
   assert(location.hostname === "localhost" && location.port === "4143", "Isolated fixture origin required");
+  if (stage === "load-error") {
+    await wait(() => !document.getElementById("retry-dashboard").hidden);
+    assert(document.getElementById("dashboard").hidden, "Private controls shown after load failure");
+    assert(document.querySelector(".dashboard-nav").hidden, "Private navigation shown after load failure");
+    assert(!document.getElementById("signin-section").hidden, "Sign-in unavailable after load failure");
+    assert(!document.getElementById("dashboard-load-status").hidden, "Load failure explanation missing");
+    return { loadFailureHidden: true, recoveryAvailable: true };
+  }
   if (stage === "anonymous") {
     await wait(() => !document.getElementById("signin-section").hidden);
     assert(document.getElementById("dashboard").hidden, "Private controls shown without session");
     assert(document.querySelector(".dashboard-nav").hidden, "Private navigation shown without session");
     assert(document.getElementById("signin-form").checkValidity() === false, "Profile required for sign-in");
+    const handle = document.getElementById("signin-handle");
+    handle.value = "MyChannel";
+    assert(handle.checkValidity(), "Mixed-case profile rejected before normalization");
+    handle.value = "";
     assert(!document.body.innerText.includes("Error al conectar con la API"), "Signed-out state treated as API error");
     assert(document.documentElement.scrollWidth <= innerWidth, "Anonymous horizontal overflow");
     return { signedOutState: true, privateControlsHidden: true };
@@ -41,8 +53,10 @@ async function f2BrowserChecks(stage) {
   assert(JSON.stringify(handles) === '["alice"]', "Profile isolation failed in UI");
   assert(!document.cookie.includes("chat_overlay_session"), "Session cookie exposed to script");
   if (!sessionStorage.getItem("obs_token_alice")) {
-    const manage = [...document.querySelectorAll("#profiles-list button")].find(button => button.textContent === "Gestionar enlace OBS");
+    const manage = document.querySelector('#profiles-list button[data-action="obs-link"][data-profile-handle="alice"]');
     assert(manage, "Missing OBS management action without cached capability");
+    const input = document.getElementById("obs-overlay-url");
+    assert(input.value === "" || input.value.includes("••••"), "Tokenless URL advertised as private");
     manage.click();
     assert(document.activeElement.id === "regenerate-obs-token-btn", "OBS management did not focus next action");
     assert(!document.getElementById("obs-copy-status").hidden, "Missing private-link recovery explanation");

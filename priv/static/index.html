@@ -20,18 +20,20 @@
       <button type="button" id="session-logout-btn" class="btn-secondary btn-sm">Cerrar sesión</button>
     </div>
 
-    <nav class="dashboard-nav" aria-label="Secciones del panel"><a href="#profiles-section">Canales</a><a href="#obs-management-section">OBS</a><a href="#accounts-management-section">Cuentas</a><a href="#alerts-management-section">Alertas</a></nav>
+    <p id="dashboard-load-status" class="hint" role="status">Comprobando el acceso al panel…</p>
+    <button id="retry-dashboard" type="button" hidden>Volver a intentar</button>
+    <nav hidden class="dashboard-nav" aria-label="Secciones del panel"><a href="#profiles-section">Canales</a><a href="#obs-management-section">OBS</a><a href="#accounts-management-section">Cuentas</a><a href="#alerts-management-section">Alertas</a></nav>
     <section id="signin-section" class="dashboard-section" hidden>
       <h2 class="section-title">Entra en tu panel</h2>
       <p class="hint">Indica tu perfil y entra con una de sus cuentas vinculadas. Para abrir el chat, usa el enlace privado que ya tienes.</p>
       <form id="signin-form">
         <label for="signin-handle">Nombre del perfil</label>
-        <input id="signin-handle" required pattern="[a-z0-9][a-z0-9_\-]{0,39}" maxlength="40" autocomplete="username">
+        <input id="signin-handle" required pattern="[a-zA-Z0-9][a-zA-Z0-9_\-]{0,39}" maxlength="40" autocomplete="username">
         <div class="form-actions account-actions"><button name="provider" value="twitch" class="btn-primary">Entrar con Twitch</button><button name="provider" value="youtube">Entrar con YouTube</button></div>
         <p id="signin-feedback" role="status"></p>
       </form>
     </section>
-    <div id="dashboard">
+    <div id="dashboard" hidden>
       <section class="dashboard-section" id="profiles-section">
         <h2 class="section-title">Canales y Perfiles Activos</h2>
         <div id="profiles-container">

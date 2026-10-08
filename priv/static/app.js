@@ -132,7 +132,7 @@
       } else if (p.has_capability_token) {
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=••••••••••••••••••••••••••••••••`;
       } else {
-        obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}`;
+        obsOverlayUrl.value = "";
       }
 
       // Populate storage quota
@@ -652,25 +652,34 @@
     async function loadProfiles() {
       try {
         const res = await fetch("/api/profiles");
+        const status = document.getElementById("dashboard-load-status");
+        const retry = document.getElementById("retry-dashboard");
+        retry.hidden = true;
         if (res.status === 401 || res.status === 403) {
+          status.hidden = true;
           dashboard.hidden = true;
           document.querySelector(".dashboard-nav").hidden = true;
           document.getElementById("signin-section").hidden = false;
           return;
         }
         if (!res.ok) throw new Error("Error cargando perfiles");
+        const data = await res.json();
+        if (!Array.isArray(data.profiles)) throw new Error("Invalid profile response");
+        currentProfiles = data.profiles;
         dashboard.hidden = false;
         document.querySelector(".dashboard-nav").hidden = false;
         document.getElementById("signin-section").hidden = true;
-        const data = await res.json();
-        currentProfiles = data.profiles || [];
+        status.hidden = true;
         renderProfiles(currentProfiles);
         updateObsSelect(currentProfiles);
       } catch {
-        if (loadingProfiles) {
-          loadingProfiles.hidden = false;
-          loadingProfiles.textContent = "No se pudo cargar el panel. Comprueba tu conexión y vuelve a cargar la página.";
-        }
+        dashboard.hidden = true;
+        document.querySelector(".dashboard-nav").hidden = true;
+        document.getElementById("signin-section").hidden = false;
+        const status = document.getElementById("dashboard-load-status");
+        status.hidden = false;
+        status.textContent = "No se pudo comprobar el acceso al panel. Comprueba tu conexión y vuelve a intentarlo.";
+        document.getElementById("retry-dashboard").hidden = false;
       }
     }
 
@@ -729,6 +738,8 @@
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
         copyBtn.className = "btn-action";
+        copyBtn.dataset.action = "obs-link";
+        copyBtn.dataset.profileHandle = profile.handle;
         copyBtn.textContent = sessionStorage.getItem(`obs_token_${profile.handle}`) ? "Copiar enlace OBS" : "Gestionar enlace OBS";
         copyBtn.addEventListener("click", async () => {
           const cachedToken = sessionStorage.getItem(`obs_token_${profile.handle}`);
@@ -1031,6 +1042,11 @@
         feedback.textContent = error.message;
         buttons.forEach(button => { button.disabled = false; });
       }
+    });
+    document.getElementById("retry-dashboard").addEventListener("click", () => {
+      document.getElementById("retry-dashboard").hidden = true;
+      document.getElementById("dashboard-load-status").textContent = "Comprobando el acceso al panel…";
+      loadProfiles();
     });
     loadSession();
     loadProfiles();
