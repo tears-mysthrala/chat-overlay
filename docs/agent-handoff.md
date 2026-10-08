@@ -1,22 +1,14 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
-> Candidata UI actual: Refs #39/#43, PR #68,
-> rama `chore/39-custodian-cutover-ui`. `mix check`:327 PASS;
-> HTTP/F2/sesiones/API:42 PASS; scripts de trazabilidad/secretos/estática PASS;
-> smoke/auditoría de imagen y navegador sintético desktop/móvil PASS.
-> CI y revisión del último head pendientes; diseño todavía no desplegado.
+> Estado vigente 08-10-2026: PR #68 integrada en main640ef84 y desplegada.
+> OAuth Twitch, mensaje real en OBS, alerta visual/audio y revocación probados.
+> Callback nuevo Google/YouTube posterior al corte pendiente; CSP del borde #69.
+> Backlog reconciliado en [docs/backlog.md](backlog.md) y #55. Carga4/24 h #34
+> aún sin informe final. Deprecación de Postgrex seguida en #70.
+> Continuación: docs/55-debt-closeout; registro en
+> [cierre de deuda](workflows/deployment/runs/2026-10-08-debt-closeout.md).
 >
-> 08-10-2026: PR #67 integrada (cf2d3d3), CodeRabbit APPROVED y diez checks
-> PASS sobre 2ea6f1e. Custodio/frontend desplegados en Benten9502 con imagen
-> revisada90e3de9b; secretos/red/procesos del frontend aislados y comprobados,
-> PostgreSQL/coordinador preservados (1 perfil/2 cuentas/2 objetos).
-> HTTPS readiness200 y acceso anónimo401. OAuth/OBS autenticados posteriores
-> al corte todavía NOT TESTED. Diseño web/chat corregido en candidata local;
-> Auto Review limpio sobre el diff tras autorización del operador; sin
-> publicación ni despliegue de ese diff. Siguiente paso: publicar y comprobar
-> CI/revisión antes del merge/despliegue; después OAuth/OBS reales.
-> Detalle: docs/workflows/deployment/runs/2026-10-08-custodian-cutover-ui.md.
-
+> Los registros inferiores son históricos; sus pendientes no sustituyen el estado vigente.
 > 07-10-2026: preview manual #64 implementado en feat/64-obs-preview y desplegado
 > en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,
 > revisión oficial OpenAI e28c1e39 completada sin vulnerabilidades del diff.
