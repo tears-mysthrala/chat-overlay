@@ -16,6 +16,7 @@
     return;
   }
 
+  /** Initialize dashboard controls; profile loading verifies access before revealing them. */
   function initDashboard() {
     const profilesList = document.getElementById("profiles-list");
     const emptyProfiles = document.getElementById("empty-profiles");
@@ -119,6 +120,7 @@
       return currentProfiles.find(p => p.handle === obsProfileSelect.value) || null;
     }
 
+    /** Refresh selected-profile controls without presenting a tokenless URL as a private OBS link. */
     function syncProfileSelection() {
       const p = getSelectedProfile();
       if (!p) {
@@ -649,6 +651,7 @@
       });
     }
 
+    /** Load authorized profiles, hiding private controls on failure and exposing a retry action. */
     async function loadProfiles() {
       try {
         const res = await fetch("/api/profiles");
@@ -683,6 +686,9 @@
       }
     }
 
+    /** Render profile actions and guide OBS-link recovery when this browser lacks a cached token.
+     * @param {Array<object>} profiles Authorized profiles returned by the profiles endpoint.
+     */
     function renderProfiles(profiles) {
       if (loadingProfiles) loadingProfiles.hidden = true;
       if (!profilesList) return;

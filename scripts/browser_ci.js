@@ -12,6 +12,7 @@ const origin = "http://localhost:4143";
 const evidence = { passed: false, scenarios: [] };
 let stage = "launch";
 let browser;
+/** Persist bounded browser evidence for the CI artifact, including the failing stage when applicable. */
 function report() {
   mkdirSync("output/browser", { recursive: true });
   writeFileSync("output/browser/result.json", JSON.stringify({ ...evidence, stage }, null, 2) + "\n");

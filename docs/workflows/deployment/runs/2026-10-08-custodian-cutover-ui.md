@@ -40,6 +40,8 @@ Validación local final y Auto Review terminados. Publicar PR no draft, verifica
 
 ## Corrección de revisión PR #68
 
+CodeRabbit aprobó `8779a39` el08-10-2026 a06:45:58UTC; diez checks PASS y cinco hilos resueltos. Persistía un aviso de docstrings16,67% sobre seis funciones de tres archivos. Se documentan las funciones del dashboard y los drivers de navegador, sin cambiar comportamiento. Sintaxis Node de los tres archivos y `git diff --check` PASS. El nuevo delta documental requiere CI y revisión; la aprobación y la imagen anteriores no acreditan ese head nuevo.
+
 CodexP2 confirmado: controles ocultos en HTML inicialmente; JSON se valida antes de mostrar el panel. Fallos de red/503/JSON inválido muestran acceso y recuperación, con reintento. Browser CI cubre los tres errores y regreso al estado anónimo.
 
 CodeRabbit: handoff identifica PR/rama/issues/comandos; campo OBS vacío cuando falta capability; patrón de entrada admite mayúsculas y conserva normalización; test de recuperación usa atributos estables. No se cambió el contrato servidor de acceso a perfiles sin capability.

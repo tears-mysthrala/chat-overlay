@@ -1,6 +1,10 @@
 // Evaluate this function in the native preview on the isolated browser_fixture server.
 // Run ('login'), reload the page, run ('verify'), then click logout and run ('logged-out').
 // Uses synthetic fixtures only; returns booleans/statuses, never tokens or signed URLs.
+/** Run one isolated fixture stage, including anonymous access, load failures and private-link recovery.
+ * @param {string} stage Scenario stage selected by the browser driver.
+ * @returns {Promise<object>} Assertions recorded as evidence; rejects when a check fails.
+ */
 async function f2BrowserChecks(stage) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const wait = async (predicate) => {
