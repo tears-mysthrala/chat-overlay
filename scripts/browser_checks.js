@@ -1,6 +1,10 @@
 // Evaluate this function in the native preview on the isolated browser_fixture server.
 // Run ('login'), reload the page, run ('verify'), then click logout and run ('logged-out').
 // Uses synthetic fixtures only; returns booleans/statuses, never tokens or signed URLs.
+/** Run one isolated fixture stage, including anonymous access, load failures and private-link recovery.
+ * @param {string} stage Scenario stage selected by the browser driver.
+ * @returns {Promise<object>} Assertions recorded as evidence; rejects when a check fails.
+ */
 async function f2BrowserChecks(stage) {
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const wait = async (predicate) => {
@@ -11,6 +15,27 @@ async function f2BrowserChecks(stage) {
     throw new Error("UI did not settle within five seconds");
   };
   assert(location.hostname === "localhost" && location.port === "4143", "Isolated fixture origin required");
+  if (stage === "load-error") {
+    await wait(() => !document.getElementById("retry-dashboard").hidden);
+    assert(document.getElementById("dashboard").hidden, "Private controls shown after load failure");
+    assert(document.querySelector(".dashboard-nav").hidden, "Private navigation shown after load failure");
+    assert(!document.getElementById("signin-section").hidden, "Sign-in unavailable after load failure");
+    assert(!document.getElementById("dashboard-load-status").hidden, "Load failure explanation missing");
+    return { loadFailureHidden: true, recoveryAvailable: true };
+  }
+  if (stage === "anonymous") {
+    await wait(() => !document.getElementById("signin-section").hidden);
+    assert(document.getElementById("dashboard").hidden, "Private controls shown without session");
+    assert(document.querySelector(".dashboard-nav").hidden, "Private navigation shown without session");
+    assert(document.getElementById("signin-form").checkValidity() === false, "Profile required for sign-in");
+    const handle = document.getElementById("signin-handle");
+    handle.value = "MyChannel";
+    assert(handle.checkValidity(), "Mixed-case profile rejected before normalization");
+    handle.value = "";
+    assert(!document.body.innerText.includes("Error al conectar con la API"), "Signed-out state treated as API error");
+    assert(document.documentElement.scrollWidth <= innerWidth, "Anonymous horizontal overflow");
+    return { signedOutState: true, privateControlsHidden: true };
+  }
   if (stage === "login") {
     const auth = await (await fetch("/api/oauth/authorize/twitch?handle=alice")).json();
     assert(auth.ok, "Synthetic OAuth start failed");
@@ -31,6 +56,16 @@ async function f2BrowserChecks(stage) {
   const handles = [...document.querySelectorAll("#obs-profile-select option")].map(x => x.value);
   assert(JSON.stringify(handles) === '["alice"]', "Profile isolation failed in UI");
   assert(!document.cookie.includes("chat_overlay_session"), "Session cookie exposed to script");
+  if (!sessionStorage.getItem("obs_token_alice")) {
+    const manage = document.querySelector('#profiles-list button[data-action="obs-link"][data-profile-handle="alice"]');
+    assert(manage, "Missing OBS management action without cached capability");
+    const input = document.getElementById("obs-overlay-url");
+    assert(input.value === "" || input.value.includes("••••"), "Tokenless URL advertised as private");
+    manage.click();
+    assert(document.activeElement.id === "regenerate-obs-token-btn", "OBS management did not focus next action");
+    assert(!document.getElementById("obs-copy-status").hidden, "Missing private-link recovery explanation");
+  }
+
   const forbidden = await fetch("/api/profiles/bob/media", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   assert(forbidden.status === 403, "Cross-profile mutation allowed");
   for (const id of ["audio-type-upload", "image-type-upload", "audio-file-input", "image-file-input"]) {

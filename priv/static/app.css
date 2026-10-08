@@ -4,7 +4,7 @@
 .workspace { display:grid; grid-template-columns:300px minmax(0,800px); gap:36px; max-width:1220px; margin:0 auto; padding:36px 28px; height:100dvh } aside { padding-top:4px; display:flex; flex-direction:column; min-height:0; overflow-y:auto } aside h1 { margin:34px 0 8px; font-size:28px; overflow-wrap:anywhere } #connection { color:var(--muted); margin:0 0 24px } #source-status { display:grid; gap:16px; padding:22px 0; border-block:1px solid var(--line) } .source { display:grid; grid-template-columns:1fr auto; gap:4px 12px; font-size:14px } .source strong { font-size:16px; font-weight:600 } .source small { color:var(--muted); grid-column:1/-1 } .source[data-platform=twitch] strong { color:var(--twitch) } .source[data-platform=youtube] strong { color:var(--youtube) } .source[data-platform=kick] strong { color:var(--kick) } .tools { display:grid; gap:16px; margin-top:28px } .tools a { text-align:center; font-size:14px } #copy-status { margin:0; font-size:14px } .help { margin-top:28px; color:var(--muted); font-size:14px } summary { cursor:pointer; color:var(--ink) } .retention { color:var(--muted); font-size:13px; margin-top:auto; padding-top:36px } #demo-notice { border-left:3px solid var(--accent); padding:8px 12px; background:var(--panel); font-size:14px }
 .conversation { position:relative; min-width:0; min-height:0; display:flex; flex-direction:column; background:#12212d; border:1px solid var(--line); border-radius:14px; overflow:hidden } .conversation-header { padding:20px 24px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; gap:16px } .conversation-header h2 { font-size:18px; margin:0; font-weight:600 } #message-count { font-size:13px; color:var(--muted) } #messages { flex:1; overflow:auto; list-style:none; margin:0; padding:16px 24px; overscroll-behavior:contain; scrollbar-color:var(--line) transparent } .message { padding:12px 0; border-bottom:1px solid #263847; overflow-wrap:anywhere; unicode-bidi:plaintext } .message-meta { display:flex; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:5px } .platform { font-size:11px; font-weight:650; border-radius:4px; padding:1px 5px; color:#172635; background:var(--twitch) } [data-platform=youtube] .platform { background:var(--youtube) } [data-platform=kick] .platform { background:var(--kick) } .author { font-size:15px; font-weight:650 } time { color:var(--muted); font-size:12px; margin-left:auto } .message p { white-space:pre-wrap; margin:0; line-height:1.55 } .emote { display:inline-block; vertical-align:middle; width:28px; height:28px; object-fit:contain; margin:0 2px } .empty { margin:auto; padding:48px 24px; max-width:440px; text-align:center; color:var(--muted) } .empty>span { font-size:64px; color:#688ea5 } .empty h2 { font-size:23px; font-weight:500; color:var(--ink) } .empty p { font-size:15px } .empty:not([hidden]) + #messages { flex:0; padding:0 } .chat-footer { border-top:1px solid var(--line); padding:14px 20px; display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--muted); gap:12px } .chat-footer button { font-size:12px; padding:6px 10px } #overlay-state { padding:0 20px; font-size:13px; color:var(--muted) }
 body.overlay { background:transparent; color:#fff } .overlay .workspace { display:block; margin:0; padding:12px; max-width:none; height:100dvh } .overlay .reader-chrome,.overlay .conversation-header,.overlay .empty { display:none!important } .overlay .conversation { height:100%; background:transparent; border:0; border-radius:0; justify-content:flex-end } .overlay #messages { flex:0 1 auto; padding:0; scrollbar-width:none; overflow:hidden } .overlay .message { background:rgba(18,33,45,.92); padding:12px 16px; margin:8px 0; border:0; border-left:3px solid var(--twitch); border-radius:4px 10px 10px 4px } .overlay .message[data-platform=youtube] { border-left-color:var(--youtube) } .overlay .message[data-platform=kick] { border-left-color:var(--kick) } .overlay .message p { font-size:20px; line-height:1.4 } .overlay .emote { width:36px; height:36px } .overlay time { display:none } .overlay #overlay-state:not(:empty) { align-self:flex-end; background:rgba(18,33,45,.9); padding:5px 10px; border-radius:5px; color:white }
-@media(max-width:760px) { .workspace { display:flex; flex-direction:column; height:auto; min-height:100dvh; padding:18px; gap:20px } aside { overflow:visible } aside h1 { margin-top:18px } #source-status { display:flex; flex-wrap:wrap; gap:20px } .tools { grid-template-columns:1fr 1fr; align-items:center; margin-top:16px } .retention,.help { display:none } .conversation { height:70dvh; min-height:420px } .welcome { padding:40px 22px } .input-row { flex-direction:column } .chat-footer>span { display:none } }
+@media(max-width:760px) { .workspace { display:flex; flex-direction:column; height:auto; min-height:100dvh; padding:18px; gap:20px } aside { overflow:visible } aside h1 { margin-top:18px } #source-status { display:flex; flex-wrap:wrap; gap:20px } .tools { grid-template-columns:1fr 1fr; align-items:center; margin-top:16px } .retention { margin-top:0; padding-top:16px } .help { margin-top:16px } .conversation { height:70dvh; min-height:420px } .welcome { padding:40px 22px } .input-row { flex-direction:column } .chat-footer>span { display:none } }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important } }
 .dashboard-section { margin-top:36px; padding:24px; background:var(--panel); border:1px solid var(--line); border-radius:12px }
 .section-title { font-size:20px; font-weight:650; margin:0 0 16px; color:var(--ink) }
@@ -114,7 +114,7 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 
 .accounts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 16px;
   margin-top: 14px;
 }
@@ -240,3 +240,32 @@ select { font:inherit; color:var(--ink); background:#12212d; border:1px solid #6
 
 
 .media-preview { position: fixed; inset: 15% auto auto 50%; transform: translateX(-50%); width: 224px; height: 224px; object-fit: contain; z-index: 10; }
+
+/* Resilient creator and reader layouts; OBS keeps its transparent surface. */
+.home .welcome { max-width:1100px; padding-top:40px }
+.home .welcome h1 { font-size:clamp(32px,5vw,52px); margin:28px 0 16px; letter-spacing:-1px }
+.home .intro { max-width:660px; margin-bottom:28px }
+.dashboard-nav { display:flex; flex-wrap:wrap; gap:8px 24px; padding:16px 0; border-block:1px solid var(--line) }
+.dashboard-nav a { padding:8px 0 }
+.dashboard-section { scroll-margin-top:20px }
+.account-header,.account-actions,.profile-actions,.media-action-row,.quota-header,.session-banner { flex-wrap:wrap }
+.account-card,.profile-info,.warning-content,.session-status-text { min-width:0; overflow-wrap:anywhere }
+input,select { max-width:100% }
+button:disabled { opacity:.6; cursor:default }
+.btn-action,.btn-secondary.btn-sm,.chat-footer button { min-height:44px }
+.radio-toggle { min-height:32px }
+.skip-link { position:absolute; left:16px; top:-100px; z-index:20; padding:12px; background:var(--ink); color:var(--background) }
+.skip-link:focus { top:16px }
+.platform-badge.youtube { background:#b80000 }
+.unauthorized-card p { color:var(--muted) }
+@media(max-width:480px) {
+  .home .welcome { padding:24px 16px }
+  .dashboard-section { padding:18px; margin-top:24px }
+  .account-actions button { flex:1 }
+  .tools { grid-template-columns:1fr }
+  .conversation-header { flex-wrap:wrap; padding:16px }
+  #messages { padding:12px 16px }
+}
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important } }
+
+.overlay .conversation { min-height:0 }

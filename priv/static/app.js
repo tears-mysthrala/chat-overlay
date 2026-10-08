@@ -16,6 +16,7 @@
     return;
   }
 
+  /** Initialize dashboard controls; profile loading verifies access before revealing them. */
   function initDashboard() {
     const profilesList = document.getElementById("profiles-list");
     const emptyProfiles = document.getElementById("empty-profiles");
@@ -119,6 +120,7 @@
       return currentProfiles.find(p => p.handle === obsProfileSelect.value) || null;
     }
 
+    /** Refresh selected-profile controls without presenting a tokenless URL as a private OBS link. */
     function syncProfileSelection() {
       const p = getSelectedProfile();
       if (!p) {
@@ -132,7 +134,7 @@
       } else if (p.has_capability_token) {
         obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}?token=••••••••••••••••••••••••••••••••`;
       } else {
-        obsOverlayUrl.value = `${location.origin}/overlay/${encodeURIComponent(p.handle)}`;
+        obsOverlayUrl.value = "";
       }
 
       // Populate storage quota
@@ -475,7 +477,7 @@
           if (regenerateStatus) {
             regenerateStatus.hidden = false;
             regenerateStatus.className = "feedback-msg";
-            regenerateStatus.textContent = "Regenerando capability token…";
+            regenerateStatus.textContent = "Preparando el nuevo enlace…";
           }
 
           const res = await fetch(`/api/profiles/${encodeURIComponent(p.handle)}/token/regenerate`, {
@@ -649,19 +651,44 @@
       });
     }
 
+    /** Load authorized profiles, hiding private controls on failure and exposing a retry action. */
     async function loadProfiles() {
       try {
         const res = await fetch("/api/profiles");
+        const status = document.getElementById("dashboard-load-status");
+        const retry = document.getElementById("retry-dashboard");
+        retry.hidden = true;
+        if (res.status === 401 || res.status === 403) {
+          status.hidden = true;
+          dashboard.hidden = true;
+          document.querySelector(".dashboard-nav").hidden = true;
+          document.getElementById("signin-section").hidden = false;
+          return;
+        }
         if (!res.ok) throw new Error("Error cargando perfiles");
         const data = await res.json();
-        currentProfiles = data.profiles || [];
+        if (!Array.isArray(data.profiles)) throw new Error("Invalid profile response");
+        currentProfiles = data.profiles;
+        dashboard.hidden = false;
+        document.querySelector(".dashboard-nav").hidden = false;
+        document.getElementById("signin-section").hidden = true;
+        status.hidden = true;
         renderProfiles(currentProfiles);
         updateObsSelect(currentProfiles);
       } catch {
-        if (loadingProfiles) loadingProfiles.textContent = "Error al conectar con la API.";
+        dashboard.hidden = true;
+        document.querySelector(".dashboard-nav").hidden = true;
+        document.getElementById("signin-section").hidden = false;
+        const status = document.getElementById("dashboard-load-status");
+        status.hidden = false;
+        status.textContent = "No se pudo comprobar el acceso al panel. Comprueba tu conexión y vuelve a intentarlo.";
+        document.getElementById("retry-dashboard").hidden = false;
       }
     }
 
+    /** Render profile actions and guide OBS-link recovery when this browser lacks a cached token.
+     * @param {Array<object>} profiles Authorized profiles returned by the profiles endpoint.
+     */
     function renderProfiles(profiles) {
       if (loadingProfiles) loadingProfiles.hidden = true;
       if (!profilesList) return;
@@ -717,16 +744,25 @@
         const copyBtn = document.createElement("button");
         copyBtn.type = "button";
         copyBtn.className = "btn-action";
-        copyBtn.textContent = "Copiar Overlay OBS";
+        copyBtn.dataset.action = "obs-link";
+        copyBtn.dataset.profileHandle = profile.handle;
+        copyBtn.textContent = sessionStorage.getItem(`obs_token_${profile.handle}`) ? "Copiar enlace OBS" : "Gestionar enlace OBS";
         copyBtn.addEventListener("click", async () => {
           const cachedToken = sessionStorage.getItem(`obs_token_${profile.handle}`);
-          const fullUrl = cachedToken
-            ? `${location.origin}${profile.overlay_url}?token=${encodeURIComponent(cachedToken)}`
-            : `${location.origin}${profile.overlay_url}`;
+          if (!cachedToken) {
+            obsProfileSelect.value = profile.handle;
+            syncProfileSelection();
+            document.getElementById("obs-management-section").scrollIntoView({ block: "start" });
+            regenerateObsTokenBtn.focus();
+            obsCopyStatus.hidden = false;
+            obsCopyStatus.textContent = "Este navegador no conserva el enlace privado. Si necesitas uno nuevo, regenera el enlace y actualiza la fuente de OBS.";
+            return;
+          }
+          const fullUrl = `${location.origin}${profile.overlay_url}?token=${encodeURIComponent(cachedToken)}`;
           try {
             await navigator.clipboard.writeText(fullUrl);
             copyBtn.textContent = "¡Copiado!";
-            setTimeout(() => { copyBtn.textContent = "Copiar Overlay OBS"; }, 2000);
+            setTimeout(() => { copyBtn.textContent = "Copiar enlace OBS"; }, 2000);
           } catch {
             prompt("Copia la URL del overlay:", fullUrl);
           }
@@ -994,6 +1030,30 @@
       }
     }
 
+    document.getElementById("signin-form").addEventListener("submit", async event => {
+      event.preventDefault();
+      const feedback = document.getElementById("signin-feedback");
+      const handle = document.getElementById("signin-handle").value.trim().toLowerCase();
+      const provider = event.submitter?.value;
+      if (!/^[a-z0-9][a-z0-9_-]{0,39}$/.test(handle) || !["twitch", "youtube"].includes(provider)) return;
+      const buttons = [...event.currentTarget.querySelectorAll("button")];
+      buttons.forEach(button => { button.disabled = true; });
+      feedback.textContent = "Preparando el acceso…";
+      try {
+        const response = await fetch(`/api/oauth/authorize/${provider}?handle=${encodeURIComponent(handle)}`);
+        const result = await response.json();
+        if (!response.ok || !result.ok || !result.url) throw new Error("No se pudo iniciar el acceso. Comprueba el perfil y que esa cuenta esté vinculada.");
+        location.assign(result.url);
+      } catch (error) {
+        feedback.textContent = error.message;
+        buttons.forEach(button => { button.disabled = false; });
+      }
+    });
+    document.getElementById("retry-dashboard").addEventListener("click", () => {
+      document.getElementById("retry-dashboard").hidden = true;
+      document.getElementById("dashboard-load-status").textContent = "Comprobando el acceso al panel…";
+      loadProfiles();
+    });
     loadSession();
     loadProfiles();
   }

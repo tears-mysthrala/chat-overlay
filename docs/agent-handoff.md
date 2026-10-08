@@ -1,17 +1,21 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
-> 07-10-2026: ADR0008/#39 implementado en `security/39-private-custodian`,
-> PR #67 abierta y enlazada. 327 ExUnit PASS por seed; PostgreSQL 26 PASS por
-> seed más boot/persistencia/reinicio; smoke release, 12 Python Linux y separación
-> sintética de dos releases PASS. La revisión oficial de la candidata y su delta
-> no reportó vulnerabilidades confirmadas; las regresiones OAuth/media se
-> corrigieron con pruebas mTLS. Los diez checks de CI pasan en `2e96ed3`.
-> CodeRabbit revisó ese delta y solicitó dos correcciones documentales, atendidas
-> en esta actualización. Siguiente paso: comprobar CI y la revisión de este
-> ajuste; resolver cualquier hallazgo antes del merge y del corte a producción.
-> El corte sigue pendiente de verificar firewall y OAuth/OBS/multimedia reales
-> en Benten. No se declara acreditada la separación en producción.
-> Detalle: docs/workflows/deployment/runs/2026-10-07-private-custodian.md.
+> Candidata UI actual: Refs #39/#43, PR #68,
+> rama `chore/39-custodian-cutover-ui`. `mix check`:327 PASS;
+> HTTP/F2/sesiones/API:42 PASS; scripts de trazabilidad/secretos/estática PASS;
+> smoke/auditoría de imagen y navegador sintético desktop/móvil PASS.
+> CI y revisión del último head pendientes; diseño todavía no desplegado.
+>
+> 08-10-2026: PR #67 integrada (cf2d3d3), CodeRabbit APPROVED y diez checks
+> PASS sobre 2ea6f1e. Custodio/frontend desplegados en Benten9502 con imagen
+> revisada90e3de9b; secretos/red/procesos del frontend aislados y comprobados,
+> PostgreSQL/coordinador preservados (1 perfil/2 cuentas/2 objetos).
+> HTTPS readiness200 y acceso anónimo401. OAuth/OBS autenticados posteriores
+> al corte todavía NOT TESTED. Diseño web/chat corregido en candidata local;
+> Auto Review limpio sobre el diff tras autorización del operador; sin
+> publicación ni despliegue de ese diff. Siguiente paso: publicar y comprobar
+> CI/revisión antes del merge/despliegue; después OAuth/OBS reales.
+> Detalle: docs/workflows/deployment/runs/2026-10-08-custodian-cutover-ui.md.
 
 > 07-10-2026: preview manual #64 implementado en feat/64-obs-preview y desplegado
 > en Benten9502 por aprobación explícita. Runtime43ed8a7a, 295 ExUnit PASS,

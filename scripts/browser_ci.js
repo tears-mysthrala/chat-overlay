@@ -12,6 +12,7 @@ const origin = "http://localhost:4143";
 const evidence = { passed: false, scenarios: [] };
 let stage = "launch";
 let browser;
+/** Persist bounded browser evidence for the CI artifact, including the failing stage when applicable. */
 function report() {
   mkdirSync("output/browser", { recursive: true });
   writeFileSync("output/browser/result.json", JSON.stringify({ ...evidence, stage }, null, 2) + "\n");
@@ -50,8 +51,18 @@ const deadline = setTimeout(() => {
         page.on("pageerror", () => pageErrors++);
         page.setDefaultTimeout(10_000);
         page.setDefaultNavigationTimeout(15_000);
+        for (const fault of ["network", "server", "invalid-json"]) {
+          stage = `${viewport.width}:load-error:${fault}`;
+          await page.route("**/api/profiles", route => fault === "network" ? route.abort("failed") : route.fulfill({ status: fault === "server" ? 503 : 200, contentType: "application/json", body: "not-json" }));
+          await page.goto(origin, { waitUntil: "domcontentloaded" });
+          await page.evaluate(checks, "load-error");
+          await page.unroute("**/api/profiles");
+          await page.locator("#retry-dashboard").click();
+          await page.evaluate(checks, "anonymous");
+        }
         stage = `${viewport.width}:login`;
         await page.goto(origin, { waitUntil: "domcontentloaded" });
+        const anonymous = await page.evaluate(checks, "anonymous");
         const login = await page.evaluate(checks, "login");
         if (login.login !== true) throw new Error("login");
         await page.reload({ waitUntil: "domcontentloaded" });
@@ -65,7 +76,7 @@ const deadline = setTimeout(() => {
         ]);
         stage = `${viewport.width}:logged-out-checks`;
         const logout = await page.evaluate(checks, "logged-out");
-        evidence.scenarios.push({ viewport, login, checks: result, logout, pageErrors, cspViolations, externalRequests });
+        evidence.scenarios.push({ viewport, anonymous, login, checks: result, logout, pageErrors, cspViolations, externalRequests });
         stage = `${viewport.width}:runtime-and-isolation`;
         if (pageErrors || cspViolations || externalRequests) throw new Error("browser isolation or runtime failure");
       } finally {

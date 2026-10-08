@@ -1,7 +1,9 @@
 # Despliegue
 
+- [Corte custodio e interfaz 2026-10-08](runs/2026-10-08-custodian-cutover-ui.md): separación desplegada y firewall/secretos/datos verificados; diseño local en validación, OAuth/OBS posteriores al corte pendientes.
+
 - [Custodio privado 2026-10-07](runs/2026-10-07-private-custodian.md): ADR0008
-  aprobado, codec de entrada validado; integración y separación efectiva pendientes.
+  aprobado e integrado por PR #67; historial de validación local y revisión.
 
 - [Recuperación 2026-10-07](runs/2026-10-07-ops-recovery.md): backup real cifrado
   sincronizado a Drive, base/medios/cuentas restaurados sin red; ARCH06 y
