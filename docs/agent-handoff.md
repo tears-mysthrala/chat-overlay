@@ -1,7 +1,7 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
 > #51: aceptación conciliada en [persistencia](workflows/deployment/runs/2026-10-09-persistence-acceptance.md); cerrado por PR #78 (main65a22e5), sin nuevo despliegue.
-> #40: herramientas/ensayo/procedimiento conciliados en [recuperación](workflows/deployment/runs/2026-10-09-recovery-acceptance.md); operación continua #38 sigue pendiente.
+> #40: EIO/SIGKILL durante staging PASS en [ensayo](workflows/deployment/runs/2026-10-09-recovery-faults.md), cierre pendiente de integración. Herramientas/ensayo/procedimiento conciliados en [recuperación](workflows/deployment/runs/2026-10-09-recovery-acceptance.md); operación continua #38 sigue pendiente.
 > Actualización 09-10-2026: #64 cerrado por PR #76 (main54671c1), sin nuevo despliegue.
 > #62 cerrado por PR #77, main32e18b2; sin nuevo despliegue.
 > Disco/coordinador Linux real12 PASS; aplicación24 PASS y referencias operativas

@@ -44,6 +44,12 @@ jobs:
           docker run --rm --network none --cpus 2 --memory 1g --pids-limit 128 -e ERL_FLAGS='+S 2:2' -e CI_TEST_REPORT_DIR=/evidence -v "$PWD/output/tests:/evidence" chat-overlay:validation sh scripts/ci_tests.sh
       - name: Recovery fails closed on real staging ENOSPC
         run: docker run --rm --network none --cpus 2 --memory 1g --pids-limit 128 --tmpfs /recovery-faults:size=4096 -e ERL_FLAGS='+S 2:2' chat-overlay:validation mix run --no-start scripts/test_recovery_disk.exs
+      - name: Recovery survives staging EIO and writer SIGKILL
+        run: |
+          docker build -f Dockerfile.recovery-faults -t chat-overlay:recovery-faults .
+          for mode in eio kill; do
+            docker run --rm --network none --cpus 2 --memory 1g --pids-limit 128 -e ERL_FLAGS='+S 2:2' -e RECOVERY_FAULT_MODE="$mode" chat-overlay:recovery-faults sh scripts/test_recovery_faults.sh
+          done
       - name: Reject skipped, excluded, empty or incomplete test results
         if: ${{ always() && steps.exunit.outcome != 'skipped' }}
         run: python3 scripts/check_test_report.py output/tests/exunit-0.json output/tests/exunit-424242.json
