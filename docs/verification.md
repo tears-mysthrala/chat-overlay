@@ -91,10 +91,11 @@ minuto, duración real e instantes UTC, y admite una etiqueta de revisión del c
 Histograma acotado y percentiles conservadores comprobados por
 `test/load_metrics_test.exs`. Metodología y comandos reproducibles en
 [scripts/README.md](../scripts/README.md#carga-sostenida-sintética-issue-4-rel-08).
-Esta instrumentación no acredita estabilidad por sí sola. Las ejecuciones de
-cuatro y 24 horas, el análisis de su tendencia de memoria y la aprobación humana
-de publicación siguen pendientes bajo #4.
+Esta instrumentación no acredita estabilidad por sí sola. La ejecución de cuatro
+horas y su análisis de recursos están completados y aceptados en el registro
+inferior. La ejecución de 24 horas, su análisis y la aprobación humana de
+publicación siguen pendientes bajo #4/#34.
 
 ### Carga de cuatro horas — 09-10-2026 (#34)
 
-Aceptada sobre base640ef84: 7.215.000/7.215.000 entregas, cero errores, p95 de50 ms, sin OOM y procesos estables. Análisis de memoria y límites en [registro de carga](workflows/deployment/runs/2026-10-09-soak.md). Ejecución de24 h iniciada; resultado pendiente. Esta actualización sustituye el estado pendiente de4 h anterior, conservado como historial.
+Aceptada sobre base640ef84: 7.215.000/7.215.000 entregas, cero errores, p95 de50 ms, sin OOM y procesos estables. Análisis de memoria y límites en [registro de carga](workflows/deployment/runs/2026-10-09-soak.md). Ejecución de24 h iniciada; resultado pendiente.

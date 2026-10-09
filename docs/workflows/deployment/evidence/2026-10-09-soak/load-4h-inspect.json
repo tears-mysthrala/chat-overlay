@@ -1,0 +1,33 @@
+{
+  "Id": "0517a416b36ed810972511c75f46ad9cb6b66f9cd30023a028a6a35a9f73d6a2",
+  "Name": "/overlay34-4h-640ef84",
+  "Image": "sha256:d4a26881f8d7642b7a8407df1a491f0eec3ab8dfe3f60e91e568a6a08f7ec840",
+  "State": {
+    "Status": "exited",
+    "Running": false,
+    "Paused": false,
+    "Restarting": false,
+    "OOMKilled": false,
+    "Dead": false,
+    "Pid": 0,
+    "ExitCode": 0,
+    "Error": "",
+    "StartedAt": "2026-10-08T21:00:34.980160399Z",
+    "FinishedAt": "2026-10-09T01:00:40.581872624Z"
+  },
+  "Resources": {
+    "NetworkMode": "none",
+    "NanoCpus": 2000000000,
+    "Memory": 1073741824,
+    "MemorySwap": 1073741824,
+    "PidsLimit": 128
+  },
+  "Cmd": [
+    "mix",
+    "run",
+    "--no-start",
+    "scripts/load.exs",
+    "14400"
+  ],
+  "Provenance": "Allowlisted projection of original docker inspect; environment, host paths and network identifiers omitted."
+}
