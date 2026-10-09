@@ -23,3 +23,5 @@
 - [CI exigible 2026-10-09](runs/2026-10-09-ci.md): protección aplicada; acciones Node24 y regresión local, CI remoto pendiente.
 
 - [Aceptación preview 2026-10-09](runs/2026-10-09-preview-acceptance.md): seis regresiones PASS; CI final pendiente.
+
+- [Aceptación disco local 2026-10-09](runs/2026-10-09-local-media-acceptance.md):24 pruebas de aplicación y12 de disco/coordinador PASS; evidencia operativa conciliada.
