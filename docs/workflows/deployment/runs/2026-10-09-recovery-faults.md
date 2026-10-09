@@ -30,3 +30,9 @@ recovery.md. #40 alcanza su matriz de ensayos/procedimiento; CI final pendiente.
 Periodicidad/custodia redundante/descarga remota independiente siguen en #38;
 no acredita corte eléctrico, hardware físico, producción ni disponibilidad global.
 Rollback: revertir harness y etapa CI; no cambia datos ni claves.
+
+Corrección de revisión remota: fijados gcc15.2.0-r5/musl-dev1.2.6-r2,
+verificados en metadata APK local y revisados como dependencias solo de desarrollo
+(docs/dependencies.md). Rebuild963fa81f6fec698b64d7b93ae3ae38cd462055575ecd95a38b307ae5b5b182b9;
+EIO y SIGKILL repetidos PASS. No cambia runtime. apk info intentó refrescar índices
+sin red; versiones obtenidas directamente de /lib/apk/db/installed.

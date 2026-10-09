@@ -2,7 +2,8 @@
 ARG VALIDATION_IMAGE=chat-overlay:validation
 FROM ${VALIDATION_IMAGE}
 USER root
-RUN apk add --no-cache gcc musl-dev
+# Development toolchain reviewed/tested 2026-10-09. Fail on unavailable pins.
+RUN apk add --no-cache gcc=15.2.0-r5 musl-dev=1.2.6-r2
 COPY scripts/recovery_fault.c /tmp/recovery_fault.c
 RUN cc -shared -fPIC -Wall -Wextra -Werror -o /tmp/recovery_fault.so /tmp/recovery_fault.c -ldl
 COPY scripts/test_recovery_fault.exs scripts/test_recovery_fault.exs

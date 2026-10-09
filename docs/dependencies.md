@@ -150,3 +150,17 @@ Actualización del 2026-10-07, Refs #55: runtime OpenSSL 3.5.9-r0 confirmado en 
 ## Compatibilidad Postgrex con Elixir 1.20 — #70
 
 Se conserva Postgrex 0.22.4 fijado. El build aplica una sustitución acotada de metadata obsoleta tras verificar el SHA256 original; el inventario incluye el hash efectivo. Fuente, límites y validación en [registro de compatibilidad](workflows/deployment/runs/2026-10-09-postgrex-build.md). No se modifica código runtime ni se silencian avisos globales.
+
+## Toolchain del harness de recuperación — #40
+
+Solo Dockerfile.recovery-faults (desarrollo/CI): gcc15.2.0-r5 y
+musl-dev1.2.6-r2 fijados por revisión APK. Versiones verificadas en la base
+local /lib/apk/db/installed. Metadatos de licencia de esos paquetes:
+GPL-2.0-or-later AND LGPL-2.1-or-later para gcc y MIT para musl-dev;
+son metadata de Alpine, no dictamen de distribución. No se incorporan a
+Dockerfile/runtime ni se publica esta imagen de herramientas.
+Compila únicamente recovery_fault.c controlado por el repositorio; el injector
+solo se activa en contenedores sintéticos sin red. Build con Werror y EIO/SIGKILL
+repetidos. Si los pins dejan de existir, build falla y requiere actualización
+revisada, no quitar versiones. Los pins directos no constituyen un lock completo
+de todas las dependencias transitivas de Alpine ni auditoría CVE de este toolchain.
