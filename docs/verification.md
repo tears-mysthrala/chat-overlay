@@ -64,7 +64,7 @@ multimedia se limitan a extensión/MIME declarados: no prueban formato real.
 | Protocolos | connectors/resolver/socket tests | YouTube Data API v3 (OAuth y API Key), Twitch EventSub WebSocket + Helix + GraphQL con variables parametrizadas (ARCH-07); Kick diferido |
 | SEC-05/07 | Chromium local y OBS Studio | Texto HTML literal sin nodos ejecutables (DOM text nodes), assets locales, fondo transparente, responsive, CSP restrictiva |
 | SEC-06 | event tests + Net | Destinos cerrados con validación de IP pública, bloqueo de loopback/red privada/IPv6; TLS verificado en producción |
-| REL-08 | `scripts/load.exs 60` (29-09-2026) | 4.500 eventos emitidos, 45.000/45.000 entregas (100%), 0 errores, p95 49 ms (objetivo <100 ms); RAM BEAM 468 MB → 365 MB |
+| REL-08 | `scripts/load.exs 60` (29-09-2026); [registro de carga #34](workflows/deployment/runs/2026-10-09-soak.md) (09-10-2026) | Prueba histórica: 4.500 eventos, 45.000/45.000 entregas, 0 errores, p95 49 ms, RAM BEAM 468 MB → 365 MB. Cuatro horas aceptadas: 7.215.000/7.215.000 entregas, 0 errores, p95 50 ms (objetivo <100 ms), sin OOM y recursos estables en la ventana analizada. Prueba de 24 horas iniciada; resultado y análisis pendientes. |
 | DEV-13 | OBS Studio 32.2.2 en vivo (`obs-browser` CEF 152.0.7977.83) | PASS verificado mediante `scripts/test_obs_validation.py`: canal alfa transparente (RGBA=0), tipografía nítida, badges de Twitch/YouTube unificados, reconexión limpia tras ocultar/mostrar fuente y snapshot sin mensajes duplicados |
 | DEV-13 | Plataformas reales en vivo | Twitch (chat y metadatos reales de `gilraennr` y `revenant`); YouTube (canal y directo activo de `gilraennr`); Kick diferido |
 | COMP-01/10 | Matriz de cumplimiento y plataformas | Actualizado en `docs/compliance.md` y `docs/platforms.md` con justificación formal de diferimiento de Kick |
@@ -91,6 +91,11 @@ minuto, duración real e instantes UTC, y admite una etiqueta de revisión del c
 Histograma acotado y percentiles conservadores comprobados por
 `test/load_metrics_test.exs`. Metodología y comandos reproducibles en
 [scripts/README.md](../scripts/README.md#carga-sostenida-sintética-issue-4-rel-08).
-Esta instrumentación no acredita estabilidad por sí sola. Las ejecuciones de
-cuatro y 24 horas, el análisis de su tendencia de memoria y la aprobación humana
-de publicación siguen pendientes bajo #4.
+Esta instrumentación no acredita estabilidad por sí sola. La ejecución de cuatro
+horas y su análisis de recursos están completados y aceptados en el registro
+inferior. La ejecución de 24 horas, su análisis y la aprobación humana de
+publicación siguen pendientes bajo #4/#34.
+
+### Carga de cuatro horas — 09-10-2026 (#34)
+
+Aceptada sobre base640ef84: 7.215.000/7.215.000 entregas, cero errores, p95 de50 ms, sin OOM y procesos estables. Análisis de memoria y límites en [registro de carga](workflows/deployment/runs/2026-10-09-soak.md). Ejecución de24 h iniciada; resultado pendiente.

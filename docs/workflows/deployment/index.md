@@ -17,3 +17,5 @@
 - [Lectores OAuth 2026-10-07](runs/2026-10-07-readers.md): validación local; revisión corregida y despliegue pendientes.
 
 - [Reconciliación y cierre F2 2026-10-08](runs/2026-10-08-debt-closeout.md): PR68 desplegada, pruebas reales consolidadas, backlog actualizado, smoke de carga PASS y ejecución de4 h iniciada.
+
+- [Carga sostenida 2026-10-09](runs/2026-10-09-soak.md): cuatro horas aceptadas;24 h en ejecución, sin resultado final.
