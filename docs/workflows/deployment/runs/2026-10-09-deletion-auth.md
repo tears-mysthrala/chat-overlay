@@ -31,3 +31,23 @@ instrucción de iniciar sesión también en ese camino, no un error422 genérico
 
 Suite completa tras corrección331 PASS seed0. Respuesta403 de autorización caducada ajustada después;56 pruebas focalizadas de la versión final PASS. Estática específica0 findings, secrets sin fugas y diff-check PASS. CI final pendiente, sin despliegue.
 
+
+## Corrección del hallazgo remoto — pendiente de aceptación
+
+Codex detectó que created_at es emisión de sesión, no autenticación del proveedor.
+Se retira la aceptación por edad: el OAuth actual no aporta una prueba verificable
+reciente. El borrado de producción queda denegado incluso con sesión recién emitida;
+campos de prueba suministrados al generador no habilitan el permiso. Demo offline
+conserva su excepción. PR81 no está lista para integrar; falta implementar el
+recorrido de reautenticación y luego la aceptación integral #48.
+
+La documentación Twitch describe force_verify como reautorización, no como una
+prueba de contraseña o MFA: https://dev.twitch.tv/docs/authentication/getting-tokens-oidc
+Google prompt=consent exige consentimiento, no autenticación reciente:
+https://developers.google.com/identity/openid-connect/openid-connect
+No se sustituye una evidencia por esos parámetros ni por un JWT sin verificar.
+Las afirmaciones anteriores de acceso reciente quedan invalidadas por este hallazgo.
+
+Primer intento inválido: montajes en /app cuando la imagen usa /build; sus54 pruebas no acreditan el parche. Corregido el montaje:57 focalizadas PASS, con aviso de cláusula inalcanzable corregido después. Validación final pendiente. Sin aceptación ni despliegue.
+
+Versión provisional final: compilación --warnings-as-errors PASS y suite completa332 PASS seed0 con lib/test montados en /build. Diff-check PASS. Auto Review del nuevo delta pendiente; no es entrega lista ni cierre de #48.

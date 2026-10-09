@@ -118,7 +118,7 @@ defmodule ChatOverlay.Web do
               ChatOverlay.JSON.encode(%{
                 "ok" => false,
                 "error" =>
-                  "Vuelve a iniciar sesión antes de eliminar el perfil (acceso de los últimos 5 minutos)."
+                  "El borrado requiere reautenticación verificable; este recorrido aún no está disponible."
               })
             )
 
@@ -630,7 +630,7 @@ defmodule ChatOverlay.Web do
           ChatOverlay.JSON.encode(%{
             "ok" => false,
             "error" =>
-              "Vuelve a iniciar sesión antes de eliminar el perfil (acceso de los últimos 5 minutos)."
+              "El borrado requiere reautenticación verificable; este recorrido aún no está disponible."
           })
         )
 

@@ -31,17 +31,25 @@ defmodule ChatOverlay.SessionTest do
     :ok
   end
 
-  test "sensitive deletion needs a recent session and preserves profile isolation" do
+  test "session issuance never substitutes for verified reauthentication" do
     now = System.system_time(:second)
 
     for {age, expected} <- [
-          {0, :ok},
-          {300, :ok},
+          {0, {:error, :reauthentication_required}},
+          {300, {:error, :reauthentication_required}},
           {301, {:error, :reauthentication_required}},
           {-1, {:error, :reauthentication_required}}
         ] do
       {:ok, token} =
-        Session.create_token(%{"handle" => "streamer-prod"}, key: @test_key, now: now - age)
+        Session.create_token(
+          %{
+            "handle" => "streamer-prod",
+            "reauthenticated_at" => now,
+            "authentication_verified" => true
+          },
+          key: @test_key,
+          now: now - age
+        )
 
       conn =
         conn(:delete, "/api/profiles/streamer-prod")

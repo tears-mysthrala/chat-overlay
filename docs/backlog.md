@@ -7,7 +7,7 @@ Este inventario dirigido no sustituye una auditoría completa ni acredita ASVS L
 ## Cierre del producto existente: F2
 
 - #32: cuotas y limpieza duradera implementadas (PR #57). Revisar aceptación contra almacenamiento local actual y distinguir cobertura R2.
-- #48: autorización reciente de borrado implementada en [unidad 09-10](workflows/deployment/runs/2026-10-09-deletion-auth.md), integración pendiente; eliminación/revocación y saneamiento: conciliar pruebas de limpieza, fallos/reinicio y aislamiento A/B; no borrar datos reales para acreditar el gate.
+- #48: borrado de producción bloqueado provisionalmente en [unidad 09-10](workflows/deployment/runs/2026-10-09-deletion-auth.md), falta recorrido de reautenticación verificable (created_at no es prueba) e integración; eliminación/revocación y saneamiento: conciliar pruebas de limpieza, fallos/reinicio y aislamiento A/B; no borrar datos reales para acreditar el gate.
 - #51: persistencia PostgreSQL/RLS y aceptación conciliadas en [registro 09-10](workflows/deployment/runs/2026-10-09-persistence-acceptance.md): roles/pool/A-B/fallos/concurrencia/reinicio/export probados. Cerrado por PR #78 (main65a22e5).
 - #40: herramientas y procedimiento de recuperación/rotación conciliados en [registro 09-10](workflows/deployment/runs/2026-10-09-recovery-acceptance.md),6+7 pruebas PASS. ENOSPC, EIO y SIGKILL durante staging probados en [fallos reales](workflows/deployment/runs/2026-10-09-recovery-faults.md); cerrado por PR #80 (main2f26827); periodicidad/custodia redundante y descarga remota independiente siguen en operación #38.
 - #49: cuarentena y coordinador integrados (PR #65). Conciliar aceptación negativa, límites y artefacto desplegado.

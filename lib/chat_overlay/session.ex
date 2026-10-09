@@ -259,19 +259,21 @@ defmodule ChatOverlay.Session do
   def demo_profile?(_), do: false
 
   @doc """
-  Requires ordinary profile authorization and a session issued in the last five
-  minutes for deletion. Preserves direct-loopback offline demo management only.
+  Requires ordinary profile authorization before deletion. Production deletion
+  remains denied until a verified reauthentication mechanism is connected.
+  Session issuance time is not authentication time. Offline demo management
+  remains available only over direct loopback.
   """
   @spec authorize_recent(Plug.Conn.t(), String.t(), keyword()) ::
           :ok | {:error, :unauthorized | :forbidden | :reauthentication_required}
   def authorize_recent(conn, handle, opts \\ []) do
     with :ok <- authorize(conn, handle, opts) do
-      now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
-
       case fetch_session(conn, opts) do
-        {:ok, %{"created_at" => created}}
-        when is_integer(created) and created <= now and created >= now - 300 ->
-          :ok
+        # OAuth may reuse an existing provider SSO session. No current issuer
+        # verifies authentication time, so even a freshly issued session cannot
+        # satisfy this requirement. Do not accept client-supplied proof fields.
+        {:ok, _session} ->
+          {:error, :reauthentication_required}
 
         {:error, _} ->
           # Preserve offline demo management. Production profiles never use this
@@ -280,9 +282,6 @@ defmodule ChatOverlay.Session do
                (demo_profile?(handle) or ChatOverlay.Config.profile(handle) == nil),
              do: :ok,
              else: {:error, :reauthentication_required}
-
-        _ ->
-          {:error, :reauthentication_required}
       end
     end
   end
