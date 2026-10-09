@@ -1,7 +1,8 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> #51: aceptación conciliada en [persistencia](workflows/deployment/runs/2026-10-09-persistence-acceptance.md); integración pendiente.
 > Actualización 09-10-2026: #64 cerrado por PR #76 (main54671c1), sin nuevo despliegue.
-> #62: aceptación del backend local conciliada en PR #77, pendiente de integración.
+> #62 cerrado por PR #77, main32e18b2; sin nuevo despliegue.
 > Disco/coordinador Linux real12 PASS; aplicación24 PASS y referencias operativas
 > en [aceptación local](workflows/deployment/runs/2026-10-09-local-media-acceptance.md).
 > Esto acredita el backend local, no toda SEC-17: #49 y el escalado #63 siguen abiertos.
