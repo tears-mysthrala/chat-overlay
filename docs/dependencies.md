@@ -146,3 +146,7 @@ contrastado también con fuente del paquete resuelto. Inventario/Hex audit del
 build con Hex 2.5.1 PASS; [registro](workflows/postgres-rls/runs/2026-10-05.md).
 
 Actualización del 2026-10-07, Refs #55: runtime OpenSSL 3.5.9-r0 confirmado en APKINDEX oficial v3.24/main. El escaneo previo de 3.5.8-r0 produjo 26 matches; rebuild y re-escaneo requeridos antes de exposición en Benten.
+
+## Compatibilidad Postgrex con Elixir 1.20 — #70
+
+Se conserva Postgrex 0.22.4 fijado. El build aplica una sustitución acotada de metadata obsoleta tras verificar el SHA256 original; el inventario incluye el hash efectivo. Fuente, límites y validación en [registro de compatibilidad](workflows/deployment/runs/2026-10-09-postgrex-build.md). No se modifica código runtime ni se silencian avisos globales.

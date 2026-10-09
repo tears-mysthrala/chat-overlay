@@ -4,7 +4,8 @@ ENV MIX_ENV=prod CHAT_STORAGE=json_demo
 RUN mix local.hex 2.5.1 --force && mix local.rebar rebar3 https://builds.hex.pm/installs/1.18.4/rebar3-3.25.1-otp-28 --sha512 992fd755b7926fae455e5e07d9d195f4d3e7f181609eed1b9cabfe548624df10d148cd4b59bda40bebb185d3d68f9a9fd68a70b294101c8ad9cf0fadcc683d24 --force
 COPY mix.exs mix.lock ./
 COPY config config
-RUN mix deps.get --only prod && mix hex.audit && mix deps.compile
+COPY scripts/prepare_postgrex.exs scripts/prepare_postgrex.exs
+RUN mix deps.get --only prod && mix hex.audit && elixir scripts/prepare_postgrex.exs && mix deps.compile
 COPY lib lib
 COPY priv priv
 COPY scripts/inventory.exs scripts/inventory.exs

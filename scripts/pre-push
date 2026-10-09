@@ -39,7 +39,7 @@ while read -r local_ref local_oid remote_ref remote_oid; do
 done <<< "$refs"
 changed="$(echo "$changed" | tr ' ' '\n' | sort -u)"
 
-packaging="$(echo "$changed" | grep -E '^(Dockerfile|\.dockerignore|mix\.exs|mix\.lock|\.tool-versions|vex\.openvex\.json|config/|lib/|priv/|vendor/|scripts/(audit_image\.py|smoke_image\.py|inventory\.exs))' || true)"
+packaging="$(echo "$changed" | grep -E '^(Dockerfile|\.dockerignore|mix\.exs|mix\.lock|\.tool-versions|vex\.openvex\.json|config/|lib/|priv/|vendor/|scripts/(audit_image\.py|smoke_image\.py|inventory\.exs|prepare_postgrex\.exs))' || true)"
 
 if [ -n "$packaging" ]; then
   need docker

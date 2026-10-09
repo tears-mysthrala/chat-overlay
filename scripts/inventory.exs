@@ -40,6 +40,23 @@ components =
       "bom-ref" => "pkg:hex/#{name}@#{version}",
       "purl" => "pkg:hex/#{name}@#{version}",
       "hashes" => [%{"alg" => "SHA-256", "content" => checksum}],
+      "properties" =>
+        if(name == :postgrex,
+          do: [
+            %{
+              "name" => "chat-overlay:build-metadata-patch",
+              "value" => "issue-70: xref to elixirc_options; runtime sources unchanged"
+            },
+            %{
+              "name" => "chat-overlay:effective-mix-exs-sha256",
+              "value" =>
+                Base.encode16(:crypto.hash(:sha256, File.read!("deps/postgrex/mix.exs")),
+                  case: :lower
+                )
+            }
+          ],
+          else: []
+        ),
       "licenses" => Enum.map(licenses, &%{"license" => %{"id" => &1}})
     }
   end)
