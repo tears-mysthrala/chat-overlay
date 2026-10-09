@@ -16,7 +16,7 @@
   },
   "repository_sha256": {
     "scripts/media_validator.py": "794c58cdd76078991d51ce9d61f8b553d8d006ba001785600626adf6f2dbaad0",
-    "scripts/media_sandbox.py": "c482ecd0a551483790dc22350025b6e2fa743d48de1174b7b16e80597e98a9b8",
+    "scripts/media_sandbox.py": "5d6c9072e2250b96a061da46028c60bf06bb0bc97c819b3078ba6b322e3fae18",
     "scripts/media_coordinator.py": "8de3f358b52c2cbdc57f50ae93b1e99eb79028095a7ad251e38c0315d1b4c572",
     "Dockerfile.media-validator": "9e157f45d0432f76b3269bda4d82ae4772d08dbc779b5d27de79c4cc365b9068",
     "vendor/media/python/SHA256SUMS": "62b3e9d974d5bb5055aaf711759da6506e7c13d7173409aa8fabe514b456f247"
