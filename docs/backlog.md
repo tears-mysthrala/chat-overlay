@@ -8,10 +8,10 @@ Este inventario dirigido no sustituye una auditoría completa ni acredita ASVS L
 
 - #32: cuotas y limpieza duradera implementadas (PR #57). Revisar aceptación contra almacenamiento local actual y distinguir cobertura R2.
 - #48: eliminación/revocación y saneamiento: conciliar pruebas de limpieza, fallos/reinicio y aislamiento A/B; no borrar datos reales para acreditar el gate.
-- #51: persistencia y PostgreSQL/RLS integrados. Conciliar evidencia de rol/pool y frontera efectiva; no repetir la implementación ya entregada.
+- #51: persistencia PostgreSQL/RLS y aceptación conciliadas en [registro 09-10](workflows/deployment/runs/2026-10-09-persistence-acceptance.md): roles/pool/A-B/fallos/concurrencia/reinicio/export probados. Cierre pendiente de integración del registro.
 - #40: recuperación cifrada y mantenimiento offline integrados (PR #66). Consolidar evidencia de restauración/rotación y procedimiento.
 - #49: cuarentena y coordinador integrados (PR #65). Conciliar aceptación negativa, límites y artefacto desplegado.
-- #62: almacenamiento local privado implementado y aceptación conciliada en PR #77:24 regresiones de aplicación y12 de disco/coordinador PASS, despliegue/panel/OBS referenciados. Cierre pendiente de integración de PR #77. R2/S3 no es requisito de la instalación local; cuarentena global sigue en #49.
+- #62: almacenamiento local privado implementado y aceptación conciliada en PR #77:24 regresiones de aplicación y12 de disco/coordinador PASS, despliegue/panel/OBS referenciados. Cerrado mediante PR #77 (main32e18b2). R2/S3 no es requisito de la instalación local; cuarentena global sigue en #49.
 - #64: previsualización manual integrada (PR #65); imagen y audio probados en OBS real. No acredita eventos automáticos de follows/subs.
 - #47: lectores usan coordinador OAuth; queda cerrar matriz de expiración, refresh, revocación y recuperación, no desarrollar otra integración equivalente.
 - #43: UI y pruebas de navegador integradas (PR #68); Twitch real, OBS, audio y revocación probados. Callback nuevo Google/YouTube posterior al corte pendiente.

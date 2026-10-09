@@ -25,3 +25,5 @@
 - [Aceptación preview 2026-10-09](runs/2026-10-09-preview-acceptance.md): seis regresiones PASS; CI final pendiente.
 
 - [Aceptación disco local 2026-10-09](runs/2026-10-09-local-media-acceptance.md):24 pruebas de aplicación y12 de disco/coordinador PASS; evidencia operativa conciliada.
+
+- [Aceptación persistencia 2026-10-09](runs/2026-10-09-persistence-acceptance.md):26 RLS PASS por semilla, boot/restart PASS y18 pruebas de persistencia PASS.
