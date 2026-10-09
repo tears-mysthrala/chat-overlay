@@ -95,3 +95,14 @@ mutaciones y conservar el documento nuevo junto al backup: no borrar el inventar
 ni restaurar una copia antigua sobre cambios posteriores. Conciliar objetos creados
 tras el backup antes de volver a un binario anterior. El cambio se entrega para revisión,
 sin merge, migración de datos de usuario ni despliegue.
+
+## Borrado de perfil y reautenticación — #48
+
+La PR81 mantiene bloqueado el borrado de perfiles de producción hasta conectar
+un mecanismo de reautenticación verificable. Una sesión recién emitida por OAuth
+puede reutilizar SSO y no acredita acceso reciente al proveedor. DELETE devuelve
+403 y explica que ese recorrido no está disponible; repetir OAuth no lo habilita.
+La identidad, versión y revocación se comprueban también en el escritor.
+La gestión offline de perfiles demo desde loopback directo conserva la excepción
+contractual. #48 y PR81 siguen abiertos: esto es una protección provisional,
+no la aceptación del recorrido de borrado. No se ha desplegado.

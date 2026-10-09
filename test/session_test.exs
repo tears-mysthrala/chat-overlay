@@ -31,6 +31,42 @@ defmodule ChatOverlay.SessionTest do
     :ok
   end
 
+  test "session issuance never substitutes for verified reauthentication" do
+    now = System.system_time(:second)
+
+    for {age, expected} <- [
+          {0, {:error, :reauthentication_required}},
+          {300, {:error, :reauthentication_required}},
+          {301, {:error, :reauthentication_required}},
+          {-1, {:error, :reauthentication_required}}
+        ] do
+      {:ok, token} =
+        Session.create_token(
+          %{
+            "handle" => "streamer-prod",
+            "reauthenticated_at" => now,
+            "authentication_verified" => true
+          },
+          key: @test_key,
+          now: now - age
+        )
+
+      conn =
+        conn(:delete, "/api/profiles/streamer-prod")
+        |> Map.put(:remote_ip, {203, 0, 113, 10})
+        |> put_req_cookie(Session.cookie_name(), token)
+
+      assert Session.authorize_recent(conn, "streamer-prod", key: @test_key, now: now) == expected
+
+      assert Session.authorize_recent(conn, "streamer-demo", key: @test_key, now: now) ==
+               {:error, :forbidden}
+    end
+
+    remote = %{conn(:delete, "/api/profiles/streamer-prod") | remote_ip: {203, 0, 113, 10}}
+    assert {:error, :unauthorized} = Session.authorize_recent(remote, "streamer-prod")
+    assert :ok = Session.authorize_recent(conn(:delete, "/"), "streamer-demo")
+  end
+
   describe "token generation and verification" do
     test "creates and verifies a valid session token" do
       payload = %{

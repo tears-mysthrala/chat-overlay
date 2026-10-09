@@ -79,11 +79,13 @@ defmodule ChatOverlay.Custodian.Operations do
   defp dispatch_authorized(conn, %{"operation" => op, "arguments" => args}) do
     authorizer =
       cond do
+        op == "profiles.delete" ->
+          fn -> ChatOverlay.Session.authorize_recent(conn, args["handle"]) end
+
         op == "profiles.save" ->
           fn -> ChatOverlay.Session.authorize_profile_creation(conn, args["document"]) end
 
         op in [
-          "profiles.delete",
           "profiles.sync_youtube",
           "profiles.rotate_capability",
           "profiles.unlink",
