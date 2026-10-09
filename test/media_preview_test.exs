@@ -161,6 +161,52 @@ defmodule ChatOverlay.MediaPreviewTest do
     assert request.(token, "{}", "https://overlay.example.test").status == 403
   end
 
+  test "configuration and cleanup changes during authorization reject stale media", c do
+    store =
+      start_supervised!(%{
+        id: Store,
+        start: {Store, :start_link, [[name: Store.name("creator"), sources: []]]}
+      })
+
+    for change <- [:configuration, :cleanup] do
+      Application.put_env(:chat_overlay, :profiles, [c.profile])
+      Application.put_env(:chat_overlay, :media_objects, [c.object])
+      parent = self()
+
+      task =
+        Task.async(fn ->
+          Profiles.preview_media("creator", fn ->
+            send(parent, {:authorizing, self()})
+
+            receive do
+              :continue ->
+                send(parent, {:authorization_resumed, change})
+                :ok
+            after
+              2000 -> {:error, :timeout}
+            end
+          end)
+        end)
+
+      assert_receive {:authorizing, executor}, 2000
+
+      case change do
+        :configuration ->
+          Application.put_env(:chat_overlay, :profiles, [Map.put(c.profile, "media", %{})])
+
+        :cleanup ->
+          Application.put_env(:chat_overlay, :media_objects, [
+            Map.put(c.object, "state", "retired")
+          ])
+      end
+
+      send(executor, :continue)
+      assert_receive {:authorization_resumed, ^change}, 2000
+      assert Task.await(task) == {:error, :preview_rejected}
+      assert {0, nil} = Store.preview_since(store, 0)
+    end
+  end
+
   test "real SSE delivers to protected overlay once, skips reader and reconnect", c do
     token = ChatOverlay.Crypto.generate_capability_token()
 

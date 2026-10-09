@@ -21,3 +21,5 @@
 - [Carga sostenida 2026-10-09](runs/2026-10-09-soak.md): cuatro horas aceptadas;24 h en ejecución, sin resultado final.
 
 - [CI exigible 2026-10-09](runs/2026-10-09-ci.md): protección aplicada; acciones Node24 y regresión local, CI remoto pendiente.
+
+- [Aceptación preview 2026-10-09](runs/2026-10-09-preview-acceptance.md): seis regresiones PASS; CI final pendiente.
