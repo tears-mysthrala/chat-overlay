@@ -31,3 +31,5 @@
 - [Aceptación recuperación 2026-10-09](runs/2026-10-09-recovery-acceptance.md):6 tests de cifrado/rotación y7 auxiliares PASS; operación continua #38 pendiente.
 
 - [Fallos de recuperación 2026-10-09](runs/2026-10-09-recovery-faults.md): EIO y SIGKILL durante staging PASS; backup anterior/restauración/reintento preservados.
+
+- [Borrado autorizado 2026-10-09](runs/2026-10-09-deletion-auth.md): sesión reciente exigida,65 regresiones PASS; aceptación integral #48 pendiente.

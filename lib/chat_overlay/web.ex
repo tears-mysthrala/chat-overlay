@@ -96,8 +96,11 @@ defmodule ChatOverlay.Web do
 
       {"DELETE", ["api", "profiles", handle]} ->
         with true <- allowed_origin?(conn),
-             :ok <- Session.authorize(conn, handle) do
-          api_delete_profile(conn, handle)
+             :ok <- Session.authorize_recent(conn, handle) do
+          ChatOverlay.RequestScope.with_authorizer(
+            fn -> Session.authorize_recent(conn, handle) end,
+            fn -> api_delete_profile(conn, handle) end
+          )
         else
           :bad_origin ->
             reply(
@@ -105,6 +108,18 @@ defmodule ChatOverlay.Web do
               403,
               "application/json",
               ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
+            )
+
+          {:error, :reauthentication_required} ->
+            reply(
+              conn,
+              403,
+              "application/json",
+              ChatOverlay.JSON.encode(%{
+                "ok" => false,
+                "error" =>
+                  "Vuelve a iniciar sesión antes de eliminar el perfil (acceso de los últimos 5 minutos)."
+              })
             )
 
           {:error, :unauthorized} ->
@@ -607,6 +622,18 @@ defmodule ChatOverlay.Web do
 
   defp api_delete_profile(conn, handle) do
     case ChatOverlay.Profiles.delete(handle) do
+      {:error, :reauthentication_required} ->
+        reply(
+          conn,
+          403,
+          "application/json",
+          ChatOverlay.JSON.encode(%{
+            "ok" => false,
+            "error" =>
+              "Vuelve a iniciar sesión antes de eliminar el perfil (acceso de los últimos 5 minutos)."
+          })
+        )
+
       :ok ->
         reply(conn, 200, "application/json", ChatOverlay.JSON.encode(%{"ok" => true}))
 

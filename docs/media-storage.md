@@ -95,3 +95,15 @@ mutaciones y conservar el documento nuevo junto al backup: no borrar el inventar
 ni restaurar una copia antigua sobre cambios posteriores. Conciliar objetos creados
 tras el backup antes de volver a un binario anterior. El cambio se entrega para revisión,
 sin merge, migración de datos de usuario ni despliegue.
+
+## Borrado de perfil y acceso reciente — #48
+
+La eliminación de un perfil de producción requiere iniciar sesión en los últimos
+cinco minutos; una sesión antigua vigente permite otras acciones autorizadas,
+pero recibe403 en DELETE con indicación de volver a iniciar sesión. La identidad,
+versión de cuenta y revocación se comprueban también en el escritor serializado.
+No se revoca automáticamente OBS por esta reautenticación. La gestión offline
+de demo desde loopback directo y404 de handles inexistentes conserva su contrato;
+los proxies configurados no conceden esa excepción. El borrado lógico conserva
+inventario de cleanup hasta confirmar eliminación física; no significa que R2
+haya borrado inmediatamente sus bytes ni prueba ese servicio en vivo.

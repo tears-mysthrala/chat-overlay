@@ -259,16 +259,38 @@ defmodule ChatOverlay.Session do
   def demo_profile?(_), do: false
 
   @doc """
-  Authorizes access to a target profile resource.
+  Requires ordinary profile authorization and a session issued in the last five
+  minutes for deletion. Preserves direct-loopback offline demo management only.
+  """
+  @spec authorize_recent(Plug.Conn.t(), String.t(), keyword()) ::
+          :ok | {:error, :unauthorized | :forbidden | :reauthentication_required}
+  def authorize_recent(conn, handle, opts \\ []) do
+    with :ok <- authorize(conn, handle, opts) do
+      now = Keyword.get_lazy(opts, :now, fn -> System.system_time(:second) end)
 
-  Rules:
-  1. If an active session is present, caller must match `handle` (SEC-14 strict authorization).
-     Validates profile existence and linked account identity.
-     Cross-profile access returns `{:error, :forbidden}`.
-  2. If no session is present:
-     - Local loopback connections under demo mode or querying unconfigured handles
-       are allowed (`:ok`) for zero-friction quick start and testing.
-     - Remote / non-loopback connections or production non-demo profiles return `{:error, :unauthorized}`.
+      case fetch_session(conn, opts) do
+        {:ok, %{"created_at" => created}}
+        when is_integer(created) and created <= now and created >= now - 300 ->
+          :ok
+
+        {:error, _} ->
+          # Preserve offline demo management. Production profiles never use this
+          # exception, and configured proxies are excluded by loopback?/1.
+          if loopback?(conn) and
+               (demo_profile?(handle) or ChatOverlay.Config.profile(handle) == nil),
+             do: :ok,
+             else: {:error, :reauthentication_required}
+
+        _ ->
+          {:error, :reauthentication_required}
+      end
+    end
+  end
+
+  @doc """
+  Authorizes the current session against the target profile and linked identity.
+  Without a session only direct loopback demo/unconfigured handles are allowed;
+  configured proxies and production profiles cannot use that exception.
   """
   @spec authorize(Plug.Conn.t(), String.t() | nil, keyword()) ::
           :ok | {:error, :unauthorized | :forbidden}
