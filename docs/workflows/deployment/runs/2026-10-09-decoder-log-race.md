@@ -26,3 +26,14 @@ La carga de24 h permanece en su contenedor independiente. Esta corrección del
 lanzador no modifica la imagen BEAM usada por esa carga ni producción.
 Rollback: revertir el parche del lanzador y su regresión. #49 permanece abierto
 para el resto de su aceptación.
+
+## Vínculo de integridad
+
+El primer CI detectó correctamente el hash anterior del lanzador en la evidencia
+aprobada. Se actualiza únicamente su hash SHA256 para esta corrección autorizada
+del producto existente. Se conservan la aprobación histórica, imagen, hashes del
+runtime, controles de ejecución, declaraciones VEX y vencimiento21-10-2026.
+No se presenta esta actualización como una nueva aprobación humana de riesgos.
+La revisión local examinó el cambio y los rechazos; los controles de manipulación,
+caducidad y aprobación pasan con Python normal y optimizado. Comprobación sobre
+la imagen exacta: hashes efectivos de runtime y fuentes PASS.
