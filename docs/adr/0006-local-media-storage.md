@@ -1,7 +1,8 @@
 # ADR 0006 — Disco local para multimedia inicial — Refs #62
 
-Estado: dirección aprobada por el usuario el 07-10-2026; implementación y
-validación en curso. No acredita subidas operativas ni sustituye SEC-17.
+Estado: dirección aprobada el 07-10-2026, implementada y desplegada. Aceptación
+local conciliada en PR #77 y el registro 2026-10-09-local-media-acceptance.md;
+integración de ese cierre pendiente. No sustituye la aceptación global SEC-17/#49.
 
 La primera instalación usa el disco del guest9502. R2/S3 sigue disponible como
 backend alternativo; su contratación y facturación quedan fuera de esta unidad.

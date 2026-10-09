@@ -11,7 +11,7 @@ Este inventario dirigido no sustituye una auditoría completa ni acredita ASVS L
 - #51: persistencia y PostgreSQL/RLS integrados. Conciliar evidencia de rol/pool y frontera efectiva; no repetir la implementación ya entregada.
 - #40: recuperación cifrada y mantenimiento offline integrados (PR #66). Consolidar evidencia de restauración/rotación y procedimiento.
 - #49: cuarentena y coordinador integrados (PR #65). Conciliar aceptación negativa, límites y artefacto desplegado.
-- #62: almacenamiento local privado integrado (PR #65); revisar checklist antes del cierre. R2/S3 no es requisito de la primera instalación local.
+- #62: almacenamiento local privado implementado y aceptación conciliada en PR #77:24 regresiones de aplicación y12 de disco/coordinador PASS, despliegue/panel/OBS referenciados. Cierre pendiente de integración de PR #77. R2/S3 no es requisito de la instalación local; cuarentena global sigue en #49.
 - #64: previsualización manual integrada (PR #65); imagen y audio probados en OBS real. No acredita eventos automáticos de follows/subs.
 - #47: lectores usan coordinador OAuth; queda cerrar matriz de expiración, refresh, revocación y recuperación, no desarrollar otra integración equivalente.
 - #43: UI y pruebas de navegador integradas (PR #68); Twitch real, OBS, audio y revocación probados. Callback nuevo Google/YouTube posterior al corte pendiente.
