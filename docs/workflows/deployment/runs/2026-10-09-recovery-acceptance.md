@@ -15,7 +15,7 @@ con AAD ligado a propietario/proveedor, conservando perfiles/permisos/ledger.
 RecoveryTest:6 PASS seed0, imagen chat-overlay:70-validation, rednone,
 2CPU/1GiB/128PIDs,+S2:2. Backup/restore sintético conserva datos exactos y
 rotación conserva permisos/aislamiento A-B. Clave incorrecta, corrupción,
-copia truncada/interrumpida, credencial dañada, ruta/disco no escribible,
+copia truncada después de terminar, credencial dañada, ruta padre inexistente,
 symlink, destino existente, clave no privada y versión desconocida fallan
 sin salida aceptable ni filtrado de plaintext.
 
@@ -36,6 +36,24 @@ No se ejecutaron esas operaciones sobre usuarios reales.
 La copia remota tiene existencia/sincronización verificadas históricamente;
 descarga independiente403 sigue NOT TESTED. Custodia redundante de clave fuera
 de este PC y periodicidad de backup no se acreditan por estos tests: operación
-continua pendiente #38. Este cierre acredita criterios de herramienta/ensayo/
+continua pendiente #38. Esta unidad acredita parcialmente criterios de herramienta/ensayo/
 procedimiento #40; no cierra disponibilidad del servicio ni #38 ni #55.
 CI de conciliación pendiente. Rollback de esta PR es documental.
+
+
+Corrección de Codex: la prueba de ruta inexistente no acredita ENOSPC/EIO y truncar una copia no acredita matar el escritor durante staging. #40 permanece abierto hasta cubrir esas condiciones; no se declara su aceptación completa.
+
+Ensayo adicional: tmpfs4KiB provoca ENOSPC durante escritura de un bundle válido.
+Primer fixture inválido fue rechazado antes de escribir; se corrigió conforme al
+fixture existente. Con bundle válido IO.binwrite lanzó ErlangError:enospc.
+Se cambió a :file.write para retornar error y conservar el contrato del escritor.
+Ensayo final PASS: errorenospc, salida inexistente, staging eliminado y fuente
+idéntica. Se añadió al CI source-and-tests. Interrupción real del proceso durante
+staging sigue pendiente; este resultado no la sustituye.
+
+Auto Review informó sobre staging en el directorio destino y falta de EIO/interrupción.
+Verificado: staging en el mismo filesystem es diseño previo necesario para publicar
+mediante hard link, no regresión introducida. EIO/interrupción constan pendientes
+explícitos y la PR ya no cierra #40. Se rechaza el hallazgo como defecto del parche;
+se conserva la limitación de cobertura. El step CI fue situado en source-and-tests,
+que construye la imagen validation. No se declara autoreview sin findings emitidos.
