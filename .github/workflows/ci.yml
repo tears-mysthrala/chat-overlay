@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Verify issue traceability
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,7 +58,7 @@ jobs:
         run: |
           set -o pipefail
           docker run --rm --network none --cpus 2 --memory 1g -e ERL_FLAGS='+S 2:2' chat-overlay:validation mix run --no-start scripts/load.exs 30 | tee output/load.json
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: source-evidence
@@ -74,7 +74,7 @@ jobs:
     env:
       POSTGRES_TEST_PROJECT: overlay51-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build PostgreSQL integration tooling
         run: docker build --target validation -t chat-overlay:51-postgres-validation .
       - name: Isolated synthetic database and restricted migration identity
@@ -94,7 +94,7 @@ jobs:
       - name: Remove only this run's synthetic resources
         if: always()
         run: docker compose -f compose.postgres-local.yml -p "$POSTGRES_TEST_PROJECT" down --volumes
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: postgres-evidence
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build release image
         run: docker build -t chat-overlay:review .
       - name: Verify hardened runtime
@@ -120,7 +120,7 @@ jobs:
           "$RUNNER_TEMP/overlay-audit/bin/python" -m pip install jsonschema==4.26.0 referencing==0.37.0
       - name: SBOM schema and all-severity vulnerability gate
         run: '"$RUNNER_TEMP/overlay-audit/bin/python" scripts/audit_image.py chat-overlay:review'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: image-evidence
@@ -132,7 +132,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
       - name: Build pinned decoder and run isolated pipeline tests
         run: |
           docker build -f Dockerfile.media-validator -t chat-overlay:media-validator .
@@ -161,7 +161,7 @@ jobs:
           "$RUNNER_TEMP/decoder-audit/bin/python" -m pip install jsonschema==4.26.0 referencing==0.37.0
       - name: Audit exact decoder image with all-severity gate
         run: '"$RUNNER_TEMP/decoder-audit/bin/python" scripts/audit_image.py chat-overlay:media-validator --decoder'
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         if: always()
         with:
           name: media-decoder-evidence
