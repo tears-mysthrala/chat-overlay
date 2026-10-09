@@ -33,3 +33,12 @@ como revisión de esta nueva prueba. Formato final PASS y Auto Review Codex exit
 Preview manual no acredita follows/subs ni eventos automáticos.
 #69 sigue independiente: inyección del borde incompatible con CSP.
 Revert de esta unidad retira prueba y evidencia; no altera datos ni producción.
+
+## Corrección de revisión remota
+
+Codex sobre57166eb detectó un falso positivo de la propia prueba: el timeout
+podía producir preview_rejected sin comprobar selección actual. Se añadió una
+confirmación explícita authorization_resumed antes de aceptar ese resultado.
+Formato y seis pruebas PASS. Copia aislada con :continue sustituido por
+:never_resume: fallo esperado en assert_receive, cinco de seis PASS y una fallida.
+No se publica esa mutación. Auto Review Codex del fix exit0 sin hallazgos.

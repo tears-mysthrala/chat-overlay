@@ -179,7 +179,9 @@ defmodule ChatOverlay.MediaPreviewTest do
             send(parent, {:authorizing, self()})
 
             receive do
-              :continue -> :ok
+              :continue ->
+                send(parent, {:authorization_resumed, change})
+                :ok
             after
               2000 -> {:error, :timeout}
             end
@@ -199,6 +201,7 @@ defmodule ChatOverlay.MediaPreviewTest do
       end
 
       send(executor, :continue)
+      assert_receive {:authorization_resumed, ^change}, 2000
       assert Task.await(task) == {:error, :preview_rejected}
       assert {0, nil} = Store.preview_since(store, 0)
     end
