@@ -21,7 +21,7 @@ No se atribuye una revisión CodeRabbit completa a un resultado limitado por cuo
 | --- | --- | --- |
 | Persistir antes de confirmar | `profile_persistence_test.exs`, `profile_storage_test.exs` | Revisión #56 y [aceptación #51](workflows/deployment/runs/2026-10-09-persistence-acceptance.md): fallos y reinicio probados, sin fallback JSON |
 | Cuota y limpieza | `media_ledger_test.exs`, `web_f2_test.exs` | #57; conciliación/reautenticación/vista operativa #48 |
-| Recuperación y clave | `recovery_test.exs`, [runbook](recovery.md) | Revisión #40 y aprobación antes de operación real |
+| Recuperación y clave | `recovery_test.exs`, [runbook](recovery.md) | [Aceptación #40](workflows/deployment/runs/2026-10-09-recovery-acceptance.md) y [EIO/SIGKILL/ENOSPC](workflows/deployment/runs/2026-10-09-recovery-faults.md) probados; aprobación antes de operación real y operación continua #38 pendiente |
 | Aislamiento de almacenamiento SEC-13 | [PostgreSQL local](postgres-storage.md), `test_postgres/rls_test.exs`, boot/restart del producto | ADR0005 implementada; rol/pool y mutaciones reales26 PASS por seed0/424242, boot/restart PASS; separación desplegada en PR67. [Aceptación #51](workflows/deployment/runs/2026-10-09-persistence-acceptance.md). No protege de aplicación totalmente comprometida ni cierra #39/distribución; JSON **no acredita** RLS |
 | Formato real SEC-17 | [límites multimedia](media-storage.md) | #49: cuarentena/decoder/salida ligada a hash pendientes |
 | ASVS y pruebas negativas | Regresiones existentes; mapa parcial histórico | #42: IDs oficiales/evidencia y revisión de riesgo residual |

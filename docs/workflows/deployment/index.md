@@ -29,3 +29,5 @@
 - [Aceptación persistencia 2026-10-09](runs/2026-10-09-persistence-acceptance.md):26 RLS PASS por semilla, boot/restart PASS y18 pruebas de persistencia PASS.
 
 - [Aceptación recuperación 2026-10-09](runs/2026-10-09-recovery-acceptance.md):6 tests de cifrado/rotación y7 auxiliares PASS; operación continua #38 pendiente.
+
+- [Fallos de recuperación 2026-10-09](runs/2026-10-09-recovery-faults.md): EIO y SIGKILL durante staging PASS; backup anterior/restauración/reintento preservados.

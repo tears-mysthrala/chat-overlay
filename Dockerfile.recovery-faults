@@ -1,0 +1,9 @@
+# Development validation only; not a runtime or distribution artifact.
+ARG VALIDATION_IMAGE=chat-overlay:validation
+FROM ${VALIDATION_IMAGE}
+USER root
+RUN apk add --no-cache gcc musl-dev
+COPY scripts/recovery_fault.c /tmp/recovery_fault.c
+RUN cc -shared -fPIC -Wall -Wextra -Werror -o /tmp/recovery_fault.so /tmp/recovery_fault.c -ldl
+COPY scripts/test_recovery_fault.exs scripts/test_recovery_fault.exs
+COPY scripts/test_recovery_faults.sh scripts/test_recovery_faults.sh
