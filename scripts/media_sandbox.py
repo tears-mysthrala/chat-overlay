@@ -51,13 +51,16 @@ def normalize_isolated(data, category, image):
                 image, category, input_hash, "--hold")
             while True:
                 output = docker("logs", name)
+                if not output and docker("inspect", "--format", "{{.State.Running}}", name).strip() != b"true":
+                    # The decoder can publish its rejection between logs and inspect.
+                    output = docker("logs", name)
+                    if not output:
+                        raise ValueError("validator_exited")
                 if output:
                     report = json.loads(output)
                     if report.get("ok") is False:
                         raise ValueError("decoder_rejected: " + str(report.get("error")))
                     break
-                if docker("inspect", "--format", "{{.State.Running}}", name).strip() != b"true":
-                    raise ValueError("validator_exited")
                 time.sleep(0.05)
             result = docker("exec", name, "python3", "-I", "/validator.py", "--read-output", category,
                             maximum=LIMITS[category])
