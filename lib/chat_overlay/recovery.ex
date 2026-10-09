@@ -158,7 +158,7 @@ defmodule ChatOverlay.Recovery do
             result =
               try do
                 with :ok <- File.chmod(temporary, 0o600),
-                     :ok <- IO.binwrite(io, contents),
+                     :ok <- :file.write(io, contents),
                      :ok <- :file.sync(io),
                      do: :ok
               after
