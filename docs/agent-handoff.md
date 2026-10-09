@@ -1,5 +1,11 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> Actualización 09-10-2026: #64 cerrado por PR #76 (main54671c1), sin nuevo despliegue.
+> #62: aceptación del backend local conciliada en PR #77, pendiente de integración.
+> Disco/coordinador Linux real12 PASS; aplicación24 PASS y referencias operativas
+> en [aceptación local](workflows/deployment/runs/2026-10-09-local-media-acceptance.md).
+> Esto acredita el backend local, no toda SEC-17: #49 y el escalado #63 siguen abiertos.
+> Los estados fechados anteriores se conservan como historial; no invalidan esta actualización.
 > Estado vigente 08-10-2026: PR #68 integrada en main640ef84 y desplegada.
 > OAuth Twitch, mensaje real en OBS, alerta visual/audio y revocación probados.
 > Callback nuevo Google/YouTube posterior al corte pendiente; CSP del borde #69.
@@ -17,7 +23,7 @@
 > CI/publicación/merge pendientes; no equivale a cierre global de F2.
 > Detalle: docs/workflows/deployment/runs/2026-10-07-obs-preview.md.
 
-> Estado actual 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.
+> Estado histórico 02-10-2026: F2 en cierre de deuda (#55), sin merge/despliegue.
 > Las secciones iniciales son historial. Consultar las entradas fechadas al final
 > y `docs/verification.md`; SEC-13/SEC-17 no están acreditados.
 
