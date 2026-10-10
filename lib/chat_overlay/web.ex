@@ -96,7 +96,7 @@ defmodule ChatOverlay.Web do
 
       {"DELETE", ["api", "profiles", handle]} ->
         with true <- allowed_origin?(conn),
-             :ok <- Session.authorize_recent(conn, handle) do
+             :ok <- Session.authorize(conn, handle) do
           ChatOverlay.RequestScope.with_authorizer(
             fn -> Session.authorize_recent(conn, handle) end,
             fn -> api_delete_profile(conn, handle) end
@@ -108,18 +108,6 @@ defmodule ChatOverlay.Web do
               403,
               "application/json",
               ChatOverlay.JSON.encode(%{"ok" => false, "error" => "Origen no permitido"})
-            )
-
-          {:error, :reauthentication_required} ->
-            reply(
-              conn,
-              403,
-              "application/json",
-              ChatOverlay.JSON.encode(%{
-                "ok" => false,
-                "error" =>
-                  "El borrado requiere reautenticación verificable; este recorrido aún no está disponible."
-              })
             )
 
           {:error, :unauthorized} ->
@@ -620,21 +608,58 @@ defmodule ChatOverlay.Web do
     end
   end
 
+  defp reauthentication_reply(conn, reason) do
+    {status, message} =
+      case reason do
+        :reauthentication_not_configured ->
+          {403,
+           "Contacta con el operador para configurar tu código de verificación antes de borrar el perfil."}
+
+        :reauthentication_rate_limited ->
+          {429, "Demasiados intentos. Espera cinco minutos antes de volver a probar."}
+
+        _ ->
+          {403,
+           "Introduce un código actual de tu aplicación de autenticación. Si ya lo usaste, espera al siguiente."}
+      end
+
+    reply(
+      conn,
+      status,
+      "application/json",
+      ChatOverlay.JSON.encode(%{"ok" => false, "error" => message})
+    )
+  end
+
   defp api_delete_profile(conn, handle) do
     case ChatOverlay.Profiles.delete(handle) do
-      {:error, :reauthentication_required} ->
+      {:error, reason}
+      when reason in [
+             :reauthentication_required,
+             :reauthentication_not_configured,
+             :reauthentication_rate_limited
+           ] ->
+        reauthentication_reply(conn, reason)
+
+      {:error, reason} when reason in [:unauthorized, :forbidden] ->
         reply(
           conn,
           403,
           "application/json",
           ChatOverlay.JSON.encode(%{
             "ok" => false,
-            "error" =>
-              "El borrado requiere reautenticación verificable; este recorrido aún no está disponible."
+            "error" => "La sesión ya no autoriza este borrado."
           })
         )
 
       :ok ->
+        # The successful deletion already consumed its factor. Logout only
+        # revokes the caller's cookie; it must not consume that factor again.
+        conn =
+          ChatOverlay.RequestScope.with_authorizer(fn -> :ok end, fn ->
+            Session.delete_session(conn)
+          end)
+
         reply(conn, 200, "application/json", ChatOverlay.JSON.encode(%{"ok" => true}))
 
       {:error, :not_found} ->

@@ -1,7 +1,7 @@
 # Borrado con autorización reciente — 2026-10-09
 
-Estado actual: protección provisional en cfa1f81; no integrar. Falta el recorrido
-de reautenticación verificable y aceptación integral de #48.
+Estado histórico de 09-10: protección provisional en cfa1f81. Continuación con
+TOTP y aceptación en [registro de 11-10](2026-10-11-deletion-totp.md).
 
 ## Historia de 9f9bc0a — sustituida por la corrección posterior
 

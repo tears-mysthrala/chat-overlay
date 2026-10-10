@@ -378,6 +378,7 @@ defmodule ChatOverlay.SessionTest do
 
       # 1. Matching linked account -> authorized
       assert :ok = Session.authorize(conn, "streamer-linked", key: @test_key)
+      assert {:ok, [_]} = Session.scope_profiles(conn, [prod_with_link], key: @test_key)
 
       # 2. When account is unlinked (linked_accounts is empty or provider missing) -> 401 unauthorized
       prod_unlinked = %{prod_with_link | "linked_accounts" => %{}}
@@ -385,6 +386,9 @@ defmodule ChatOverlay.SessionTest do
 
       assert {:error, :unauthorized} =
                Session.authorize(conn, "streamer-linked", key: @test_key)
+
+      assert {:error, :unauthorized} =
+               Session.scope_profiles(conn, [prod_unlinked], key: @test_key)
 
       # 3. When user_id changed -> 401 unauthorized
       prod_changed_user =

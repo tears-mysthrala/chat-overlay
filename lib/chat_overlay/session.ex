@@ -259,25 +259,24 @@ defmodule ChatOverlay.Session do
   def demo_profile?(_), do: false
 
   @doc """
-  Requires ordinary profile authorization before deletion. Production deletion
-  remains denied until a verified reauthentication mechanism is connected.
-  Session issuance time is not authentication time. Offline demo management
-  remains available only over direct loopback.
+  Revalidates the profile session and consumes a current TOTP code. Invoke only
+  in the serialized deletion authorizer, immediately before the mutation.
   """
-  @spec authorize_recent(Plug.Conn.t(), String.t(), keyword()) ::
-          :ok | {:error, :unauthorized | :forbidden | :reauthentication_required}
   def authorize_recent(conn, handle, opts \\ []) do
     with :ok <- authorize(conn, handle, opts) do
       case fetch_session(conn, opts) do
-        # OAuth may reuse an existing provider SSO session. No current issuer
-        # verifies authentication time, so even a freshly issued session cannot
-        # satisfy this requirement. Do not accept client-supplied proof fields.
-        {:ok, _session} ->
-          {:error, :reauthentication_required}
+        {:ok, session} ->
+          case Plug.Conn.get_req_header(conn, "x-reauth-code") do
+            [code] when byte_size(code) == 6 ->
+              if ChatOverlay.Transport.secure?(conn),
+                do: ChatOverlay.Reauthentication.consume(session, code),
+                else: {:error, :reauthentication_required}
+
+            _ ->
+              {:error, :reauthentication_required}
+          end
 
         {:error, _} ->
-          # Preserve offline demo management. Production profiles never use this
-          # exception, and configured proxies are excluded by loopback?/1.
           if loopback?(conn) and
                (demo_profile?(handle) or ChatOverlay.Config.profile(handle) == nil),
              do: :ok,
@@ -409,7 +408,11 @@ defmodule ChatOverlay.Session do
     case fetch_session(conn, opts) do
       {:ok, session} ->
         session_handle = session["handle"]
-        {:ok, Enum.filter(profiles, &(&1["handle"] == session_handle))}
+
+        case do_authorize(conn, session_handle, opts) do
+          :ok -> {:ok, Enum.filter(profiles, &(&1["handle"] == session_handle))}
+          _ -> {:error, :unauthorized}
+        end
 
       {:error, _reason} ->
         if loopback?(conn) do

@@ -80,7 +80,7 @@ defmodule ChatOverlay.Custodian.Operations do
     authorizer =
       cond do
         op == "profiles.delete" ->
-          fn -> ChatOverlay.Session.authorize_recent(conn, args["handle"]) end
+          fn -> ChatOverlay.Session.authorize(conn, args["handle"]) end
 
         op == "profiles.save" ->
           fn -> ChatOverlay.Session.authorize_profile_creation(conn, args["document"]) end
@@ -171,6 +171,11 @@ defmodule ChatOverlay.Custodian.Operations do
       query = query(op, args)
       headers = [{"content-type", "application/json"}]
       headers = if args["origin"], do: [{"origin", args["origin"]} | headers], else: headers
+
+      headers =
+        if op == "profiles.delete" and args["reauth_code"],
+          do: [{"x-reauth-code", args["reauth_code"]} | headers],
+          else: headers
 
       cookies =
         if args["session"], do: [{ChatOverlay.Session.cookie_name(), args["session"]}], else: []

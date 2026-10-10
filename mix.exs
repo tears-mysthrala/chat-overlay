@@ -12,7 +12,8 @@ defmodule ChatOverlay.MixProject do
         {:bandit, "1.12.5"},
         {:mint, "1.11.0"},
         {:mint_web_socket, "1.0.6"},
-        {:postgrex, "0.22.4"}
+        {:postgrex, "0.22.4"},
+        {:nimble_totp, "1.0.0"}
       ],
       aliases: [
         check: [

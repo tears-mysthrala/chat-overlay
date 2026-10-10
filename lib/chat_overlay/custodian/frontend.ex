@@ -132,7 +132,8 @@ defmodule ChatOverlay.Custodian.Frontend do
         {:ok, "profiles.resolve", %{}, true}
 
       {"DELETE", ["api", "profiles", h]} ->
-        {:ok, "profiles.delete", %{"handle" => h}, false}
+        {:ok, "profiles.delete", optional(%{"handle" => h}, "reauth_code", reauth_code(conn)),
+         false}
 
       {"POST", ["api", "profiles", h, "sync-youtube"]} ->
         {:ok, "profiles.sync_youtube", %{"handle" => h}, false}
@@ -166,6 +167,13 @@ defmodule ChatOverlay.Custodian.Frontend do
 
       _ ->
         :not_found
+    end
+  end
+
+  defp reauth_code(conn) do
+    case Plug.Conn.get_req_header(conn, "x-reauth-code") do
+      [code] when byte_size(code) == 6 -> code
+      _ -> nil
     end
   end
 

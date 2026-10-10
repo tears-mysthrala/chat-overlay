@@ -269,3 +269,14 @@ button:disabled { opacity:.6; cursor:default }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important } }
 
 .overlay .conversation { min-height:0 }
+
+#delete-profile-dialog {
+  max-width: min(32rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--border-color, #687181);
+  border-radius: 0.75rem;
+  background: var(--bg-color, #10151e);
+  color: var(--text-primary, #f5f7fa);
+}
+#delete-profile-dialog::backdrop { background: rgb(0 0 0 / 70%); }
+#delete-profile-code { display: block; width: 100%; margin-top: 0.5rem; }

@@ -7,7 +7,7 @@ defmodule ChatOverlay.Custodian.Protocol do
     "session.logout" => %{},
     "profiles.list" => %{},
     "profiles.save" => %{"document" => :document},
-    "profiles.delete" => %{"handle" => :handle},
+    "profiles.delete" => %{"handle" => :handle, "reauth_code" => 6},
     "profiles.resolve" => %{"target" => 2048, "platform" => :platform},
     "profiles.sync_youtube" => %{"handle" => :handle},
     "profiles.rotate_capability" => %{"handle" => :handle},

@@ -140,6 +140,91 @@ defmodule ChatOverlay.Custodian.TLSTest do
     assert Enum.map(profiles, & &1["handle"]) == ["test"]
   end
 
+  test "public DELETE carries the TOTP to the serialized writer over real mTLS", %{root: root} do
+    previous = Application.get_env(:chat_overlay, :profiles)
+    old_path = Application.get_env(:chat_overlay, :profiles_path)
+    factor_state = :sys.get_state(ChatOverlay.Reauthentication)
+    secret = NimbleTOTP.secret()
+    factor = root <> "/factor.json"
+
+    File.write!(
+      factor,
+      ChatOverlay.JSON.encode([
+        %{
+          "handle" => "test",
+          "provider" => "twitch",
+          "user_id" => "fixture",
+          "secret" => Base.encode32(secret, padding: false)
+        }
+      ])
+    )
+
+    File.chmod!(factor, 0o600)
+    {:ok, clock} = Agent.start_link(fn -> 1_800_000_001 end)
+
+    {:ok, state} =
+      ChatOverlay.Reauthentication.init(path: factor, clock: fn -> Agent.get(clock, & &1) end)
+
+    :sys.replace_state(ChatOverlay.Reauthentication, fn _ -> state end)
+    Agent.update(clock, fn _ -> 1_800_000_031 end)
+    Application.put_env(:chat_overlay, :profiles_path, root <> "/delete-profiles.json")
+
+    profiles =
+      Enum.map(previous, fn p ->
+        if p["handle"] == "test",
+          do:
+            Map.put(p, "linked_accounts", %{
+              "twitch" => %{"user_id" => "fixture", "account_version" => 1}
+            }),
+          else: p
+      end)
+
+    Application.put_env(:chat_overlay, :profiles, profiles)
+
+    on_exit(fn ->
+      :sys.replace_state(ChatOverlay.Reauthentication, fn _ -> factor_state end)
+      Application.put_env(:chat_overlay, :profiles, previous)
+      restore(:profiles_path, old_path)
+      # Deletion stops the actual store/sources; restore this shared test fixture.
+      for p <- previous do
+        if Registry.lookup(ChatOverlay.Registry, {:store, p["handle"]}) == [],
+          do: Supervisor.start_child(ChatOverlay.Stores, ChatOverlay.Store.child_spec(p))
+      end
+
+      for source <- ChatOverlay.Config.sources() do
+        if Registry.lookup(ChatOverlay.Registry, {:source, ChatOverlay.Config.key(source)}) == [],
+          do: Supervisor.start_child(ChatOverlay.Sources, ChatOverlay.Source.child_spec(source))
+      end
+    end)
+
+    {:ok, token} =
+      ChatOverlay.Session.create_token(%{
+        "handle" => "test",
+        "provider" => "twitch",
+        "user_id" => "fixture",
+        "account_version" => 1
+      })
+
+    conn =
+      Plug.Test.conn("DELETE", "/api/profiles/test")
+      |> Map.merge(%{remote_ip: {198, 51, 100, 10}, scheme: :https, host: "overlay.example.test"})
+      |> Plug.Conn.put_req_header("origin", "https://overlay.example.test")
+      |> Plug.Conn.put_req_header("cookie", ChatOverlay.Session.cookie_name() <> "=" <> token)
+
+    assert ChatOverlay.Custodian.Frontend.call(conn, []).status == 403
+
+    conn =
+      Plug.Conn.put_req_header(
+        conn,
+        "x-reauth-code",
+        NimbleTOTP.verification_code(secret, time: 1_800_000_031)
+      )
+
+    assert ChatOverlay.Custodian.Frontend.call(conn, []).status == 200
+    assert ChatOverlay.Config.profile("test") == nil
+    assert ChatOverlay.Config.profile("other") != nil
+  end
+
   test "custodian failure does not fall back to local profile state", %{client: client} do
     Application.put_env(:chat_overlay, :custodian_client, Keyword.put(client, :port, 1))
     conn = %{Plug.Test.conn("GET", "/api/profiles") | remote_ip: {198, 51, 100, 10}}
