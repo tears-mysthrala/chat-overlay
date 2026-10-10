@@ -1,0 +1,9 @@
+{
+  "image": "sha256:007e79d7a90f8a727e77b2ec4b98444ec06cdece55350bd1f6b964de4c6c232d",
+  "separate_pid_namespaces": true,
+  "frontend_without_private_credentials_or_state": true,
+  "authenticated_profile_rpc": true,
+  "private_port_unpublished": true,
+  "failure_without_local_fallback": true,
+  "scope": "synthetic JSON release; guest firewall, upstream OAuth, PostgreSQL and media NOT TESTED"
+}

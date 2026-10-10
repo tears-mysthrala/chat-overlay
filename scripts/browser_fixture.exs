@@ -67,6 +67,24 @@ Application.put_env(:chat_overlay, :oauth_http_client, fn
     {:error, :fixture_destination_rejected}
 end)
 
+# Optional synthetic second factor; private file never served over HTTP.
+if System.get_env("BROWSER_FIXTURE_TOTP") == "1" do
+  factor_path = Path.join(dir, "totp.json")
+
+  factor = [
+    %{
+      "handle" => "alice",
+      "provider" => "twitch",
+      "user_id" => "synthetic-alice",
+      "secret" => Base.encode32(NimbleTOTP.secret(), padding: false)
+    }
+  ]
+
+  File.write!(factor_path, ChatOverlay.JSON.encode(factor))
+  File.chmod!(factor_path, 0o600)
+  Application.put_env(:chat_overlay, :reauth_totp_file, factor_path)
+end
+
 {:ok, _} = Application.ensure_all_started(:chat_overlay)
 :ok = ChatOverlay.ProfileStorage.write(path, profiles, [])
 IO.puts("Synthetic browser fixture ready on http://127.0.0.1:4143; all sources are demo.")

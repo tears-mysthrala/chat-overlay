@@ -5,6 +5,8 @@ if config_env() != :test do
   config :chat_overlay, role: role
 
   if role != :frontend do
+    config :chat_overlay, reauth_totp_file: System.get_env("CHAT_REAUTH_TOTP_FILE")
+
     backend =
       case System.get_env("CHAT_STORAGE") || if(config_env() == :dev, do: "json_demo", else: nil) do
         "json_demo" -> :json_demo

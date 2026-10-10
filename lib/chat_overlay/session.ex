@@ -259,16 +259,36 @@ defmodule ChatOverlay.Session do
   def demo_profile?(_), do: false
 
   @doc """
-  Authorizes access to a target profile resource.
+  Revalidates the profile session and consumes a current TOTP code. Invoke only
+  in the serialized deletion authorizer, immediately before the mutation.
+  """
+  def authorize_recent(conn, handle, opts \\ []) do
+    with :ok <- authorize(conn, handle, opts) do
+      case fetch_session(conn, opts) do
+        {:ok, session} ->
+          case Plug.Conn.get_req_header(conn, "x-reauth-code") do
+            [code] when byte_size(code) == 6 ->
+              if ChatOverlay.Transport.secure?(conn),
+                do: ChatOverlay.Reauthentication.consume(session, code),
+                else: {:error, :reauthentication_required}
 
-  Rules:
-  1. If an active session is present, caller must match `handle` (SEC-14 strict authorization).
-     Validates profile existence and linked account identity.
-     Cross-profile access returns `{:error, :forbidden}`.
-  2. If no session is present:
-     - Local loopback connections under demo mode or querying unconfigured handles
-       are allowed (`:ok`) for zero-friction quick start and testing.
-     - Remote / non-loopback connections or production non-demo profiles return `{:error, :unauthorized}`.
+            _ ->
+              {:error, :reauthentication_required}
+          end
+
+        {:error, _} ->
+          if loopback?(conn) and
+               (demo_profile?(handle) or ChatOverlay.Config.profile(handle) == nil),
+             do: :ok,
+             else: {:error, :reauthentication_required}
+      end
+    end
+  end
+
+  @doc """
+  Authorizes the current session against the target profile and linked identity.
+  Without a session only direct loopback demo/unconfigured handles are allowed;
+  configured proxies and production profiles cannot use that exception.
   """
   @spec authorize(Plug.Conn.t(), String.t() | nil, keyword()) ::
           :ok | {:error, :unauthorized | :forbidden}
@@ -388,7 +408,11 @@ defmodule ChatOverlay.Session do
     case fetch_session(conn, opts) do
       {:ok, session} ->
         session_handle = session["handle"]
-        {:ok, Enum.filter(profiles, &(&1["handle"] == session_handle))}
+
+        case do_authorize(conn, session_handle, opts) do
+          :ok -> {:ok, Enum.filter(profiles, &(&1["handle"] == session_handle))}
+          _ -> {:error, :unauthorized}
+        end
 
       {:error, _reason} ->
         if loopback?(conn) do

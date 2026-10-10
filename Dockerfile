@@ -5,7 +5,8 @@ RUN mix local.hex 2.5.1 --force && mix local.rebar rebar3 https://builds.hex.pm/
 COPY mix.exs mix.lock ./
 COPY config config
 COPY scripts/prepare_postgrex.exs scripts/prepare_postgrex.exs
-RUN mix deps.get --only prod && mix hex.audit && elixir scripts/prepare_postgrex.exs && mix deps.compile
+COPY scripts/prepare_nimble_totp.exs scripts/prepare_nimble_totp.exs
+RUN mix deps.get --only prod && mix hex.audit && elixir scripts/prepare_postgrex.exs && elixir scripts/prepare_nimble_totp.exs && mix deps.compile
 COPY lib lib
 COPY priv priv
 COPY scripts/inventory.exs scripts/inventory.exs

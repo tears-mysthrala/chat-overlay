@@ -78,8 +78,9 @@ no se infiere propiedad únicamente de una URL externa. No se han modificado dat
 reales ni ejecutado migraciones contra almacenamiento remoto.
 
 La eliminación del perfil confirma eliminación local; los objetos permanecen en
-el inventario hasta confirmación remota. Falta en #48 la vista operativa de borrados
-pendientes, la reautenticación específica y la conciliación de inventario heredado.
+el inventario hasta confirmación remota. La reautenticación específica se implementa
+en PR #81 mediante TOTP. Falta en #48 cerrar la vista operativa de borrados
+pendientes y la conciliación de inventario heredado.
 
 ## Configuración, compatibilidad y rollback
 
@@ -95,3 +96,18 @@ mutaciones y conservar el documento nuevo junto al backup: no borrar el inventar
 ni restaurar una copia antigua sobre cambios posteriores. Conciliar objetos creados
 tras el backup antes de volver a un binario anterior. El cambio se entrega para revisión,
 sin merge, migración de datos de usuario ni despliegue.
+
+## Borrado de perfil y segundo factor — #48
+
+DELETE exige sesión vigente, identidad vinculada y el código actual de la
+aplicación de autenticación del titular. El custodio comprueba y consume ese
+código dentro del escritor, con cinco intentos por perfil cada cinco minutos.
+Un código solo se usa una vez; después de un reinicio hay que esperar al siguiente
+intervalo de 30 segundos. Una sesión OAuth nueva no sustituye el segundo factor.
+
+El operador configura la semilla fuera del panel. Sin factor, la respuesta indica
+contactar con él. Ver [aprovisionamiento](reauthentication.md) y
+[ADR 0009](adr/0009-sensitive-action-reauthentication.md). La demo local directa
+conserva su excepción. Un error al guardar no borra el perfil, pero consume el
+código: hay que reintentar con el siguiente. Solo se confirma borrado físico
+cuando el coordinador confirma cada objeto; antes queda inventario pendiente.

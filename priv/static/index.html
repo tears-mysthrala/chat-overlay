@@ -5,6 +5,21 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Chat Overlay · Panel de Creador</title>
   <link rel="stylesheet" href="/assets/app.css">
+  <dialog id="delete-profile-dialog" aria-labelledby="delete-profile-title" aria-describedby="delete-profile-help">
+    <form method="dialog" id="delete-profile-form">
+      <h2 id="delete-profile-title">Eliminar perfil</h2>
+      <p id="delete-profile-target"></p>
+      <p id="delete-profile-help">Se cerrarán sus conexiones y se retirarán sus archivos. Confirma con el código de tu aplicación de autenticación. Si aún no la has configurado, contacta con el operador.</p>
+      <label for="delete-profile-code">Código de verificación</label>
+      <input id="delete-profile-code" name="code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" aria-describedby="delete-profile-demo">
+      <p id="delete-profile-demo" class="hint">En la demo local puedes dejar el código vacío.</p>
+      <div class="form-actions">
+        <button type="button" id="delete-profile-cancel" class="btn-action">Cancelar</button>
+        <button type="submit" value="delete" class="btn-action btn-danger">Eliminar perfil</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/assets/app.js" defer></script>
 </head>
 <body class="home">
