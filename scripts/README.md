@@ -82,5 +82,5 @@ El proceso falla ante pérdida de muestras, errores de lectores o p95 >=100 ms.
 Estos gates no certifican estabilidad de memoria: revisar la serie temporal y
 explicar cualquier crecimiento sostenido antes de aceptar REL-08. Tampoco prueban
 recuperación de workers, upstream, OBS, navegador ni Internet. Las pruebas de 4 y
-24 horas siguen pendientes hasta disponer de sus informes y revisión; un smoke
+24 horas se aceptaron para 640ef84 en [el registro de carga](../docs/workflows/deployment/runs/2026-10-11-soak-closeout.md); un smoke
 de 65 segundos solo verifica el muestreo periódico y la entrega corta.

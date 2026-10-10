@@ -1,5 +1,7 @@
 # Handoff F2 — issue #17 (Panel de Creador, Capability Tokens, Módulo Multimedia R2 y URLs Externas)
 
+> #34: cargas 4 h/24 h aceptadas sobre 640ef84; [cierre y evidencia](workflows/deployment/runs/2026-10-11-soak-closeout.md). Sin prueba nueva, despliegue ni cierre global F2.
+
 > #51: aceptación conciliada en [persistencia](workflows/deployment/runs/2026-10-09-persistence-acceptance.md); cerrado por PR #78 (main65a22e5), sin nuevo despliegue.
 > #40: EIO/SIGKILL durante staging PASS en [ensayo](workflows/deployment/runs/2026-10-09-recovery-faults.md), cierre pendiente de integración. Herramientas/ensayo/procedimiento conciliados en [recuperación](workflows/deployment/runs/2026-10-09-recovery-acceptance.md); operación continua #38 sigue pendiente.
 > Actualización 09-10-2026: #64 cerrado por PR #76 (main54671c1), sin nuevo despliegue.
@@ -11,8 +13,8 @@
 > Estado vigente 08-10-2026: PR #68 integrada en main640ef84 y desplegada.
 > OAuth Twitch, mensaje real en OBS, alerta visual/audio y revocación probados.
 > Callback nuevo Google/YouTube posterior al corte pendiente; CSP del borde #69.
-> Backlog reconciliado en [docs/backlog.md](backlog.md) y #55. Carga4/24 h #34
-> aún sin informe final. Deprecación de Postgrex seguida en #70.
+> Backlog reconciliado en [docs/backlog.md](backlog.md) y #55. La carga #34 se
+> actualiza en el registro superior. Deprecación de Postgrex seguida en #70.
 > Continuación: docs/55-debt-closeout; registro en
 > [cierre de deuda](workflows/deployment/runs/2026-10-08-debt-closeout.md).
 >

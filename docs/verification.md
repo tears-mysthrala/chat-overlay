@@ -93,9 +93,19 @@ Histograma acotado y percentiles conservadores comprobados por
 [scripts/README.md](../scripts/README.md#carga-sostenida-sintética-issue-4-rel-08).
 Esta instrumentación no acredita estabilidad por sí sola. La ejecución de cuatro
 horas y su análisis de recursos están completados y aceptados en el registro
-inferior. La ejecución de 24 horas, su análisis y la aprobación humana de
-publicación siguen pendientes bajo #4/#34.
+inferior. La ejecución de 24 horas y su análisis se aceptan en el registro
+del 11-10 enlazado abajo. La aprobación de publicación y el resto de gates de #4
+permanecen separados.
 
 ### Carga de cuatro horas — 09-10-2026 (#34)
 
-Aceptada sobre base640ef84: 7.215.000/7.215.000 entregas, cero errores, p95 de50 ms, sin OOM y procesos estables. Análisis de memoria y límites en [registro de carga](workflows/deployment/runs/2026-10-09-soak.md). Ejecución de24 h iniciada; resultado pendiente.
+Aceptada sobre base640ef84: 7.215.000/7.215.000 entregas, cero errores, p95 de50 ms, sin OOM y procesos estables. Análisis de memoria y límites en [registro de carga](workflows/deployment/runs/2026-10-09-soak.md). La ejecución de 24 h se completó después y se analiza en el registro siguiente.
+
+### Carga de veinticuatro horas — aceptación 11-10-2026 (#34)
+
+Candidata 640ef84, misma imagen y límites de la prueba de cuatro horas.
+43.215.000/43.215.000 entregas, cero errores, p95 de 50 ms, exit 0 sin OOM.
+1.440 muestras de carga con 549 procesos; memoria media horas 2–24 entre
+427,402 y 429,119 MB. Sin crecimiento sostenido observado en esta ventana.
+[Informe íntegro, análisis reproducible y límites](workflows/deployment/runs/2026-10-11-soak-closeout.md).
+El intento anterior interrumpido no se suma ni se acredita. No hubo otra ejecución.
