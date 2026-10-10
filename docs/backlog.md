@@ -21,7 +21,7 @@ Este inventario dirigido no sustituye una auditoría completa ni acredita ASVS L
 
 ## Validación y distribución
 
-- #34: carga sintética 4 h; analizar entrega, p95 y tendencia de recursos antes de ejecutar 24 h. PR #33 ya integrada. Sin carga contra plataformas reales.
+- #34: cargas sintéticas de 4 h y 24 h aceptadas sobre 640ef84; entrega exacta, cero errores, p95 50 ms y recursos estables en esas ventanas. [Evidencia y límites](workflows/deployment/runs/2026-10-11-soak-closeout.md). No acredita upstream/OBS ni otra candidata.
 - #44: fallos/cuotas/latencia y recuperación de conectores en candidata; separar fixtures y upstream real.
 - #35: firma, procedencia y evidencia ligada al mismo artefacto.
 - #36: licencias de runtime, imagen y assets antes de distribución.
