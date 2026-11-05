@@ -25,7 +25,7 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 
 Son diez paquetes Hex directos/transitivos, todos fijados con hashes en mix.lock. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
 
-La imagen y builder Alpine 3.24.3 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
+La imagen y builder Alpine 3.24.3 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20261020-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`, `musl=1.2.6-r3`, `musl-utils=1.2.6-r3`, `zlib=1.3.2-r1`; verificados el 2026-11-05): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
 
 Los paquetes pueden ejecutar sus tareas de compilación durante el build, en un entorno sin secretos de producción. En ejecución, los permisos son los del UID 65532; ninguna dependencia obtiene privilegios extra. No hay exportador de telemetría configurado. Retirada: transporte detrás de Net/Socket/Web/Stream; cambiar componentes exige ADR, pruebas de protocolo y nueva aprobación cuando corresponda.
 
@@ -154,7 +154,7 @@ Se conserva Postgrex 0.22.4 fijado. El build aplica una sustitución acotada de 
 ## Toolchain del harness de recuperación — #40
 
 Solo Dockerfile.recovery-faults (desarrollo/CI): gcc15.2.0-r5 y
-musl-dev1.2.6-r2 fijados por revisión APK. Versiones verificadas en la base
+musl-dev1.2.6-r3 fijados por revisión APK. Versiones verificadas en la base
 local /lib/apk/db/installed. Metadatos de licencia de esos paquetes:
 GPL-2.0-or-later AND LGPL-2.1-or-later para gcc y MIT para musl-dev;
 son metadata de Alpine, no dictamen de distribución. No se incorporan a

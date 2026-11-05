@@ -588,3 +588,8 @@ aplicada en producción. Revisión/CI/merge de esta unidad pendientes. No backup
 periódico ni segunda custodia de clave configurados. Propuesta ARCH06 ADR0008
 preparada; protocolo interno y cambio de arquitectura requieren decisión explícita.
 Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
+
+## Recuperación de CI — 05-11-2026, Refs #46, #50
+
+Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
+Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
