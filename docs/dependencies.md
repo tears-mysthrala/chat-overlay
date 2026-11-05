@@ -13,19 +13,19 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 
 | Componente fijado | Papel | Licencia de paquete |
 | --- | --- | --- |
-| Elixir 1.20.4 / OTP 29.1.1 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
-| Bandit 1.12.5 | Servidor HTTP | MIT |
+| Elixir 1.20.5 / OTP 29.1.2 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
+| Bandit 1.14.1 | Servidor HTTP | MIT |
 | Mint 1.11.0 | HTTP/TLS saliente | Apache-2.0 |
 | Mint.WebSocket 1.0.6 | Protocolo WebSocket | Apache-2.0 |
 | hpax 1.1.0 | Dependencia de transporte | Apache-2.0 |
 | mime 2.0.7 | Tipos MIME de Plug | Apache-2.0 |
-| Plug 1.20.3 / plug_crypto 2.2.0 | Contrato web / primitivas de Plug | Apache-2.0 |
+| Plug 1.20.3 / plug_crypto 2.2.1 | Contrato web / primitivas de Plug | Apache-2.0 |
 | telemetry 1.4.2 | Instrumentación interna de dependencias | Apache-2.0 |
-| Thousand Island 1.5.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
+| Thousand Island 1.6.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
 
 Son diez paquetes Hex directos/transitivos, todos fijados con hashes en mix.lock. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
 
-La imagen y builder Alpine 3.24.2 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
+La imagen y builder Alpine 3.24.3 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
 
 Los paquetes pueden ejecutar sus tareas de compilación durante el build, en un entorno sin secretos de producción. En ejecución, los permisos son los del UID 65532; ninguna dependencia obtiene privilegios extra. No hay exportador de telemetría configurado. Retirada: transporte detrás de Net/Socket/Web/Stream; cambiar componentes exige ADR, pruebas de protocolo y nueva aprobación cuando corresponda.
 
@@ -114,11 +114,11 @@ los checks compartidos/T3 y el runtime permanecen independientes. Fuentes oficia
 
 El usuario aprobó expresamente Postgrex con ADR0005 para implementación/pruebas
 locales. El árbol actualizado contiene **13** paquetes Hex: los diez anteriores,
-Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.1.1. Fijados con
+Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.2.0. Fijados con
 checksums en mix.lock; no Ecto, Jason ni otra dependencia directa de producción.
 Apache-2.0 en los tres, verificado en [Postgrex versionado](https://raw.githubusercontent.com/elixir-ecto/postgrex/v0.22.4/mix.exs),
 [DBConnection](https://raw.githubusercontent.com/elixir-ecto/db_connection/v2.10.2/mix.exs)
-y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.1.1/mix.exs).
+y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.2.0/mix.exs).
 Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.4
 probado. Postgrex 0.22.4 publicado en [Hex](https://hex.pm/packages/postgrex);
 no se presume una política LTS de Postgrex que el proveedor no publica.
@@ -164,3 +164,20 @@ solo se activa en contenedores sintéticos sin red. Build con Werror y EIO/SIGKI
 repetidos. Si los pins dejan de existir, build falla y requiere actualización
 revisada, no quitar versiones. Los pins directos no constituyen un lock completo
 de todas las dependencias transitivas de Alpine ni auditoría CVE de este toolchain.
+
+## Recuperación de CI — 05-11-2026, Refs #46, #50
+
+Actualizaciones de componentes existentes, sin dependencias nuevas ni cambios de licencia
+(Bandit y Thousand Island MIT; plug_crypto y Decimal Apache-2.0): Hex por avisos de
+`mix hex.audit`, Elixir/OTP/Alpine y `ca-certificates`, `musl`, `zlib` por pins retirados o
+avisos con corrección publicada. Thousand Island sube porque Bandit 1.13+ exige `~> 1.6`.
+`musl-dev` 1.2.6-r3 sustituye al pin de `Dockerfile.recovery-faults`.
+
+`Dockerfile.media-validator` y las aprobaciones de `docs/security` no cambian: siguen ligados
+al artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026. El pin Python 3.14.8-r0
+ya no existe, así que esa receta no reconstruye. `Dockerfile.media-validator.candidate` usa
+Python 3.14.10-r1, que incluye tres de los backports, y conserva solo el de poplib; no tiene
+aprobación. `audit_image.py IMAGE --decoder-candidate` lo escanea sin VEX: todo hallazgo falla.
+
+Esta unidad no renueva ni amplía ninguna excepción: las revisiones VEX vencidas siguen
+bloqueando la auditoría hasta una decisión humana (#50).

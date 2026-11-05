@@ -13,10 +13,12 @@ SYFT = "anchore/syft:v1.52.0@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6
 GRYPE = "anchore/grype:v0.119.0@sha256:8c2c9234a345577a6d321a4753aa3ee1276d8975c8452d2344a56b57733ecad3"
 SCHEMA_REV = "4b3f59453366e27c8073fd24e98bf21ef8892c8e"
 image = sys.argv[1]
-decoder = sys.argv[2:] == ["--decoder"]
+# --decoder-candidate: raw scan of a built decoder. No VEX applies, so every finding fails.
+candidate = sys.argv[2:] == ["--decoder-candidate"]
+decoder = candidate or sys.argv[2:] == ["--decoder"]
 if sys.argv[2:] and not decoder:
-    raise SystemExit("usage: audit_image.py IMAGE [--decoder]")
-out = pathlib.Path("output/audit/decoder" if decoder else "output/audit").resolve()
+    raise SystemExit("usage: audit_image.py IMAGE [--decoder | --decoder-candidate]")
+out = pathlib.Path("output/audit/decoder-candidate" if candidate else "output/audit/decoder" if decoder else "output/audit").resolve()
 out.mkdir(parents=True, exist_ok=True)
 mount = f"type=bind,source={out},target=/scan"
 def run(*args):
@@ -89,7 +91,7 @@ if vex_src.is_file() and not decoder:
     vex_n = len(vex_doc["statements"])
     print(f"VEX aplicado: {vex_src} ({vex_n} declaraciones, autor: {vex_doc.get('author')})", flush=True)
 run(*cmd)
-if decoder:
+if decoder and not candidate:
     # Preserve the unfiltered report before applying any approved disposition.
     from decoder_vex import verified_document
     (out / 'vulnerabilities.raw.json').write_bytes((out / 'vulnerabilities.json').read_bytes())
