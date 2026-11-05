@@ -107,7 +107,9 @@ Ambas rutas de subida normalizan en un [decoder aislado](media-quarantine.md), s
 credenciales ni socket Docker, y publican PNG estático o WAV ligado a job y hash. El
 coordinador y su launcher con acceso a Docker son servicio confiable del operador, fuera
 del backend HTTP. `MediaLedger` y `MediaCleanup` conservan cuota e inventario hasta
-confirmar el borrado. La [cabecera de cuarentena](media-quarantine.md) es anterior al
+confirmar el borrado. Según el código, el coordinador local valida el VEX del decoder al
+arrancar: la revisión vencida el 2026-10-21 (#50) puede impedir su reinicio; estado
+desplegado no comprobado. La [cabecera de cuarentena](media-quarantine.md) es anterior al
 despliegue local. Preview es manual ([aceptación](workflows/deployment/runs/2026-10-09-preview-acceptance.md)):
 no acredita eventos automáticos de follows/subs.
 
@@ -123,6 +125,7 @@ Estado de los issues comprobado el 05-11-2026:
 - **Multimedia:** #49 (aceptación global SEC-17), #48 (borrado y saneamiento), #32 (cuotas), #63 (escalado, sin implementar).
 - **Validación:** #42 (ASVS), #43 (navegador/OBS, Google), #44 (conectores reales), #47 (matriz OAuth de lectores), #34 (carga: `main` solo registra 4 h aceptadas).
 - **Distribución y operación:** #4, #35, #36, #37, #38, #45, #46, #50.
+- **CI:** la [ejecución de `main` del 02-11-2026](https://github.com/tears-mysthrala/chat-overlay/actions/runs/41474962609) sobre `2f26827` falló en auditoría de dependencias y build del decoder; no corregida ni repetida en esta revisión. Bloquea el merge (#50).
 
 Un único coordinador de producto activo está soportado; varias instancias necesitan
 coordinación adicional. Ver [modelo de amenazas](threat-model.md) y [verificación](verification.md).

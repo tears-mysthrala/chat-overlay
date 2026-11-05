@@ -598,5 +598,7 @@ contrato, README, AGENTS, verificación, operación y plataformas. La tabla del
 02-10-2026 se conserva como historial. Observado y no cambiado aquí: verification.md
 aún marca SEC-17 como pendiente de implementar; custodian-protocol.md, ADR0008 y
 media-quarantine.md tienen cabeceras anteriores al corte; revisión OpenVEX del
-21-10-2026 vencida con #50 abierto; aceptación de 24 h solo en la rama no integrada
+21-10-2026 vencida con #50 abierto, que puede impedir reiniciar el coordinador local
+(estado desplegado no comprobado); CI de main2f26827 roja el 02-11-2026 (run41474962609),
+no corregida ni repetida; aceptación de 24 h solo en la rama no integrada
 docs/34-soak-acceptance. Rollback: revert documental.
