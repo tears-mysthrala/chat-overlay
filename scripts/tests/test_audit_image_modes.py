@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,10 @@ class AuditModes(unittest.TestCase):
         self.calls.touch()
         # Malformed on purpose: a repository VEX file must not even be read by a decoder scan.
         (tmp / "vex.openvex.json").write_text("not json")
+        security = tmp / "docs/security"
+        security.mkdir(parents=True)
+        for name in ("vex-decoder.approved.json", "decoder-evidence.approved.json"):
+            shutil.copy(SCRIPT.parents[1] / "docs/security" / name, security)
         env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
                "DOCKER_CALLS": str(self.calls), "FAKE_REPORT": json.dumps(report)}
         return subprocess.run([sys.executable, "-c", RUNNER, str(SCRIPT), "image", *flags],
@@ -91,6 +96,7 @@ class AuditModes(unittest.TestCase):
     def test_approved_mode_still_rejects_an_unapproved_image(self):
         result = self.run_audit({"matches": []}, "--decoder")
         self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Decoder image changed", result.stderr)
         self.assertNotIn("--vex", self.calls.read_text())
         self.assertTrue((Path(self.tmp.name) / "output/audit/decoder/vulnerabilities.raw.json").is_file())
 
