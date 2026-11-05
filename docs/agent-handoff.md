@@ -588,3 +588,17 @@ aplicada en producción. Revisión/CI/merge de esta unidad pendientes. No backup
 periódico ni segunda custodia de clave configurados. Propuesta ARCH06 ADR0008
 preparada; protocolo interno y cambio de arquitectura requieren decisión explícita.
 Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
+
+## Arquitectura y amenazas reconciliadas — 05-11-2026, Refs #41
+
+Entrega parcial de #41, base main2f26827, rama docs/41-f2-architecture-threats.
+Solo cambian docs/architecture.md, docs/threat-model.md y este registro. Sin cambios
+de runtime, dependencias ni producción; ninguna prueba en vivo se repitió. Quedan en #41
+contrato, README, AGENTS, verificación, operación y plataformas. La tabla del
+02-10-2026 se conserva como historial. Observado y no cambiado aquí: verification.md
+aún marca SEC-17 como pendiente de implementar; custodian-protocol.md, ADR0008 y
+media-quarantine.md tienen cabeceras anteriores al corte; revisión OpenVEX del
+21-10-2026 vencida con #50 abierto, que puede impedir reiniciar el coordinador local
+(estado desplegado no comprobado); CI de main2f26827 roja el 02-11-2026 (run41474962609),
+no corregida ni repetida; aceptación de 24 h solo en la rama no integrada
+docs/34-soak-acceptance. Rollback: revert documental.
