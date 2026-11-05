@@ -89,7 +89,8 @@ de fallos). Twitch real tras el corte consta en el
 el callback nuevo de Google/YouTube no se ejecutó.
 
 **Capabilities y revocación.** Las capabilities OBS se guardan como hashes y regenerarlas
-desconecta los SSE del perfil (`Stream.disconnect_viewers`). `events.subscribe` autoriza
+desconecta los SSE de overlay del perfil (`Stream.disconnect_viewers`); los lectores con
+sesión no dependen de la capability y siguen conectados. `events.subscribe` autoriza
 antes de ocupar admisión y la sesión del lector se revalida durante el flujo
 (`custodian_tls_test.exs`). Registro real del 08-10-2026: enlace anterior 401, actual 200.
 
