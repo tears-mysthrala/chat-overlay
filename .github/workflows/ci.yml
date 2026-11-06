@@ -144,7 +144,9 @@ jobs:
       - name: Build decoder candidate and run isolated pipeline tests
         run: |
           docker build -f Dockerfile.media-validator.candidate -t chat-overlay:media-validator-candidate .
-          export MEDIA_VALIDATOR_IMAGE=$(docker image inspect --format '{{.Id}}' chat-overlay:media-validator-candidate)
+          MEDIA_VALIDATOR_IMAGE=$(docker image inspect --format '{{.Id}}' chat-overlay:media-validator-candidate)
+          test -n "$MEDIA_VALIDATOR_IMAGE"
+          export MEDIA_VALIDATOR_IMAGE
           echo "CANDIDATE_IMAGE=$MEDIA_VALIDATOR_IMAGE" >> "$GITHUB_ENV"
           python3 scripts/test_media_sandbox.py -v
           python3 scripts/test_media_coordinator.py -v

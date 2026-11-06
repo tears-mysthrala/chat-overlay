@@ -51,6 +51,14 @@ Navegador: `ci_browser.sh` PASS en escritorio y móvil, en ejecución local adap
 Playwright 1.63.0 fijada (QA, `03904f7`), no el paso del runner. No ejecutado: CI remota. Las
 comprobaciones previas con Elixir 1.20.4 no cuentan para esta candidata.
 
+## CI remota en `50c38fe`
+
+[Run 42185602110](https://github.com/tears-mysthrala/chat-overlay/actions/runs/42185602110), 06-11-2026.
+Sustituye las predicciones anteriores para esa revisión. source-and-tests y postgres-rls: PASS,
+incluidos secretos y navegador en el runner. image-security: falla por el VEX vencido, tras smoke y
+aislamiento PASS. media-decoder: pruebas de candidata e histórico PASS; el tar cargó con el ID
+aprobado `89432cb3`; fallan ambas auditorías. quality-gate: falla correctamente.
+
 ## Puertas humanas
 
 1. image-security: decidir la declaración BusyBox para la imagen nueva (#50).

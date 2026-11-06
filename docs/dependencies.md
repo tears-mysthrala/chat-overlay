@@ -37,7 +37,10 @@ Syft 1.52.0 genera CycloneDX 1.7 de la imagen; su catálogo no detectó paquetes
 
 Gitleaks 8.30.1 escanea la instantánea de fuente que Git considera versionada/versionable, con redacción; no examina secretos locales ignorados ni pretende certificar todo el historial Git. `security_static.py` detecta algunas construcciones prohibidas, no sustituye una revisión completa. jsonschema 4.26.0/referencing 0.37.0 son herramientas de validación, no dependencias del servicio.
 
-## Hallazgos abiertos: 4 coincidencias, 2 CVE
+## Registro histórico (2026-09-21): 4 coincidencias, 2 CVE
+
+No describe el estado vigente. Esta tabla y las secciones hasta la excepción SUP-07 corresponden
+a la imagen de esa fecha. Estado actual en el [registro de recuperación](workflows/deployment/runs/2026-11-05-ci-recovery.md).
 
 | Paquete | Aviso | Severidad de Grype | Estado |
 | --- | --- | --- | --- |
@@ -72,9 +75,12 @@ Decisión (ADR 0002): mantener Alpine 3.24.2. Ninguna alternativa da un gate ver
 - **CVE-2025-60876 (busybox wget, inyección de cabeceras):** el desencadenante exige ejecutar el applet `wget` de BusyBox con un request-target controlado por el atacante. Evidencia de no alcanzabilidad en este servicio: `lib/` no contiene ninguna primitiva de shell (`System.cmd`, `:os.cmd`, `Port.open`, `open_port` — búsqueda vacía); la salida HTTP usa exclusivamente Mint contra destinos de `Net.open` (allowlist + IP pública pineada + `verify_peer`); los applets `wget`/`ssl_client` no se invocan en ninguna ruta (solo `/bin/sh` ejecuta el script de arranque del release). Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 - **CVE-2026-85091 (zlib `gz_vacate`, vía `gzprintf` tras stall):** el desencadenante exige la API de ficheros `gz*` de zlib. Evidencia: árbol de dependencias 100 % Elixir puro (bandit, hpax, mime, mint, mint_web_socket, plug, plug_crypto, telemetry, thousand_island, websock; sin ficheros `.c`/`.so` en `deps/`); sin uso de `:zlib`/gzip/deflate en `lib/` ni en el frontend; el módulo `:zlib` de BEAM no expone las funciones de fichero `gz*`. Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 
-Esto **no corrige los componentes**: el gate pasa solo mediante la excepción SUP-07 fechada (sección siguiente) y el merge a `main` sigue requiriendo revisión humana.
+Esto **no corrige los componentes**: en esa fecha el gate pasaba solo mediante la excepción SUP-07 fechada (sección siguiente) y el merge a `main` sigue requiriendo revisión humana.
 
-## Excepción aprobada por Kalista (SUP-07, 2026-09-21, issue #4)
+## Excepción histórica de Kalista (SUP-07, 2026-09-21, issue #4), vencida
+
+Su revisión venció el 2026-10-21 sin renovarse (#50): no respalda un gate en verde. La auditoría
+actual de imagen falla por ese vencimiento antes de escanear; ver el [registro de recuperación](workflows/deployment/runs/2026-11-05-ci-recovery.md).
 
 Mecanismo: `vex.openvex.json` (OpenVEX, versionado en el repo), consumido por
 `scripts/audit_image.py` vía `grype --vex`. Dos declaraciones `not_affected`
@@ -85,7 +91,7 @@ silenciosas: el JSON del escáner conserva los ignorados con su regla VEX.
 
 Caducidad automática: los purls fijan la versión exacta; cualquier revisión nueva
 de Alpine deja de coincidir y el gate vuelve a rojo, forzando re-evaluación.
-Revisión humana debida: 2026-10-21. Responsable: Kalista; motivo y compensación
+Revisión humana debida: 2026-10-21, vencida. Responsable: Kalista; motivo y compensación
 en el ADR 0002 y en la sección de aplicabilidad anterior.
 
 SUP-05 sigue pendiente antes de distribución: firma/procedencia verificable y revisión de todas las obligaciones de licencia de la imagen. El SHA-256 identifica bytes; no autentica al publicador.
