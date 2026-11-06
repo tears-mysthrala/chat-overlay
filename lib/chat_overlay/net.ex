@@ -166,8 +166,7 @@ defmodule ChatOverlay.Net do
          %{"account_version" => ^version, "status" => "active"} <- current[provider] do
       {:ok, token}
     else
-      {:error, reason}
-      when reason in [:upstream_unavailable, :upstream_timeout, :token_refresh_failed] ->
+      {:error, reason} when reason in [:upstream_unavailable, :upstream_timeout] ->
         {:error, :upstream_unavailable}
 
       _ ->
