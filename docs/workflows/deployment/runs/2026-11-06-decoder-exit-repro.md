@@ -39,7 +39,8 @@ arnés ejecutaba fases a la vez; estas cifras son de la repetición en serie, si
 
 `test_sandbox_exit.py` ya era determinista y falla con el launcher antiguo. Se añade a
 `test_media_sandbox.py` una prueba con 20 rechazos reales: con el launcher antiguo falló en 5 de 5
-ejecuciones, y pasa con el actual en ambas imágenes. Suites del decoder PASS con ambas imágenes.
+ejecuciones, y pasa con el actual en ambas imágenes. Con la candidata pasan las cinco suites del
+decoder; con la histórica, en esta unidad, solo `test_media_sandbox.py`.
 
 ## Límites
 
