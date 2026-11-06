@@ -593,3 +593,8 @@ Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
 
 Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
 Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
+
+## Ciclo de lectores — 06-11-2026, Refs #47
+
+Rama test/47-reader-lifecycle, base fix/46-ci-build-recovery. Aceptación con fixtures y un defecto corregido.
+Ver docs/workflows/deployment/runs/2026-11-06-reader-lifecycle.md.

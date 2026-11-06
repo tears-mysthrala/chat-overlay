@@ -126,6 +126,7 @@ defmodule ChatOverlay.Connectors do
           {:retry, 5000}
       end
     else
+      {:error, :upstream_unavailable} -> {:retry, 5000}
       _ -> {:stop, :configuration_error}
     end
   end
