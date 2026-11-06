@@ -31,7 +31,7 @@ class CandidateImageId(unittest.TestCase):
             env = {**os.environ, "PATH": f"{tmp}{os.pathsep}{os.environ['PATH']}",
                    "FAKE_INSPECT": inspect, "GITHUB_ENV": str(github_env)}
             # GitHub runs a run: block with no shell key as `bash -e {0}`.
-            result = subprocess.run(["bash", "-e", "-c", script + 'echo "$MEDIA_VALIDATOR_IMAGE"\n'],
+            result = subprocess.run(["bash", "-e", "-c", script + 'printenv MEDIA_VALIDATOR_IMAGE\n'],
                                     env=env, capture_output=True, text=True)
             return result, github_env.read_text()
 
