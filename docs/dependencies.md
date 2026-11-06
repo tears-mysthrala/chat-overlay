@@ -119,7 +119,7 @@ checksums en mix.lock; no Ecto, Jason ni otra dependencia directa de producción
 Apache-2.0 en los tres, verificado en [Postgrex versionado](https://raw.githubusercontent.com/elixir-ecto/postgrex/v0.22.4/mix.exs),
 [DBConnection](https://raw.githubusercontent.com/elixir-ecto/db_connection/v2.10.2/mix.exs)
 y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.2.0/mix.exs).
-Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.4
+Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.5
 probado. Postgrex 0.22.4 publicado en [Hex](https://hex.pm/packages/postgrex);
 no se presume una política LTS de Postgrex que el proveedor no publica.
 

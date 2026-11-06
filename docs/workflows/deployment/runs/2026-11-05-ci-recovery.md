@@ -41,13 +41,14 @@ Docker mediante un envoltorio local no versionado. Datos sintéticos.
 | Build, smoke y aislamiento de dos releases | PASS |
 | Auditoría de imagen | **Falla**: VEX vencido antes de escanear. Escaneo sin VEX: solo BusyBox, sin corrección publicada |
 | Decoder candidato: build, regresiones Python, cinco suites | PASS |
-| Auditoría de decoder candidato | **Falla**: 17 coincidencias, ninguna crítica |
+| Auditoría de decoder candidato | **Falla**: 17 coincidencias: 4 altas, 11 medias, 2 bajas |
 | Artefacto histórico: tar verificado y cinco suites | PASS con el ID local de este host (`8274808e`) |
 | Auditoría aprobada del histórico | **Falla**: ID de imagen distinto aquí; revisión vencida en cualquier caso |
 | Secretos, estática, VEX normal/-O, pruebas auxiliares | PASS |
 
-No ejecutado: navegador (requiere el runner), CI remota. Las comprobaciones previas con
-Elixir 1.20.4 no cuentan para esta candidata.
+Navegador: `ci_browser.sh` PASS en escritorio y móvil, en ejecución local adaptada con la imagen
+Playwright 1.63.0 fijada (QA, `03904f7`), no el paso del runner. No ejecutado: CI remota. Las
+comprobaciones previas con Elixir 1.20.4 no cuentan para esta candidata.
 
 ## Puertas humanas
 
