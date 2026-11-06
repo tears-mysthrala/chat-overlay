@@ -30,8 +30,9 @@ ocupando CPU. "Retardo" son 0,3 s inyectados antes de consultar el estado.
 | actual | candidata | carga | 150/150 | 0 |
 
 En los fallos registrados, hasta 25 por tanda, el contenedor tenía `ExitCode` 1, `OOMKilled` false
-y el rechazo correcto en sus logs. En el launcher actual, la segunda lectura se usó en la mayoría de
-las ejecuciones sin carga: esa es la carrera, y recupera el informe. Una primera tanda se descartó porque el
+y el rechazo correcto en sus logs. El registro de comandos del launcher actual no distingue la
+relectura tras un contenedor ya terminado de una espera normal, así que no mide cuántas veces la
+relectura recupera el informe. Una primera tanda se descartó porque el
 arnés ejecutaba fases a la vez; estas cifras son de la repetición en serie, sin solapes.
 
 ## Regresión
