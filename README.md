@@ -35,7 +35,7 @@ La demo copia la configuración inicial a un directorio privado en RAM. Las muta
 
 Para detener la demo: `docker compose -p chat-overlay-demo down`.
 
-Con Elixir 1.20.4 y OTP 29.1:
+Con Elixir 1.20.5 y OTP 29.1:
 
 ```sh
 mix deps.get

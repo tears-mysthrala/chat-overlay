@@ -13,19 +13,19 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 
 | Componente fijado | Papel | Licencia de paquete |
 | --- | --- | --- |
-| Elixir 1.20.4 / OTP 29.1.1 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
-| Bandit 1.12.5 | Servidor HTTP | MIT |
+| Elixir 1.20.5 / OTP 29.1.2 | Runtime, JSON, OTP, TLS y criptografía | Apache-2.0; conservar avisos de runtime |
+| Bandit 1.14.1 | Servidor HTTP | MIT |
 | Mint 1.11.0 | HTTP/TLS saliente | Apache-2.0 |
 | Mint.WebSocket 1.0.6 | Protocolo WebSocket | Apache-2.0 |
 | hpax 1.1.0 | Dependencia de transporte | Apache-2.0 |
 | mime 2.0.7 | Tipos MIME de Plug | Apache-2.0 |
-| Plug 1.20.3 / plug_crypto 2.2.0 | Contrato web / primitivas de Plug | Apache-2.0 |
+| Plug 1.20.3 / plug_crypto 2.2.1 | Contrato web / primitivas de Plug | Apache-2.0 |
 | telemetry 1.4.2 | Instrumentación interna de dependencias | Apache-2.0 |
-| Thousand Island 1.5.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
+| Thousand Island 1.6.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
 
 Son diez paquetes Hex directos/transitivos, todos fijados con hashes en mix.lock. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
 
-La imagen y builder Alpine 3.24.2 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
+La imagen y builder Alpine 3.24.3 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20261020-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`, `musl=1.2.6-r3`, `musl-utils=1.2.6-r3`, `zlib=1.3.2-r1`; verificados el 2026-11-05): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
 
 Los paquetes pueden ejecutar sus tareas de compilación durante el build, en un entorno sin secretos de producción. En ejecución, los permisos son los del UID 65532; ninguna dependencia obtiene privilegios extra. No hay exportador de telemetría configurado. Retirada: transporte detrás de Net/Socket/Web/Stream; cambiar componentes exige ADR, pruebas de protocolo y nueva aprobación cuando corresponda.
 
@@ -37,7 +37,10 @@ Syft 1.52.0 genera CycloneDX 1.7 de la imagen; su catálogo no detectó paquetes
 
 Gitleaks 8.30.1 escanea la instantánea de fuente que Git considera versionada/versionable, con redacción; no examina secretos locales ignorados ni pretende certificar todo el historial Git. `security_static.py` detecta algunas construcciones prohibidas, no sustituye una revisión completa. jsonschema 4.26.0/referencing 0.37.0 son herramientas de validación, no dependencias del servicio.
 
-## Hallazgos abiertos: 4 coincidencias, 2 CVE
+## Registro histórico (2026-09-21): 4 coincidencias, 2 CVE
+
+No describe el estado vigente. Esta tabla y las secciones hasta la excepción SUP-07 corresponden
+a la imagen de esa fecha. Estado actual en el [registro de recuperación](workflows/deployment/runs/2026-11-05-ci-recovery.md).
 
 | Paquete | Aviso | Severidad de Grype | Estado |
 | --- | --- | --- | --- |
@@ -72,9 +75,12 @@ Decisión (ADR 0002): mantener Alpine 3.24.2. Ninguna alternativa da un gate ver
 - **CVE-2025-60876 (busybox wget, inyección de cabeceras):** el desencadenante exige ejecutar el applet `wget` de BusyBox con un request-target controlado por el atacante. Evidencia de no alcanzabilidad en este servicio: `lib/` no contiene ninguna primitiva de shell (`System.cmd`, `:os.cmd`, `Port.open`, `open_port` — búsqueda vacía); la salida HTTP usa exclusivamente Mint contra destinos de `Net.open` (allowlist + IP pública pineada + `verify_peer`); los applets `wget`/`ssl_client` no se invocan en ninguna ruta (solo `/bin/sh` ejecuta el script de arranque del release). Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 - **CVE-2026-85091 (zlib `gz_vacate`, vía `gzprintf` tras stall):** el desencadenante exige la API de ficheros `gz*` de zlib. Evidencia: árbol de dependencias 100 % Elixir puro (bandit, hpax, mime, mint, mint_web_socket, plug, plug_crypto, telemetry, thousand_island, websock; sin ficheros `.c`/`.so` en `deps/`); sin uso de `:zlib`/gzip/deflate en `lib/` ni en el frontend; el módulo `:zlib` de BEAM no expone las funciones de fichero `gz*`. Presencia confirmada, ruta de explotación no encontrada con la evidencia disponible.
 
-Esto **no corrige los componentes**: el gate pasa solo mediante la excepción SUP-07 fechada (sección siguiente) y el merge a `main` sigue requiriendo revisión humana.
+Esto **no corrige los componentes**: en esa fecha el gate pasaba solo mediante la excepción SUP-07 fechada (sección siguiente) y el merge a `main` sigue requiriendo revisión humana.
 
-## Excepción aprobada por Kalista (SUP-07, 2026-09-21, issue #4)
+## Excepción histórica de Kalista (SUP-07, 2026-09-21, issue #4), vencida
+
+Su revisión venció el 2026-10-21 sin renovarse (#50): no respalda un gate en verde. La auditoría
+actual de imagen falla por ese vencimiento antes de escanear; ver el [registro de recuperación](workflows/deployment/runs/2026-11-05-ci-recovery.md).
 
 Mecanismo: `vex.openvex.json` (OpenVEX, versionado en el repo), consumido por
 `scripts/audit_image.py` vía `grype --vex`. Dos declaraciones `not_affected`
@@ -85,7 +91,7 @@ silenciosas: el JSON del escáner conserva los ignorados con su regla VEX.
 
 Caducidad automática: los purls fijan la versión exacta; cualquier revisión nueva
 de Alpine deja de coincidir y el gate vuelve a rojo, forzando re-evaluación.
-Revisión humana debida: 2026-10-21. Responsable: Kalista; motivo y compensación
+Revisión humana debida: 2026-10-21, vencida. Responsable: Kalista; motivo y compensación
 en el ADR 0002 y en la sección de aplicabilidad anterior.
 
 SUP-05 sigue pendiente antes de distribución: firma/procedencia verificable y revisión de todas las obligaciones de licencia de la imagen. El SHA-256 identifica bytes; no autentica al publicador.
@@ -114,12 +120,12 @@ los checks compartidos/T3 y el runtime permanecen independientes. Fuentes oficia
 
 El usuario aprobó expresamente Postgrex con ADR0005 para implementación/pruebas
 locales. El árbol actualizado contiene **13** paquetes Hex: los diez anteriores,
-Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.1.1. Fijados con
+Postgrex 0.22.4 y sus dependencias DBConnection 2.10.2 y Decimal 3.2.0. Fijados con
 checksums en mix.lock; no Ecto, Jason ni otra dependencia directa de producción.
 Apache-2.0 en los tres, verificado en [Postgrex versionado](https://raw.githubusercontent.com/elixir-ecto/postgrex/v0.22.4/mix.exs),
 [DBConnection](https://raw.githubusercontent.com/elixir-ecto/db_connection/v2.10.2/mix.exs)
-y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.1.1/mix.exs).
-Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.4
+y [Decimal](https://raw.githubusercontent.com/ericmj/decimal/v3.2.0/mix.exs).
+Requisitos Elixir respectivos ~>1.15/~>1.11/~>1.12, compatibles con el 1.20.5
 probado. Postgrex 0.22.4 publicado en [Hex](https://hex.pm/packages/postgrex);
 no se presume una política LTS de Postgrex que el proveedor no publica.
 
@@ -154,7 +160,7 @@ Se conserva Postgrex 0.22.4 fijado. El build aplica una sustitución acotada de 
 ## Toolchain del harness de recuperación — #40
 
 Solo Dockerfile.recovery-faults (desarrollo/CI): gcc15.2.0-r5 y
-musl-dev1.2.6-r2 fijados por revisión APK. Versiones verificadas en la base
+musl-dev1.2.6-r3 fijados por revisión APK. Versiones verificadas en la base
 local /lib/apk/db/installed. Metadatos de licencia de esos paquetes:
 GPL-2.0-or-later AND LGPL-2.1-or-later para gcc y MIT para musl-dev;
 son metadata de Alpine, no dictamen de distribución. No se incorporan a
@@ -164,3 +170,20 @@ solo se activa en contenedores sintéticos sin red. Build con Werror y EIO/SIGKI
 repetidos. Si los pins dejan de existir, build falla y requiere actualización
 revisada, no quitar versiones. Los pins directos no constituyen un lock completo
 de todas las dependencias transitivas de Alpine ni auditoría CVE de este toolchain.
+
+## Recuperación de CI — 05-11-2026, Refs #46, #50
+
+Actualizaciones de componentes existentes, sin dependencias nuevas ni cambios de licencia
+(Bandit y Thousand Island MIT; plug_crypto y Decimal Apache-2.0): Hex por avisos de
+`mix hex.audit`, Elixir/OTP/Alpine y `ca-certificates`, `musl`, `zlib` por pins retirados o
+avisos con corrección publicada. Thousand Island sube porque Bandit 1.13+ exige `~> 1.6`.
+`musl-dev` 1.2.6-r3 sustituye al pin de `Dockerfile.recovery-faults`.
+
+`Dockerfile.media-validator` y las aprobaciones de `docs/security` no cambian: siguen ligados
+al artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026. El pin Python 3.14.8-r0
+ya no existe, así que esa receta no reconstruye. `Dockerfile.media-validator.candidate` usa
+Python 3.14.10-r1, que incluye tres de los backports, y conserva solo el de poplib; no tiene
+aprobación. `audit_image.py IMAGE --decoder-candidate` lo escanea sin VEX: todo hallazgo falla.
+
+Esta unidad no renueva ni amplía ninguna excepción: las revisiones VEX vencidas siguen
+bloqueando la auditoría hasta una decisión humana (#50).
