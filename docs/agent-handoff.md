@@ -593,3 +593,8 @@ Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
 
 Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
 Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
+
+## `validator_exited` — 06-11-2026, Refs #49
+
+Rama fix/49-validator-exited, base fix/46-ci-build-recovery. Causa reproducida y ya corregida por
+95d1539; añade regresión real repetida. Ver docs/workflows/deployment/runs/2026-11-06-decoder-exit-repro.md.

@@ -71,6 +71,15 @@ class SandboxTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "animated_or_invalid_image"):
                 normalize_isolated(data, "image", self.image)
 
+    def test_fast_rejection_keeps_its_report_when_repeated(self):
+        # The decoder can exit before the launcher's first status check (#49). A few
+        # runs can pass by luck: before the fix, about one rejection in four was lost.
+        animated_webp = (Path(__file__).resolve().parent.parent / "test/fixtures/media/animated.webp").read_bytes()
+        for attempt in range(20):
+            with self.subTest(attempt=attempt):
+                with self.assertRaisesRegex(ValueError, "decoder_rejected: animated_or_invalid_image"):
+                    normalize_isolated(animated_webp, "image", self.image)
+
     def test_category_mismatch_and_invalid_bytes_rejected(self):
         for source, category in [(wav(), "image"), (png(), "audio"), (b"<svg></svg>", "image"), (b"not audio", "audio")]:
             with self.subTest(category=category, source=source[:8]):
