@@ -376,6 +376,9 @@ defmodule ChatOverlay.OAuth do
       status == 401 ->
         {:error, :invalid_grant}
 
+      status in 500..599 ->
+        {:error, :upstream_unavailable}
+
       status >= 400 ->
         {:error, :token_refresh_failed}
 
