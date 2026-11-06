@@ -40,11 +40,12 @@ Docker mediante un envoltorio local no versionado. Datos sintéticos.
 | PostgreSQL/RLS, seeds 0 y 424242 | 26 PASS en cada una; arranque, mutación y reinicio PASS |
 | Build, smoke y aislamiento de dos releases | PASS |
 | Auditoría de imagen | **Falla**: VEX vencido antes de escanear. Escaneo sin VEX: solo BusyBox, sin corrección publicada |
-| Decoder candidato: build, regresiones Python, cinco suites | PASS |
+| Decoder candidato: build, regresiones Python, cinco suites | PASS. Los ID de imagen cambian entre builds: una aprobación debe ligar un artefacto publicado, no la receta |
 | Auditoría de decoder candidato | **Falla**: 17 coincidencias: 4 altas, 11 medias, 2 bajas |
 | Artefacto histórico: tar verificado y cinco suites | PASS con el ID local de este host (`8274808e`) |
-| Auditoría aprobada del histórico | **Falla**: ID de imagen distinto aquí; revisión vencida en cualquier caso |
-| Secretos, estática, VEX normal/-O, pruebas auxiliares | PASS |
+| Auditoría aprobada del histórico (QA, `03904f7`, imagen `8274808e`) | **Falla**: ID de imagen distinto aquí; con la identidad aprobada, revisión vencida |
+| `scan_secrets.py` | Falla en este host con SELinux y etiquetas de montaje activas; PASS sin fugas solo con esas etiquetas desactivadas |
+| Estática, VEX normal/-O, pruebas auxiliares | PASS |
 
 Navegador: `ci_browser.sh` PASS en escritorio y móvil, en ejecución local adaptada con la imagen
 Playwright 1.63.0 fijada (QA, `03904f7`), no el paso del runner. No ejecutado: CI remota. Las
