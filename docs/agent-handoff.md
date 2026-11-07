@@ -593,3 +593,8 @@ Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
 
 Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
 Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
+
+## VEX de release con condiciones — 07-11-2026, Refs #50
+
+Rama fix/50-release-vex, base fix/46-ci-build-recovery. Decisión humana del 2026-11-07, punto 1.
+Ver docs/workflows/deployment/runs/2026-11-07-release-vex.md.

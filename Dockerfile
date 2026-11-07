@@ -22,7 +22,7 @@ COPY scripts scripts
 RUN mix format --check-formatted && mix compile --warnings-as-errors
 
 FROM alpine:3.24.3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a
-# APK pineados exactos (SUP-03): verificados en el repo v3.24 el 2026-11-05.
+# APK pineados exactos (SUP-03): verificados en el repo v3.24 el 2026-11-07.
 # Política de upgrade: si un rebuild falla por pin obsoleto, NO se quita el pin;
 # se actualiza a la revisión nueva en PR con justificación, rebuild, re-escaneo
 # (audit_image.py) y registro en docs/dependencies.md.
@@ -34,7 +34,13 @@ RUN apk add --no-cache \
   libssl3=3.5.9-r0 \
   musl=1.2.6-r3 \
   musl-utils=1.2.6-r3 \
-  zlib=1.3.2-r1
+  zlib=1.4-r0 \
+  # Decisión humana del 2026-11-07 (#50): sin cliente wget en la imagen. El código del applet
+  # sigue dentro de /bin/busybox; se retiran el enlace y su ayudante TLS. apk lo instala por
+  # install_if, así que se excluye con un conflicto en vez de borrarlo después.
+  '!ssl_client' \
+ && rm /usr/bin/wget \
+ && test ! -e /usr/bin/wget && test ! -e /usr/bin/ssl_client
 WORKDIR /app
 COPY --from=build --chown=65532:65532 /build/_build/prod/rel/chat_overlay ./
 COPY mix.lock /app/share/mix.lock
