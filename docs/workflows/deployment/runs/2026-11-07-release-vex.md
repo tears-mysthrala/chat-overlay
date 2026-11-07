@@ -35,6 +35,9 @@ Imágenes derivadas de la resultante, todas fallan con el motivo correcto: beam 
 `vm.args` modificado y librería nueva; con la versión anterior, además, enlace `wget`, script y beam que
 nombran `wget`. Pruebas unitarias para cada control.
 
+Una reconstrucción sin caché da otro ID de imagen (`5c3e2e2e…`) y pasa la misma comprobación sin
+cambios: los hashes del inventario se reproducen en este host. En el runner aún no se ha visto.
+
 Coste intencionado: cualquier cambio de release (módulo nuevo, configuración, OTP o Elixir) cambia
 hashes y hace fallar image-security hasta revisar la diferencia y regenerar el inventario con
 `python3 scripts/check_release_processes.py --record IMAGEN`.
