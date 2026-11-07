@@ -7,7 +7,7 @@ scripts/release_process_inventory.json:
 - in the application and Hex dependency beams, atom combinations a dynamic apply would need to
   launch a process (open_port, cmd or shell with os or System, open with Port);
 - every file under /app/bin, /app/releases, /app/lib/*/priv and ERTS, by SHA-256 (NIFs and ports too);
-- every symlink to BusyBox, and the names of system executables and shared libraries;
+- every symlink, copy or hard link of BusyBox, and the names of system executables and shared libraries;
 - beams or scripts naming wget, and the removed files.
 The file hashes change on purpose with any release change (new module, config, OTP or Elixir), so
 such a PR fails here until someone reviews the diff and regenerates the inventory with:
@@ -54,6 +54,9 @@ echo "--files"; { find /app/bin /app/releases /app/lib/*/priv "$E" -type f ! -pa
 echo "--executables"; { for d in /bin /sbin /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin; do
   [ -d "$d" ] && for f in "$d"/*; do [ -e "$f" ] || [ -L "$f" ] && echo "$f"; done; done
   find / -xdev -type l 2>/dev/null | while read -r l; do case "$(readlink "$l")" in *busybox*) echo "link $l";; esac; done
+  B=$(sha256sum /bin/busybox | cut -d" " -f1)
+  find / -xdev -type f -size "$(wc -c < /bin/busybox)c" 2>/dev/null | while read -r f; do
+    [ "$(sha256sum "$f" | cut -d" " -f1)" = "$B" ] && echo "busybox-copy $f"; done
   find /lib /usr/lib /usr/local/lib -name '*.so*' 2>/dev/null | sed 's/^/lib /'; } | sort -u
 echo "--wget-scripts"; grep -rl wget /app/bin /app/releases /app/lib/*/priv "$E"/bin 2>/dev/null || true
 echo "--present"; for f in REMOVED; do if [ -e "$f" ] || [ -L "$f" ]; then echo "$f"; fi; done

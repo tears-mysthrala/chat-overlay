@@ -380,6 +380,7 @@
   "/usr/sbin/setfont",
   "/usr/sbin/setlogcons",
   "/usr/sbin/update-ca-certificates",
+  "busybox-copy /bin/busybox",
   "lib /lib/ld-musl-x86_64.so.1",
   "lib /lib/libc.musl-x86_64.so.1",
   "lib /usr/lib/engines-3/afalg.so",

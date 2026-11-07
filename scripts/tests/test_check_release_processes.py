@@ -68,6 +68,11 @@ class ReleaseProcessCheck(unittest.TestCase):
         files = dict(INVENTORY["files"], **{"/app/bin/helper": "link:/bin/echo"})
         self.assertEqual(self.problems(files=files), ["release launcher file added: /app/bin/helper"])
 
+    def test_busybox_copy_or_hard_link_fails(self):
+        executables = INVENTORY["executables"] + ["busybox-copy /opt/x"]
+        self.assertEqual(self.problems(executables=executables),
+                         ["new system executable, library or BusyBox link: busybox-copy /opt/x"])
+
     def test_new_system_executable_fails(self):
         self.assertEqual(self.problems(executables=INVENTORY["executables"] + ["/usr/local/bin/x"]),
                          ["new system executable, library or BusyBox link: /usr/local/bin/x"])
