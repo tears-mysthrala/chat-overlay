@@ -187,3 +187,24 @@ aprobación. `audit_image.py IMAGE --decoder-candidate` lo escanea sin VEX: todo
 
 Esta unidad no renueva ni amplía ninguna excepción: las revisiones VEX vencidas siguen
 bloqueando la auditoría hasta una decisión humana (#50).
+
+## Release VEX vigente — decisión humana del 2026-11-07, Refs #50
+
+La persona titular aprobó, tras revisar el dossier local, `not_affected` con
+`vulnerable_code_not_in_execute_path` para BusyBox `wget` en la imagen de release (Alpine 3.24.3),
+con revisión debida el 2027-02-05 y estas condiciones, que cumple esta rama:
+
+- **Sin cliente wget:** la imagen ya no tiene `/usr/bin/wget` ni el paquete `ssl_client`, que apk
+  instalaba por `install_if` y ahora se excluye con `!ssl_client`. El código del applet sigue dentro de
+  `/bin/busybox`, que también es `/bin/sh`: no se afirma que se haya eliminado.
+- **Comprobación por imagen:** `scripts/check_release_processes.py` falla en image-security si la imagen
+  se aparta de `scripts/release_process_inventory.json`: llamadas que lanzan procesos, átomos para
+  `apply`, archivos de arranque, ERTS y `priv`, ejecutables, librerías, enlaces a BusyBox, o cualquier
+  mención de `wget`. Tras un cambio de release revisado se regenera con `--record`.
+- **Sin zlib:** se retira la declaración de zlib, que ya no casaba con nada. `zlib` sube a 1.4-r0
+  porque 1.3.2-r1 ya no está en v3.24.
+- **Sin ampliación:** el reescaneo de la imagen resultante solo da las coincidencias de `busybox` y
+  `busybox-binsh` ya conocidas. Una coincidencia nueva obliga a parar y escalar, no a ampliar el VEX.
+
+El decoder no tiene aprobación: sus declaraciones siguen sin cambios. Ver el
+[registro](workflows/deployment/runs/2026-11-07-release-vex.md).
