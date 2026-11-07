@@ -593,3 +593,8 @@ Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
 
 Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
 Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
+
+## Decoder candidato reconstruido — 07-11-2026, Refs #50
+
+Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-11-07, punto 2: sin aprobación.
+Ver docs/workflows/deployment/runs/2026-11-07-decoder-rebuild.md.
