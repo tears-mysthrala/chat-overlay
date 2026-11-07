@@ -41,13 +41,16 @@ Wget=[filename:basename(F)||F<-Beams,begin {ok,B0}=file:read_file(F),
 io:format("~s~n",[json:encode(#{<<"beams">>=>length(Beams),<<"calls">>=>[[list_to_binary(A),list_to_binary(B)]||[A,B]<-Calls],<<"beams_with_wget">>=>[list_to_binary(X)||X<-Wget],<<"atoms">>=>[[list_to_binary(M),[list_to_binary(A)||A<-L]]||[M,L]<-Atoms]})]),
 halt().
 '''
-# COOKIE is random per build and is not a launcher, so it is the one file left out.
+# /app/releases/COOKIE is random per build and is not a launcher, so it is the one file left out.
+# Symlinks under the same roots are recorded by target.
 SHELL = r'''
 set -e
 E=$(ls -d /app/erts-*)
 BOOT=$(ls /app/releases/*/start_clean.boot | head -1)
 $E/bin/erl -noshell -boot "${BOOT%.boot}" -boot_var RELEASE_LIB /app/lib -eval "$1" 2>/dev/null | tail -1
-echo "--files"; find /app/bin /app/releases /app/lib/*/priv "$E" -type f ! -name COOKIE -exec sha256sum {} + 2>/dev/null | sort -k2
+echo "--files"; { find /app/bin /app/releases /app/lib/*/priv "$E" -type f ! -path /app/releases/COOKIE -exec sha256sum {} +
+  find /app/bin /app/releases /app/lib/*/priv "$E" -type l | while read -r l; do echo "link:$(readlink "$l")  $l"; done
+  [ -f /app/releases/COOKIE ] || echo "missing  /app/releases/COOKIE"; } 2>/dev/null | sort -k2
 echo "--executables"; { for d in /bin /sbin /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin; do
   [ -d "$d" ] && for f in "$d"/*; do [ -e "$f" ] || [ -L "$f" ] && echo "$f"; done; done
   find / -xdev -type l 2>/dev/null | while read -r l; do case "$(readlink "$l")" in *busybox*) echo "link $l";; esac; done

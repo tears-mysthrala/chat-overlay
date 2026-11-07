@@ -64,6 +64,10 @@ class ReleaseProcessCheck(unittest.TestCase):
                 self.assertEqual(len(problems), 1)
                 self.assertIn("new process-related atoms", problems[0])
 
+    def test_symlink_target_counts_as_launcher_file(self):
+        files = dict(INVENTORY["files"], **{"/app/bin/helper": "link:/bin/echo"})
+        self.assertEqual(self.problems(files=files), ["release launcher file added: /app/bin/helper"])
+
     def test_new_system_executable_fails(self):
         self.assertEqual(self.problems(executables=INVENTORY["executables"] + ["/usr/local/bin/x"]),
                          ["new system executable, library or BusyBox link: /usr/local/bin/x"])
