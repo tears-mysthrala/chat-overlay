@@ -1,7 +1,7 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
   "@id": "https://github.com/tears-mysthrala/chat-overlay/vex.openvex.json",
-  "author": "Kalista (persona titular; decisión humana del 2026-11-07 en #50; antes aprobación en issue #4, 2026-09-21)",
+  "author": "Persona titular del proyecto (decisión humana del 2026-11-07, #50)",
   "timestamp": "2026-11-07T19:42:38Z",
   "version": 1,
   "statements": [
