@@ -48,5 +48,7 @@ hashes y hace fallar image-security hasta revisar la diferencia y regenerar el i
   invocarlo como applet. La declaración cubre el producto, no un intruso en la imagen.
 - La comprobación lee imports, átomos y cadenas de los beams: un `apply` cuyo módulo y función se
   construyan en ejecución sin esos átomos no se ve. Mismo método que el dossier, ampliado.
+- Una copia o un enlace duro de `/bin/busybox` fuera del `PATH` no se detecta (dev-qa). Por sí solo no
+  ejecuta nada: haría falta un lanzador, y esos sí se comprueban.
 - CI remota de esta rama sin ejecutar; el cambio de workflow necesita permiso `workflow` para publicarse.
 - Rollback: revert; la declaración anterior ya había vencido.
