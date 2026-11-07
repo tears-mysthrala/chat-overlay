@@ -180,7 +180,8 @@ avisos con corrección publicada. Thousand Island sube porque Bandit 1.13+ exige
 `musl-dev` 1.2.6-r3 sustituye al pin de `Dockerfile.recovery-faults`.
 
 `Dockerfile.media-validator` y las aprobaciones de `docs/security` no cambian: siguen ligados
-al artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026. El pin Python 3.14.8-r0
+al artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026. Desde el 2026-11-07 (#50) el artefacto aprobado es
+`decoder-1200864a`; ver [registro](workflows/deployment/runs/2026-11-07-decoder-rebuild.md). El pin Python 3.14.8-r0
 ya no existe, así que esa receta no reconstruye. `Dockerfile.media-validator.candidate` usa
 Python 3.14.10-r1, que incluye tres de los backports, y conserva solo el de poplib; no tiene
 aprobación. `audit_image.py IMAGE --decoder-candidate` lo escanea sin VEX: todo hallazgo falla.

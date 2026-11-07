@@ -15,7 +15,8 @@ class BindingTest(unittest.TestCase):
         evidence = json.loads((directory / 'decoder-evidence.approved.json').read_text())
         identity = {'Id': evidence['image'], 'Architecture': evidence['architecture']}
         runtime = evidence['runtime_sha256']
-        today = datetime.date(2026, 10, 7)
+        # Dates come from the approval itself, so the test follows each renewal.
+        today = datetime.date.fromisoformat(vex['approval']['date'])
         validate_binding(vex, evidence, identity, root, runtime, today)
         for kind in ('approval', 'image', 'architecture', 'runtime', 'source', 'expired'):
             with self.subTest(kind=kind):
@@ -26,7 +27,7 @@ class BindingTest(unittest.TestCase):
                 if kind == 'architecture': i['Architecture'] = 'arm64'
                 if kind == 'runtime': r['/validator.py'] = '0' * 64
                 if kind == 'source': e['repository_sha256']['scripts/media_sandbox.py'] = '0' * 64
-                if kind == 'expired': date = datetime.date(2026, 10, 22)
+                if kind == 'expired': date = datetime.date.fromisoformat(evidence['review_due']) + datetime.timedelta(days=1)
                 with self.assertRaises(ValueError):
                     validate_binding(v, e, i, root, r, date)
 
