@@ -13,7 +13,9 @@ SYFT = "anchore/syft:v1.52.0@sha256:500e2d872ac019436926e8322b4fc1f39441d94d21f6
 GRYPE = "anchore/grype:v0.119.0@sha256:8c2c9234a345577a6d321a4753aa3ee1276d8975c8452d2344a56b57733ecad3"
 SCHEMA_REV = "4b3f59453366e27c8073fd24e98bf21ef8892c8e"
 image = sys.argv[1]
-# --decoder-candidate: raw scan of a built decoder. No VEX applies, so every finding fails.
+# --decoder-candidate: raw scan of a built decoder, without VEX. It fails on any finding that is not one
+# of those accepted for the approved artifact (vulnerability, package, version), on any change to an
+# accepted package, and on any doubt (decision of 2026-11-07, #50). The candidate never gains approval.
 candidate = sys.argv[2:] == ["--decoder-candidate"]
 decoder = candidate or sys.argv[2:] == ["--decoder"]
 if sys.argv[2:] and not decoder:
@@ -101,6 +103,18 @@ if decoder and not candidate:
     vex_n = len(vex_doc['statements'])
     print(f'Decoder VEX applied: {vex_n} approved declarations; image/source/runtime hashes verified', flush=True)
 report = json.loads((out / "vulnerabilities.json").read_text())
+if candidate:
+    from decoder_vex import accepted_findings, classify_candidate
+    result = classify_candidate(report, bom["components"], accepted_findings(pathlib.Path('.').resolve()))
+    for row in result["accepted"]:
+        print("Accepted (approved for the decoder artifact):", *row)
+    for row in result["new"]:
+        print("NEW:", *row)
+    for row in result["changed"]:
+        print("Approved package changed (name, approved version, found):", *row)
+    print(f"Candidate findings: {len(result['accepted'])} accepted, {len(result['new'])} new; "
+          f"{len(result['changed'])} approved packages changed")
+    raise SystemExit(bool(result["new"] or result["changed"]))
 for match in report["matches"]:
     print(match["vulnerability"]["id"], match["vulnerability"]["severity"], match["artifact"]["name"], match["artifact"]["version"])
 ignored = report.get("ignoredMatches", [])

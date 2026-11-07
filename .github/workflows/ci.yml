@@ -173,7 +173,7 @@ jobs:
           "$RUNNER_TEMP/decoder-audit/bin/python" -m pip install jsonschema==4.26.0 referencing==0.37.0
       - name: Audit exact decoder image with all-severity gate
         run: '"$RUNNER_TEMP/decoder-audit/bin/python" scripts/audit_image.py chat-overlay:media-validator --decoder'
-      - name: Audit built candidate, every finding fatal and no VEX
+      - name: Audit built candidate, failing on any finding not already approved
         if: ${{ !cancelled() && env.CANDIDATE_IMAGE != '' }}
         run: '"$RUNNER_TEMP/decoder-audit/bin/python" scripts/audit_image.py "$CANDIDATE_IMAGE" --decoder-candidate'
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9

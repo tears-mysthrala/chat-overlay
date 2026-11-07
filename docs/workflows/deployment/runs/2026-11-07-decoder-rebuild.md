@@ -56,3 +56,28 @@ esperaba: aprobación anterior vencida, y la candidata sin VEX.
 - No se borran archivos de SQLite, por decisión.
 
 Pendiente: comprobar en el runner que el tar carga con el ID esperado y que la auditoría aprobada pasa.
+
+## Política de la auditoría candidata — 2026-11-07
+
+Decisión humana posterior ("Sí, solo nuevos"): el paso de la receta reconstruida falla solo ante lo que
+el artefacto aprobado `decoder-1200864a` no acepta ya. Comprobado en el runner antes del cambio: el tar
+cargó con ID `sha256:1200864a…` y la auditoría aprobada pasó con las 15 declaraciones.
+
+- Las aceptadas se derivan de `vex-decoder.approved.json` y `decoder-evidence.approved.json`, sin lista
+  propia: tuplas (vulnerabilidad, paquete, versión instalada) de cada producto declarado, 17 en total.
+  Caducan con la aprobación (2027-02-05).
+- Falla si aparece un hallazgo fuera de esas tuplas, si un paquete aceptado cambia de versión o
+  desaparece del SBOM, si la aprobación no está aprobada, caducó, no se lee o sus documentos no
+  concuerdan, y si el escáner falla, no deja informe, el informe es inválido o no tiene coincidencias.
+  Una salida sin coincidencias se trata como duda, porque las aceptadas deberían seguir apareciendo.
+- La salida lista por separado aceptadas, nuevas y paquetes cambiados. El informe completo se conserva.
+- La candidata no obtiene la identidad aprobada: no se compara su ID ni se le aplica VEX.
+
+Pruebas: el script real con Docker falso cubre solo aceptadas, una nueva, versión cambiada, paquete
+cambiado sin hallazgo, aprobación caducada, pendiente o incoherente, declaración caducada, documentos
+ausentes o mal formados, y escáner vacío, ausente, inválido o con error. Desactivar cualquiera de los
+controles hace fallar al menos una prueba. En este host, la imagen exacta da 17 aceptadas y 0 nuevas, y
+una imagen derivada que añade el CLI `sqlite` falla con hallazgos nuevos.
+
+Rollback: revert; la auditoría vuelve a fallar ante cualquier hallazgo.
+

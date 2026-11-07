@@ -599,3 +599,4 @@ Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recov
 Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-11-07, punto 2: sin aprobación.
 Ver docs/workflows/deployment/runs/2026-11-07-decoder-rebuild.md.
 Aprobación condicionada cumplida (run 42411237618); artefacto publicado como release decoder-1200864a-20261107.
+Política de la auditoría candidata ("solo nuevos") aplicada: falla solo fuera de las 17 aceptadas del artefacto aprobado.
