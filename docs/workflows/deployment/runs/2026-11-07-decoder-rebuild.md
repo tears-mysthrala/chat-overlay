@@ -13,8 +13,8 @@ que vuelva a construir. `Dockerfile.media-validator` y las aprobaciones de `docs
 
 Como paquete no es posible: el `python3` de Alpine depende de `so:libsqlite3.so.0`, y apk rechaza
 `!sqlite-libs`. Sus archivos sí se pueden borrar tras instalarlo: solo `_sqlite3` enlaza la librería, y
-una imagen derivada sin ellos pasó las cinco suites en la comprobación de QA. El escáner seguiría
-listando el paquete. No se aplica aquí: queda como opción para la decisión humana.
+una imagen derivada sin ellos pasó las cinco suites en la comprobación de QA. Se espera que el escáner siga
+listando el paquete, pero esa variante no se escaneó. No se aplica aquí: queda como opción para la decisión humana.
 
 ## Resultados en este host
 
