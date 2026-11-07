@@ -80,4 +80,3 @@ controles hace fallar al menos una prueba. En este host, la imagen exacta da 17 
 una imagen derivada que añade el CLI `sqlite` falla con hallazgos nuevos.
 
 Rollback: revert; la auditoría vuelve a fallar ante cualquier hallazgo.
-
