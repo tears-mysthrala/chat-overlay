@@ -11,8 +11,10 @@ que vuelva a construir. `Dockerfile.media-validator` y las aprobaciones de `docs
 
 ## Quitar SQLite
 
-No es posible con el `python3` de Alpine: depende de `so:libsqlite3.so.0`, y apk rechaza `!sqlite-libs`.
-Se documenta y se sigue, como indica la decisión.
+Como paquete no es posible: el `python3` de Alpine depende de `so:libsqlite3.so.0`, y apk rechaza
+`!sqlite-libs`. Sus archivos sí se pueden borrar tras instalarlo: solo `_sqlite3` enlaza la librería, y
+una imagen derivada sin ellos pasó las cinco suites en la comprobación de QA. El escáner seguiría
+listando el paquete. No se aplica aquí: queda como opción para la decisión humana.
 
 ## Resultados en este host
 
