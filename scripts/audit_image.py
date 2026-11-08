@@ -33,6 +33,8 @@ identity = json.loads(capture("docker", "image", "inspect", image))[0]
 run("docker", "save", image, "-o", str(out / "image.tar"))
 # Read only generated public build metadata; never environment/configuration.
 hex_inventory = {"components": [], "dependencies": []} if decoder else json.loads(capture("docker", "run", "--rm", "--network", "none", image, "cat", "/app/share/hex-components.json"))
+# A successful scanner command must produce a fresh report, never reuse a previous invocation.
+(out / "syft.cdx.json").unlink(missing_ok=True)
 run("docker", "run", "--rm", "--network", "none", "-e", "SYFT_CHECK_FOR_APP_UPDATE=false", "--mount", mount, SYFT,
     "docker-archive:/scan/image.tar", "-o", "cyclonedx-json=/scan/syft.cdx.json")
 bom = json.loads((out / "syft.cdx.json").read_text())
@@ -92,6 +94,7 @@ if vex_src.is_file() and not decoder:
     cmd += ["--vex", "/scan/vex.openvex.json"]
     vex_n = len(vex_doc["statements"])
     print(f"VEX aplicado: {vex_src} ({vex_n} declaraciones, autor: {vex_doc.get('author')})", flush=True)
+(out / "vulnerabilities.json").unlink(missing_ok=True)
 run(*cmd)
 if decoder and not candidate:
     # Preserve the unfiltered report before applying any approved disposition.
@@ -99,6 +102,7 @@ if decoder and not candidate:
     (out / 'vulnerabilities.raw.json').write_bytes((out / 'vulnerabilities.json').read_bytes())
     vex_doc = verified_document(pathlib.Path('.').resolve(), identity)
     (out / 'vex.openvex.json').write_text(json.dumps(vex_doc, indent=2))
+    (out / 'vulnerabilities.json').unlink(missing_ok=True)
     run(*cmd, '--vex', '/scan/vex.openvex.json')
     vex_n = len(vex_doc['statements'])
     print(f'Decoder VEX applied: {vex_n} approved declarations; image/source/runtime hashes verified', flush=True)

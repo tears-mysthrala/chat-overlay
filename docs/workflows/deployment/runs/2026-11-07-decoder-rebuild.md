@@ -80,3 +80,25 @@ controles hace fallar al menos una prueba. En este host, la imagen exacta da 17 
 una imagen derivada que añade el CLI `sqlite` falla con hallazgos nuevos.
 
 Rollback: revert; la auditoría vuelve a fallar ante cualquier hallazgo.
+
+## Corrección P2: informes anteriores — 2026-11-08
+
+Revisión encontró que la afirmación anterior «falla si el escáner no deja informe» era incompleta:
+en `0af6616`, un informe anterior con las 17 aceptadas permitía éxito aunque Grype no escribiera nada.
+Reproducido con el script real y Docker falso: exit 0, «17 accepted, 0 new».
+
+Se elimina el archivo de salida antes de cada ejecución de Syft y Grype, incluida la segunda pasada
+con VEX del artefacto aprobado. Si el comando termina sin producir su archivo, la lectura falla.
+El informe bruto de la primera pasada VEX se conserva antes de invalidar el destino de la segunda.
+No cambian la aceptación, la evidencia aprobada ni los hashes ligados al artefacto.
+
+En Linux, Python 3.15.0: las nuevas negativas fallaron en la base (6 subcasos); después, las 16 pruebas
+de modos y las 34 de `python3 -m unittest discover -s scripts/tests` pasan. Cubren resultados previos
+Grype en los tres modos, SBOM previo Syft, segunda pasada VEX sin resultado y conservación de los
+informes bruto/filtrado nuevos. `test_decoder_vex.py` normal y con `-O`, estática y trazabilidad pasan.
+`scan_secrets.py` intentado: bloqueado por permiso de escritura en `/out/gitleaks.json`, sin veredicto.
+
+Estas regresiones simulan Docker, los hashes de runtime y los esquemas descargados. No se repitió la
+auditoría real ni se escribió en `output/audit`; Docker real solo se invocó para el intento de secretos.
+Revisión independiente, QA del SHA final y CI alojada pendientes. Sin push, merge ni despliegue.
+Rollback de esta corrección: revert del commit P2; reaparece el riesgo de reutilizar informes.

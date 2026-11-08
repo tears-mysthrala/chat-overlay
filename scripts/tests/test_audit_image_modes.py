@@ -19,21 +19,26 @@ from pathlib import Path
 args = sys.argv[1:]
 Path(os.environ["DOCKER_CALLS"]).open("a").write(" ".join(args) + "\n")
 if args[:2] == ["image", "inspect"]:
-    print(json.dumps([{"Id": "sha256:" + "0" * 64, "Size": 1, "Architecture": "amd64", "Os": "linux"}]))
+    print(json.dumps([{"Id": os.environ.get("FAKE_IMAGE_ID", "sha256:" + "0" * 64), "Size": 1, "Architecture": "amd64", "Os": "linux"}]))
 elif args[0] == "save":
     Path(args[args.index("-o") + 1]).touch()
 elif args[0] == "run":
     mount = next((a for a in args if a.startswith("type=bind")), "")
     scan = Path(re.search(r"source=([^,]+)", mount).group(1)) if mount else None
     if any("syft" in a for a in args):
+        if os.environ.get("FAKE_SYFT_ABSENT"):
+            sys.exit(0)
         (scan / "syft.cdx.json").write_text(json.dumps({"specVersion": "1.7",
             "components": json.loads(os.environ.get("FAKE_COMPONENTS", "[]")),
             "dependencies": [], "metadata": {"component": {"bom-ref": "root"}}}))
     elif any("grype" in a for a in args):
         if os.environ.get("FAKE_GRYPE_FAILS"):
             sys.exit(2)
-        if os.environ["FAKE_REPORT"] != "absent":
-            (scan / "vulnerabilities.json").write_text(os.environ["FAKE_REPORT"])
+        report = os.environ.get("FAKE_VEX_REPORT", os.environ["FAKE_REPORT"]) if "--vex" in args else os.environ["FAKE_REPORT"]
+        if report != "absent":
+            (scan / "vulnerabilities.json").write_text(report)
+    elif "--read-only" in args:
+        print(json.dumps(json.loads(Path("docs/security/decoder-evidence.approved.json").read_text())["runtime_sha256"]))
     else:
         print(json.dumps({"components": [], "dependencies": []}))
 '''
@@ -59,6 +64,7 @@ runpy.run_path(sys.argv[0], run_name="__main__")
 LOW = {"matches": [{"vulnerability": {"id": "CVE-0000-0001", "severity": "Low"},
                     "artifact": {"name": "pkg", "version": "1"}}]}
 APPROVED = json.loads((SCRIPT.parents[1] / "docs/security/vex-decoder.approved.json").read_text())
+EVIDENCE = json.loads((SCRIPT.parents[1] / "docs/security/decoder-evidence.approved.json").read_text())
 
 
 def purl_parts(purl):
@@ -101,6 +107,11 @@ class AuditModes(unittest.TestCase):
         security.mkdir(parents=True)
         for name in ("vex-decoder.approved.json", "decoder-evidence.approved.json"):
             shutil.copy(SCRIPT.parents[1] / "docs/security" / name, security)
+        if flags == ("--decoder",):
+            for name in EVIDENCE["repository_sha256"]:
+                target = tmp / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(SCRIPT.parents[1] / name, target)
         if edit_evidence:
             edit_evidence(security)
         env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
@@ -195,6 +206,57 @@ class AuditModes(unittest.TestCase):
                 result = self.run_audit(report, "--decoder-candidate", env_extra=extra)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 self.assertNotIn("0 new; 0 approved packages changed", result.stdout)
+
+    def test_stale_grype_report_cannot_replace_missing_output(self):
+        for flags, directory, report in (((), "audit", {"matches": []}),
+                                         (("--decoder",), "audit/decoder", {"matches": []}),
+                                         (("--decoder-candidate",), "audit/decoder-candidate", ACCEPTED_ONLY)):
+            with self.subTest(flags=flags):
+                def seed(security):
+                    (security.parents[1] / "vex.openvex.json").unlink()
+                    out = security.parents[1] / "output" / directory
+                    out.mkdir(parents=True)
+                    (out / "vulnerabilities.json").write_text(json.dumps(report))
+                result = self.run_audit("absent", *flags, edit_evidence=seed,
+                                        env_extra={"FAKE_IMAGE_ID": EVIDENCE["image"]})
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("FileNotFoundError", result.stderr)
+                self.assertIn("vulnerabilities.json", result.stderr)
+                self.assertFalse((Path(self.tmp.name) / "output" / directory / "vulnerabilities.json").exists())
+
+    def test_stale_syft_report_cannot_replace_missing_output(self):
+        def seed(security):
+            out = security.parents[1] / "output/audit/decoder-candidate"
+            out.mkdir(parents=True)
+            (out / "syft.cdx.json").write_text(json.dumps({"specVersion": "1.7",
+                "components": components(), "dependencies": [], "metadata": {"component": {"bom-ref": "root"}}}))
+        result = self.run_audit(ACCEPTED_ONLY, "--decoder-candidate", edit_evidence=seed,
+                                env_extra={"FAKE_SYFT_ABSENT": "1"})
+        self.assertNotEqual(result.returncode, 0, result.stdout)
+        self.assertIn("FileNotFoundError", result.stderr)
+        self.assertIn("syft.cdx.json", result.stderr)
+        self.assertNotIn("grype", self.calls.read_text())
+
+    def test_approved_vex_pass_requires_its_own_grype_output(self):
+        for raw in ({"matches": []}, ACCEPTED_ONLY):
+            with self.subTest(raw=raw):
+                result = self.run_audit(raw, "--decoder", env_extra={
+                    "FAKE_IMAGE_ID": EVIDENCE["image"], "FAKE_VEX_REPORT": "absent"})
+                self.assertNotEqual(result.returncode, 0, result.stdout)
+                self.assertIn("FileNotFoundError", result.stderr)
+                self.assertIn("vulnerabilities.json", result.stderr)
+                self.assertIn("--vex", self.calls.read_text())
+                out = Path(self.tmp.name) / "output/audit/decoder"
+                self.assertEqual(json.loads((out / "vulnerabilities.raw.json").read_text()), raw)
+
+    def test_approved_vex_pass_preserves_raw_and_fresh_filtered_reports(self):
+        filtered = {"matches": [], "ignoredMatches": ACCEPTED_ONLY["matches"]}
+        result = self.run_audit(ACCEPTED_ONLY, "--decoder", env_extra={
+            "FAKE_IMAGE_ID": EVIDENCE["image"], "FAKE_VEX_REPORT": json.dumps(filtered)})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        out = Path(self.tmp.name) / "output/audit/decoder"
+        self.assertEqual(json.loads((out / "vulnerabilities.raw.json").read_text()), ACCEPTED_ONLY)
+        self.assertEqual(json.loads((out / "vulnerabilities.json").read_text()), filtered)
 
     def test_unknown_mode_is_rejected_before_any_docker_call(self):
         for flags in (["--decoder-candidat"], ["--decoder", "--decoder-candidate"]):

@@ -600,3 +600,14 @@ Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-1
 Ver docs/workflows/deployment/runs/2026-11-07-decoder-rebuild.md.
 Aprobación condicionada cumplida (run 42411237618); artefacto publicado como release decoder-1200864a-20261107.
 Política de la auditoría candidata ("solo nuevos") aplicada: falla solo fuera de las 17 aceptadas del artefacto aprobado.
+
+## Corrección de informes previos — 08-11-2026, Refs #50
+
+PR #89, rama `fix/50-decoder-rebuild`, mismo worktree del issue. P2 reproducido en `0af6616`:
+Grype sin salida podía reutilizar un informe aceptado previo y dar éxito. Ahora cada invocación
+Syft/Grype invalida su salida; también la segunda pasada Grype con VEX, conservando el bruto nuevo.
+Cuatro pruebas nuevas cubren esa ausencia y la conservación de informes frescos. Linux/Python 3.15.0:
+34 unitarias PASS, VEX normal/`-O` PASS, estática y trazabilidad PASS. Secretos intentado y bloqueado por
+permiso al escribir `/out/gitleaks.json`; no hay veredicto. Sin auditoría real nueva, cambios en evidencia
+aprobada, push, merge ni despliegue. Revisión y QA del SHA final y CI alojada pendientes.
+Detalle y rollback: [registro](workflows/deployment/runs/2026-11-07-decoder-rebuild.md).
