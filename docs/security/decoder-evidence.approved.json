@@ -1,25 +1,32 @@
 {
   "status": "approved",
-  "image": "sha256:89432cb33a13415bb42558259ccf1ea299118d0163547555f8644ae11b0f8bff",
+  "image": "sha256:1200864ad8ca4e35058f988baef7581269273c34b6bbd9985cbd06bbc9e9c240",
+  "image_note": "image is the ID a classic Docker store reports after loading the tar (config digest); a containerd store reports the OCI index instead",
+  "image_index_digest": "sha256:6199a0a2a4e502e2a4df602981344f30ee3b984d7c525ddc426470ae153f22c3",
+  "image_manifest_digest": "sha256:d3394699a21db7e47ac12401ccf2905109c4723bf86284bec045373b34870246",
+  "release": "decoder-1200864a-20261107",
+  "tar": "decoder-1200864a.tar",
+  "tar_sha256": "701dd3cb80646a43d6046ce38fb997d7eabda877da165e464a910fb16a3aef22",
   "architecture": "amd64",
-  "issue": "#55",
-  "review_due": "2026-10-21",
+  "issue": "#50",
+  "review_due": "2027-02-05",
   "runtime_sha256": {
     "/bin/busybox": "01a989eb4d1d04b0d146c790ac536abd88f374ec74a2e110c58910b840d42045",
     "/usr/lib/python3.14/poplib.py": "a6ffff188814b56d95b043c31d9e0dfee51ac6d6e92afe74ab070cb6136b076f",
-    "/usr/lib/python3.14/tarfile.py": "82ac045a2d97396a295405268a5f14393620b0ebf50e9305e56f34731e1d89ea",
+    "/usr/lib/python3.14/tarfile.py": "0f521ef8759f672841632bce6189f805d5420db9fe7f41a00db81b6150207cc7",
     "/usr/lib/python3.14/tempfile.py": "5e2a8c5539e2aa3f4d39a364c701711ba54eeca88c17e95d31ebb83ea84de27d",
     "/usr/lib/python3.14/shutil.py": "b6e01921d7f8a6dcac774c07d1d7f858b2d536ee9535ae576120503fcc559261",
     "/validator.py": "794c58cdd76078991d51ce9d61f8b553d8d006ba001785600626adf6f2dbaad0",
-    "/usr/local/bin/ffmpeg": "6fd8caaed1f94e819168d78c6b635bd7add28aab8a7286c44449430dbbb986b3",
-    "/usr/local/bin/ffprobe": "7f9df1a1bad89ff1e8ff6772bbad73f19fb17990f18d376a7c3537e248054b44"
+    "/usr/local/bin/ffmpeg": "da0bd643c3f1334badb14cf0252e6db63e255db4a8eaae46cd3fb738fc051676",
+    "/usr/local/bin/ffprobe": "078a0537d8c93c5a289919773a454901253ef5fc0a9545f445e8b00c6cd093a6"
   },
   "repository_sha256": {
     "scripts/media_validator.py": "794c58cdd76078991d51ce9d61f8b553d8d006ba001785600626adf6f2dbaad0",
     "scripts/media_sandbox.py": "5d6c9072e2250b96a061da46028c60bf06bb0bc97c819b3078ba6b322e3fae18",
     "scripts/media_coordinator.py": "8de3f358b52c2cbdc57f50ae93b1e99eb79028095a7ad251e38c0315d1b4c572",
-    "Dockerfile.media-validator": "9e157f45d0432f76b3269bda4d82ae4772d08dbc779b5d27de79c4cc365b9068",
-    "vendor/media/python/SHA256SUMS": "62b3e9d974d5bb5055aaf711759da6506e7c13d7173409aa8fabe514b456f247"
+    "Dockerfile.media-validator": "a4b7f5b5fcb7c176605de544c46b65c864d3b3e35dd88c967818a5acab001693",
+    "vendor/media/python/SHA256SUMS": "62b3e9d974d5bb5055aaf711759da6506e7c13d7173409aa8fabe514b456f247",
+    "vendor/media/python/b234a2b67539f787e191d2ef19a7cbdce32874e7.patch": "606aa1bd8124cb0d777744dfe1a89d1ba983638115372cc508f4ed4a154f3abf"
   },
   "required_execution": {
     "entrypoint": [
@@ -44,8 +51,9 @@
   },
   "limitations": [
     "Raw scanner findings retained separately; approved VEX dispositions do not remove evidence.",
-    "No assertion FFmpeg git has full automated CVE release coverage.",
-    "No real R2/provider/TLS/CI/OBS test.",
-    "Activation requires separate image and source digest checks before the scanner uses any statement. PURL matching alone is insufficient."
+    "Approval covers this exact artifact only; a rebuild is a new artifact.",
+    "Reachability argument from a local dossier, not formal verification; FFmpeg itself was not audited.",
+    "No real R2/provider/TLS/OBS test.",
+    "Activation requires image, source and runtime checks before the scanner uses any statement. PURL matching alone is insufficient."
   ]
 }

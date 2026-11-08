@@ -179,11 +179,11 @@ Actualizaciones de componentes existentes, sin dependencias nuevas ni cambios de
 avisos con corrección publicada. Thousand Island sube porque Bandit 1.13+ exige `~> 1.6`.
 `musl-dev` 1.2.6-r3 sustituye al pin de `Dockerfile.recovery-faults`.
 
-`Dockerfile.media-validator` y las aprobaciones de `docs/security` no cambian: siguen ligados
-al artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026. El pin Python 3.14.8-r0
-ya no existe, así que esa receta no reconstruye. `Dockerfile.media-validator.candidate` usa
-Python 3.14.10-r1, que incluye tres de los backports, y conserva solo el de poplib; no tiene
-aprobación. `audit_image.py IMAGE --decoder-candidate` lo escanea sin VEX: todo hallazgo falla.
+En esta fecha, `Dockerfile.media-validator` y las aprobaciones de `docs/security` seguían ligados al
+artefacto histórico `89432cb3`, cuya revisión venció el 21-10-2026, y su pin Python 3.14.8-r0 ya no
+existía. La receta candidata usaba Python 3.14.10-r1, que incluye tres de los backports, y conservaba
+solo el de poplib. `audit_image.py IMAGE --decoder-candidate` escanea sin VEX: todo hallazgo falla.
 
-Esta unidad no renueva ni amplía ninguna excepción: las revisiones VEX vencidas siguen
-bloqueando la auditoría hasta una decisión humana (#50).
+**Actualización 2026-11-07 (#50):** la persona titular aprobó el artefacto exacto `decoder-1200864a`,
+construido con esa receta, que ahora es `Dockerfile.media-validator`. Ver
+[registro](workflows/deployment/runs/2026-11-07-decoder-rebuild.md).

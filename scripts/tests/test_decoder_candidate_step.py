@@ -18,7 +18,7 @@ esac
 class CandidateImageId(unittest.TestCase):
     def run_step(self, inspect):
         text = WORKFLOW.read_text()
-        start = text.index("docker build -f Dockerfile.media-validator.candidate")
+        start = text.index("docker build -f Dockerfile.media-validator -t chat-overlay:media-validator-candidate")
         end = text.index("python3 scripts/test_media_sandbox.py", start)
         script = "".join(line.strip() + "\n" for line in text[start:end].splitlines())
         with tempfile.TemporaryDirectory() as tmp:
