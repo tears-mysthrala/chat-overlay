@@ -141,10 +141,15 @@ def main(args):
     if len(args) != 1:
         raise SystemExit("usage: check_release_processes.py [--record] IMAGE")
     state = collect(args[0])
-    problems = evaluate(state, json.loads(INVENTORY.read_text()))
+    inventory = json.loads(INVENTORY.read_text())
+    problems = evaluate(state, inventory)
+    changed_files = {
+        path: digest for path, digest in sorted(state["files"].items())
+        if inventory["files"].get(path) != digest
+    }
     print(json.dumps({"image": args[0], "beams": state["beams"], "calls": len(state["calls"]),
                       "files": len(state["files"]), "executables": len(state["executables"]),
-                      "problems": problems}))
+                      "problems": problems, "changed_file_fingerprints": changed_files}))
     return 1 if problems else 0
 
 
