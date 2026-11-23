@@ -67,6 +67,43 @@ defmodule ChatOverlay.Custodian.OperationsTest do
     assert ChatOverlay.Config.profile("bob") != nil
   end
 
+  test "custodian deletion rejects an old authenticated session without mutating the profile" do
+    {:ok, old} =
+      Session.create_token(
+        %{
+          "handle" => "alice",
+          "provider" => "twitch",
+          "user_id" => "alice-id",
+          "account_version" => 1
+        },
+        now: System.system_time(:second) - 301
+      )
+
+    before = ChatOverlay.Config.profile("alice")
+
+    assert {:ok, %{"status" => 403}} =
+             execute("profiles.delete", %{
+               "session" => old,
+               "handle" => "alice",
+               "origin" => "https://overlay.example.test"
+             })
+
+    assert ChatOverlay.Config.profile("alice") == before
+  end
+
+  test "custodian deletion rejects a newly issued SSO session", %{token: token} do
+    before = ChatOverlay.Config.profile("alice")
+
+    assert {:ok, %{"status" => 403}} =
+             execute("profiles.delete", %{
+               "session" => token,
+               "handle" => "alice",
+               "origin" => "https://overlay.example.test"
+             })
+
+    assert ChatOverlay.Config.profile("alice") == before
+  end
+
   test "logout revokes the actual token and subsequent calls lose authentication", %{token: token} do
     assert {:ok, %{"status" => 200}} =
              execute("session.logout", %{

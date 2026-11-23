@@ -23,7 +23,7 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 | telemetry 1.4.2 | Instrumentación interna de dependencias | Apache-2.0 |
 | Thousand Island 1.5.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
 
-Son diez paquetes Hex directos/transitivos, todos fijados con hashes en mix.lock. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
+Los paquetes Hex directos/transitivos están fijados con hashes en mix.lock; el inventario de build determina el conjunto efectivo. El script de inventario valida metadatos/licencias y copia sus textos a `/app/share/licenses`. Mint.WebSocket omite LICENSE en su paquete Hex; se incorpora sin cambios desde el commit de su tag v1.0.6 `302eb21d6ecf2a21c85ae4392f922ae5f6cb8fc2`, en `vendor/licenses/`. No hay NIF añadida por estos paquetes. OTP incluye código nativo y enlaza bibliotecas de la imagen (musl, OpenSSL, zlib, libstdc++, ncurses), inventariadas por Syft.
 
 La imagen y builder Alpine 3.24.2 están fijados por digest en Dockerfile. Los repositorios APK firman paquetes, pero sus revisiones pueden actualizarse al reconstruir: **no se afirma reproducibilidad bit a bit**. Los paquetes directos del runtime van además pineados exactos (`ca-certificates=20260909-r0`, `libstdc++=15.2.0-r5`, `ncurses-libs=6.6_p20260516-r0`, `libcrypto3=3.5.9-r0`, `libssl3=3.5.9-r0`; verificados el 2026-09-21): si Alpine retira una revisión y el build falla, se actualiza el pin en PR con justificación, rebuild y re-escaneo, nunca se elimina el pin para "hacer que compile". El inventario y el escaneo se ligan al digest construido. El runtime no instala paquetes, descarga código ni compila al arrancar. La imagen no incluye herramientas de build o scanners.
 
@@ -164,3 +164,23 @@ solo se activa en contenedores sintéticos sin red. Build con Werror y EIO/SIGKI
 repetidos. Si los pins dejan de existir, build falla y requiere actualización
 revisada, no quitar versiones. Los pins directos no constituyen un lock completo
 de todas las dependencias transitivas de Alpine ni auditoría CVE de este toolchain.
+
+## Segundo factor TOTP y actualización Decimal — 11-10-2026, #48/#50
+
+NimbleTOTP 1.0.0 (Dashbit, Apache-2.0) se añade para el algoritmo estándar TOTP,
+sin dependencias runtime transitivas. Paquete, licencia y fuente inspeccionados;
+semillas en custodio y provisión privada según ADR 0009. Una adaptación sintáctica
+para Elixir 1.20 hace explícito el binding `size(^offset)` ya utilizado por el
+código original. `prepare_nimble_totp.exs` verifica el SHA-256 original antes de
+editar; el SBOM conserva el hash efectivo. No se modifica HMAC ni truncado ni
+comparación; vectores RFC 6238 incluidos en la validación. No se silencian avisos.
+El paquete omite un archivo LICENSE independiente: se conserva sin cambios el
+aviso del [README de la versión 1.0.0](https://github.com/dashbitco/nimble_totp/blob/v1.0.0/README.md#license)
+en `vendor/licenses/nimble_totp-NOTICE`, junto al texto completo Apache-2.0 en
+el inventario de la imagen.
+
+Hex detectó el aviso de Decimal 3.1.1 publicado el 10-10. El resolver actualizó a
+3.2.0, fijado en mix.lock y dentro del contrato de Postgrex; no se afirma que la
+aplicación expusiera el argumento vulnerable. `mix hex.audit` no encuentra avisos
+ni paquetes retirados tras la actualización. Referencia primaria:
+https://github.com/ericmj/decimal/security/advisories/GHSA-6c27-994x-c52f.

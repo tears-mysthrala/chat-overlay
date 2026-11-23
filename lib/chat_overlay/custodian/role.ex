@@ -1,10 +1,10 @@
 defmodule ChatOverlay.Custodian.Role do
   @moduledoc "Explicit process roles. The public role refuses private credential configuration."
-  @private_env ~w(CHAT_ENCRYPTION_KEY CHAT_DB_RUNTIME_PASSWORD CHAT_DB_BOOTSTRAP_PASSWORD
+  @private_env ~w(CHAT_REAUTH_TOTP_FILE CHAT_ENCRYPTION_KEY CHAT_DB_RUNTIME_PASSWORD CHAT_DB_BOOTSTRAP_PASSWORD
     TWITCH_CLIENT_SECRET GOOGLE_CLIENT_SECRET YOUTUBE_CLIENT_SECRET MEDIA_COORDINATOR_TOKEN
     R2_SECRET_ACCESS_KEY R2_QUARANTINE_SECRET_ACCESS_KEY R2_ACCESS_KEY_ID
     R2_QUARANTINE_ACCESS_KEY_ID CHAT_TWITCH_TOKEN CHAT_YOUTUBE_TOKEN CHAT_KICK_TOKEN CHAT_CONFIG)
-  @private_config ~w(encryption_key postgres_runtime postgres_bootstrap twitch_client_secret
+  @private_config ~w(reauth_totp_file encryption_key postgres_runtime postgres_bootstrap twitch_client_secret
     google_client_secret youtube_client_secret media_coordinator_token r2_secret_access_key
     r2_quarantine_secret_access_key r2_access_key_id r2_quarantine_access_key_id)a
 

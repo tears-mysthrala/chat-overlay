@@ -53,6 +53,25 @@
       feedbackArea.textContent = "";
     }
 
+    const deleteDialog = document.getElementById("delete-profile-dialog");
+    const deleteCode = document.getElementById("delete-profile-code");
+    document.getElementById("delete-profile-cancel").addEventListener("click", () => deleteDialog.close("cancel"));
+    function confirmDeletion(handle) {
+      if (deleteDialog.open) return Promise.resolve(null);
+      document.getElementById("delete-profile-target").textContent = `Perfil: ${handle}`;
+      deleteCode.value = "";
+      deleteDialog.returnValue = "cancel";
+      return new Promise(resolve => {
+        deleteDialog.addEventListener("close", () => {
+          const code = deleteDialog.returnValue === "delete" ? deleteCode.value : null;
+          deleteCode.value = "";
+          resolve(code);
+        }, { once: true });
+        deleteDialog.showModal();
+        deleteCode.focus();
+      });
+    }
+
     let currentProfiles = [];
 
     // OBS Management elements
@@ -773,13 +792,17 @@
         deleteBtn.className = "btn-action btn-danger";
         deleteBtn.textContent = "Eliminar";
         deleteBtn.addEventListener("click", async () => {
-          if (!confirm(`¿Eliminar el perfil "${profile.handle}"?`)) return;
+          const code = await confirmDeletion(profile.handle);
+          if (code === null) return;
           try {
             deleteBtn.disabled = true;
-            const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "DELETE" });
+            const res = await fetch(`/api/profiles/${encodeURIComponent(profile.handle)}`, { method: "DELETE", headers: code ? { "x-reauth-code": code } : {} });
             const data = await res.json();
             if (data.ok) {
-              await loadProfiles();
+              sessionStorage.removeItem(`obs_token_${profile.handle}`);
+              // Deletion revokes the profile session. Discard all controls and
+              // in-flight reads belonging to that session, including its banner.
+              location.reload();
             } else {
               alert(data.error || "No se pudo eliminar el perfil");
             }

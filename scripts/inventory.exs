@@ -26,7 +26,7 @@ components =
         else: files
 
     files =
-      if name in [:postgrex, :db_connection],
+      if name in [:postgrex, :db_connection, :nimble_totp],
         do: ["vendor/licenses/#{name}-NOTICE", "vendor/licenses/Apache-2.0.txt" | files],
         else: files
 
@@ -55,7 +55,24 @@ components =
                 )
             }
           ],
-          else: []
+          else:
+            if(name == :nimble_totp,
+              do: [
+                %{
+                  "name" => "chat-overlay:source-syntax-patch",
+                  "value" => "issue-48: pin bitstring size binding for Elixir 1.20"
+                },
+                %{
+                  "name" => "chat-overlay:effective-source-sha256",
+                  "value" =>
+                    Base.encode16(
+                      :crypto.hash(:sha256, File.read!("deps/nimble_totp/lib/nimble_totp.ex")),
+                      case: :lower
+                    )
+                }
+              ],
+              else: []
+            )
         ),
       "licenses" => Enum.map(licenses, &%{"license" => %{"id" => &1}})
     }

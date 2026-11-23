@@ -1,0 +1,30 @@
+{
+  "fixture": "synthetic; OAuth upstream mocked; internal Docker network",
+  "driver": "T3 native preview",
+  "dialog_layouts": [
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 390,
+      "height": 844
+    }
+  ],
+  "escape_restores_delete_button_focus": true,
+  "three_digit_code_cannot_submit": true,
+  "mobile_dialog_width": 358,
+  "horizontal_overflow": false,
+  "final_deletion_width": 390,
+  "dashboardHidden": true,
+  "sessionBannerHidden": true,
+  "signinVisible": true,
+  "capabilityRemoved": true,
+  "authenticated": false,
+  "profileApiStatus": 401,
+  "durable_remaining_profiles": [
+    "bob"
+  ],
+  "real_provider_or_OBS": false,
+  "tls_limit": "localhost HTTP proxy simulates HTTPS metadata; actual mTLS covered by ExUnit"
+}
