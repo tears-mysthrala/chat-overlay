@@ -118,6 +118,8 @@ jobs:
         run: docker build -t chat-overlay:review .
       - name: Verify hardened runtime
         run: python3 scripts/smoke_image.py chat-overlay:review
+      - name: Release keeps wget out of reach (#50 VEX condition)
+        run: python3 scripts/check_release_processes.py chat-overlay:review
       - name: Build synthetic custodian fixture tools
         run: docker build --target validation -t chat-overlay:custodian-fixtures .
       - name: Verify separated release processes

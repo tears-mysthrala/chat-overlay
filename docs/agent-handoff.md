@@ -596,7 +596,7 @@ Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recov
 
 ## Decoder candidato reconstruido — 07-11-2026, Refs #50
 
-Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-11-07, punto 2: sin aprobación.
+Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-11-07, punto 2: aprobación condicionada a las suites del decoder.
 Ver docs/workflows/deployment/runs/2026-11-07-decoder-rebuild.md.
 Aprobación condicionada cumplida (run 42411237618); artefacto publicado como release decoder-1200864a-20261107.
 Política de la auditoría candidata ("solo nuevos") aplicada: falla solo fuera de las 17 aceptadas del artefacto aprobado.
@@ -611,3 +611,15 @@ Cuatro pruebas nuevas cubren esa ausencia y la conservación de informes frescos
 permiso al escribir `/out/gitleaks.json`; no hay veredicto. Sin auditoría real nueva, cambios en evidencia
 aprobada, push, merge ni despliegue. Revisión y QA del SHA final y CI alojada pendientes.
 Detalle y rollback: [registro](workflows/deployment/runs/2026-11-07-decoder-rebuild.md).
+
+## VEX de release con condiciones — 07-11-2026, Refs #50
+
+Rama fix/50-release-vex, base fix/46-ci-build-recovery. Decisión humana del 2026-11-07, punto 1.
+Ver docs/workflows/deployment/runs/2026-11-07-release-vex.md.
+
+## Candidata conjunta de CI — 23-11-2026, Refs #46, #50
+
+Rama `fix/46-ci-stack` sobre #84, con #88 y #89 como padres de la integración.
+La combinación conserva los controles de release y decoder y sus aprobaciones acotadas.
+Se resolvieron conflictos de documentación. El CI conjunto y la revisión humana son
+requisitos para integrar en main. Rollback de la propuesta mediante descarte de esta rama.
