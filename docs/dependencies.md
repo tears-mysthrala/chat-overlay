@@ -19,7 +19,7 @@ La sustitución por Bandit/Mint fue aprobada expresamente por Kalista el 20-09-2
 | Mint.WebSocket 1.0.6 | Protocolo WebSocket | Apache-2.0 |
 | hpax 1.1.0 | Dependencia de transporte | Apache-2.0 |
 | mime 2.0.7 | Tipos MIME de Plug | Apache-2.0 |
-| Plug 1.20.3 / plug_crypto 2.2.1 | Contrato web / primitivas de Plug | Apache-2.0 |
+| Plug 1.20.4 / plug_crypto 2.2.1 | Contrato web / primitivas de Plug | Apache-2.0 |
 | telemetry 1.4.2 | Instrumentación interna de dependencias | Apache-2.0 |
 | Thousand Island 1.6.0 / websock 0.5.3 | Conexiones / contrato WebSocket de Bandit | MIT |
 

@@ -2,7 +2,9 @@
 import copy
 import json
 from pathlib import Path
+import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -72,6 +74,25 @@ class ReleaseProcessCheck(unittest.TestCase):
         executables = INVENTORY["executables"] + ["busybox-copy /opt/x"]
         self.assertEqual(self.problems(executables=executables),
                          ["new system executable, library or BusyBox link: busybox-copy /opt/x"])
+
+    def test_busybox_link_check_follows_indirect_targets(self):
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            binary = root / "busybox"
+            binary.touch()
+            (root / "first").symlink_to(binary.name)
+            (root / "second").symlink_to("first")
+            (root / "ordinary").touch()
+            (root / "other").symlink_to("ordinary")
+            (root / "broken").symlink_to("missing")
+            for name, status in {"first": 0, "second": 0, "other": 1, "broken": 1}.items():
+                with self.subTest(name=name):
+                    result = subprocess.run(
+                        ["sh", "-c", check.BUSYBOX_LINK_CHECK + 'is_busybox_link "$1" "$2"',
+                         "check", str(root / name), str(binary)],
+                        check=False,
+                    )
+                    self.assertEqual(result.returncode, status)
 
     def test_new_system_executable_fails(self):
         self.assertEqual(self.problems(executables=INVENTORY["executables"] + ["/usr/local/bin/x"]),

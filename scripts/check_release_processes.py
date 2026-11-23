@@ -41,9 +41,16 @@ Wget=[filename:basename(F)||F<-Beams,begin {ok,B0}=file:read_file(F),
 io:format("~s~n",[json:encode(#{<<"beams">>=>length(Beams),<<"calls">>=>[[list_to_binary(A),list_to_binary(B)]||[A,B]<-Calls],<<"beams_with_wget">>=>[list_to_binary(X)||X<-Wget],<<"atoms">>=>[[list_to_binary(M),[list_to_binary(A)||A<-L]]||[M,L]<-Atoms]})]),
 halt().
 '''
+BUSYBOX_LINK_CHECK = r"""
+is_busybox_link() {
+  case "$(readlink "$1")" in *busybox*) return 0;; esac
+  [ "$1" -ef "$2" ]
+}
+"""
+
 # /app/releases/COOKIE is random per build and is not a launcher, so it is the one file left out.
 # Symlinks under the same roots are recorded by target.
-SHELL = r'''
+SHELL = BUSYBOX_LINK_CHECK + r'''
 set -e
 E=$(ls -d /app/erts-*)
 BOOT=$(ls /app/releases/*/start_clean.boot | head -1)
@@ -53,7 +60,7 @@ echo "--files"; { find /app/bin /app/releases /app/lib/*/priv "$E" -type f ! -pa
   [ -f /app/releases/COOKIE ] || echo "missing  /app/releases/COOKIE"; } 2>/dev/null | sort -k2
 echo "--executables"; { for d in /bin /sbin /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin; do
   [ -d "$d" ] && for f in "$d"/*; do [ -e "$f" ] || [ -L "$f" ] && echo "$f"; done; done
-  find / -xdev -type l 2>/dev/null | while read -r l; do case "$(readlink "$l")" in *busybox*) echo "link $l";; esac; done
+  find / -xdev -type l 2>/dev/null | while read -r l; do if is_busybox_link "$l" /bin/busybox; then echo "link $l"; fi; done
   B=$(sha256sum /bin/busybox | cut -d" " -f1)
   find / -xdev -type f -size "$(wc -c < /bin/busybox)c" 2>/dev/null | while read -r f; do
     [ "$(sha256sum "$f" | cut -d" " -f1)" = "$B" ] && echo "busybox-copy $f"; done

@@ -623,3 +623,9 @@ Rama `fix/46-ci-stack` sobre #84, con #88 y #89 como padres de la integración.
 La combinación conserva los controles de release y decoder y sus aprobaciones acotadas.
 Se resolvieron conflictos de documentación. El CI conjunto y la revisión humana son
 requisitos para integrar en main. Rollback de la propuesta mediante descarte de esta rama.
+
+El primer CI de #90 (45153196890) falló en el build por Plug 1.20.3
+y por los pins de OpenSSL del decoder. Se actualizó Plug a 1.20.4 y se
+cubrieron los enlaces indirectos en el control de release. El nuevo inventario
+requiere revisión sobre la imagen construida. El pin OpenSSL queda pendiente
+de una fuente verificable compatible con la receta y evidencia aprobadas.
