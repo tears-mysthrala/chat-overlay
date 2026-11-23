@@ -588,3 +588,44 @@ aplicada en producción. Revisión/CI/merge de esta unidad pendientes. No backup
 periódico ni segunda custodia de clave configurados. Propuesta ARCH06 ADR0008
 preparada; protocolo interno y cambio de arquitectura requieren decisión explícita.
 Ver docs/workflows/deployment/runs/2026-10-07-ops-recovery.md.
+
+## Recuperación de CI — 05-11-2026, Refs #46, #50
+
+Rama fix/46-ci-build-recovery, base main2f26827. Actualiza dependencias y pins, sin renovar VEX.
+Puertas humanas y resultados: docs/workflows/deployment/runs/2026-11-05-ci-recovery.md.
+
+## Decoder candidato reconstruido — 07-11-2026, Refs #50
+
+Rama fix/50-decoder-rebuild, base fix/46-ci-build-recovery. Decisión del 2026-11-07, punto 2: aprobación condicionada a las suites del decoder.
+Ver docs/workflows/deployment/runs/2026-11-07-decoder-rebuild.md.
+Aprobación condicionada cumplida (run 42411237618); artefacto publicado como release decoder-1200864a-20261107.
+Política de la auditoría candidata ("solo nuevos") aplicada: falla solo fuera de las 17 aceptadas del artefacto aprobado.
+
+## Corrección de informes previos — 08-11-2026, Refs #50
+
+PR #89, rama `fix/50-decoder-rebuild`, mismo worktree del issue. P2 reproducido en `0af6616`:
+Grype sin salida podía reutilizar un informe aceptado previo y dar éxito. Ahora cada invocación
+Syft/Grype invalida su salida; también la segunda pasada Grype con VEX, conservando el bruto nuevo.
+Cuatro pruebas nuevas cubren esa ausencia y la conservación de informes frescos. Linux/Python 3.15.0:
+34 unitarias PASS, VEX normal/`-O` PASS, estática y trazabilidad PASS. Secretos intentado y bloqueado por
+permiso al escribir `/out/gitleaks.json`; no hay veredicto. Sin auditoría real nueva, cambios en evidencia
+aprobada, push, merge ni despliegue. Revisión y QA del SHA final y CI alojada pendientes.
+Detalle y rollback: [registro](workflows/deployment/runs/2026-11-07-decoder-rebuild.md).
+
+## VEX de release con condiciones — 07-11-2026, Refs #50
+
+Rama fix/50-release-vex, base fix/46-ci-build-recovery. Decisión humana del 2026-11-07, punto 1.
+Ver docs/workflows/deployment/runs/2026-11-07-release-vex.md.
+
+## Candidata conjunta de CI — 23-11-2026, Refs #46, #50
+
+Rama `fix/46-ci-stack` sobre #84, con #88 y #89 como padres de la integración.
+La combinación conserva los controles de release y decoder y sus aprobaciones acotadas.
+Se resolvieron conflictos de documentación. El CI conjunto y la revisión humana son
+requisitos para integrar en main. Rollback de la propuesta mediante descarte de esta rama.
+
+El primer CI de #90 (45153196890) falló en el build por Plug 1.20.3
+y por los pins de OpenSSL del decoder. Se actualizó Plug a 1.20.4 y se
+cubrieron los enlaces indirectos en el control de release. El nuevo inventario
+requiere revisión sobre la imagen construida. El pin OpenSSL queda pendiente
+de una fuente verificable compatible con la receta y evidencia aprobadas.

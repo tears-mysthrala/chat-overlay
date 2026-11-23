@@ -1,40 +1,175 @@
 {
   "@context": "https://openvex.dev/ns/v0.2.0",
-  "@id": "urn:chat-overlay:decoder-vex-approved:2026-10-07",
-  "author": "Kalista (aprobacion explicita); documentado por Codex",
-  "timestamp": "2026-10-07T09:00:00Z",
+  "@id": "urn:chat-overlay:decoder-vex-approved:2026-11-07",
+  "author": "Persona titular del proyecto (decisión humana del 2026-11-07, #50)",
+  "timestamp": "2026-11-07T20:33:52Z",
   "version": 1,
   "approval": {
     "status": "approved",
-    "responsible": "Kalista",
-    "issue": "https://github.com/tears-mysthrala/chat-overlay/issues/55",
-    "date": "2026-10-07",
-    "authorization": "Apruebo la propuesta; conversacion del proyecto"
+    "responsible": "Persona titular del proyecto",
+    "issue": "https://github.com/tears-mysthrala/chat-overlay/issues/50",
+    "date": "2026-11-07",
+    "authorization": "Sí, si pasa: condicionado a que el CI de PR #89 pase las suites del decoder sobre esta receta"
   },
   "artifact_binding": {
-    "image": "sha256:89432cb33a13415bb42558259ccf1ea299118d0163547555f8644ae11b0f8bff",
+    "image": "sha256:1200864ad8ca4e35058f988baef7581269273c34b6bbd9985cbd06bbc9e9c240",
     "evidence": "decoder-evidence.approved.json",
     "changes_invalidate": true
   },
   "statements": [
     {
       "vulnerability": {
-        "@id": "CVE-2026-87910"
+        "@id": "CVE-2026-119586"
       },
       "products": [
         {
-          "@id": "pkg:apk/alpine/python3@3.14.8-r0?arch=x86_64&distro=alpine-3.24.2"
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
         }
       ],
-      "status": "fixed",
-      "impact_statement": "Backport oficial tarfile aplicado sin fuzz; filtro None durante fallback de links corregido. Regression test_extract_filters_target_none ejecutada en build como UID65532. APK original conserva version 3.14.8-r0; declaracion fixed exige hashes runtime de la imagen y patch manifest. Revisar ante cualquier cambio de imagen, fuente, modulo o plataforma; revision debida 2026-10-21. APROBADO el 2026-10-07; aplicacion condicionada a hashes verificados.",
-      "review_due": "2026-10-21",
-      "evidence": {
-        "upstream_commit": "a4919937a4e1e69a0d178909c6f20557eca5d1d0",
-        "runtime_files": [
-          "tarfile.py"
-        ]
-      }
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_present",
+      "impact_statement": "Fallo del CLI sqlite3 (.recover); el binario sqlite3 no está en la imagen. Dossier, grupo C (D1).",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119379"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119374"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119378"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119373"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119375"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119371"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119376"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119591"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119372"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-119377"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/sqlite-libs@3.53.4-r0?arch=x86_64&distro=alpine-3.24.2&upstream=sqlite"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere ejecutar libsqlite3 con SQL, una base o un changeset. En este artefacto solo _sqlite3 enlaza la librería, ningún módulo cargado por /validator.py la importa ni puede alcanzarla, y el proceso de producción no la carga. Dossier local del 2026-11-07, grupo C.",
+      "review_due": "2027-02-05"
     },
     {
       "vulnerability": {
@@ -42,37 +177,17 @@
       },
       "products": [
         {
-          "@id": "pkg:apk/alpine/python3@3.14.8-r0?arch=x86_64&distro=alpine-3.24.2"
+          "@id": "pkg:apk/alpine/python3@3.14.10-r1?arch=x86_64&distro=alpine-3.24.2"
         }
       ],
       "status": "fixed",
-      "impact_statement": "Backport oficial poplib rechaza control characters antes de emitir comandos. Tres variantes upstream de test_control_characters ejecutadas. Declaracion fixed ligada a archivos parcheados, no a todo Python3.14.8-r0. Revisar ante cualquier cambio de imagen, fuente, modulo o plataforma; revision debida 2026-10-21. APROBADO el 2026-10-07; aplicacion condicionada a hashes verificados.",
-      "review_due": "2026-10-21",
+      "impact_statement": "Backport oficial de poplib (b234a2b) en /usr/lib/python3.14/poplib.py: rechaza caracteres de control antes de enviar; probado en la imagen. El escáner empareja por versión. Dossier, grupo D (D3).",
+      "review_due": "2027-02-05",
       "evidence": {
         "upstream_commit": "b234a2b67539f787e191d2ef19a7cbdce32874e7",
-        "runtime_files": [
-          "poplib.py"
-        ]
-      }
-    },
-    {
-      "vulnerability": {
-        "@id": "CVE-2026-12345"
-      },
-      "products": [
-        {
-          "@id": "pkg:apk/alpine/python3@3.14.8-r0?arch=x86_64&distro=alpine-3.24.2"
+        "runtime_files": {
+          "/usr/lib/python3.14/poplib.py": "a6ffff188814b56d95b043c31d9e0dfee51ac6d6e92afe74ab070cb6136b076f"
         }
-      ],
-      "status": "fixed",
-      "impact_statement": "Backport CPython cherry-pick de 5c20517a4fc56683efe63a7751020db9573f538d, FD-relative cleanup y regresiones symlink race/on_exc/parent_mode. Registro CVE oficial PUBLISHED confirmado; SHA del patch coincide upstream. Es backport local, no release oficial corregida ni proteccion universal en plataformas sin rmtree FD-relative. Revisar ante cualquier cambio de imagen, fuente, modulo o plataforma; revision debida 2026-10-21. APROBADO el 2026-10-07; aplicacion condicionada a hashes verificados.",
-      "review_due": "2026-10-21",
-      "evidence": {
-        "upstream_commit": "363aec1fd31ecbd92c3c7d0a40af4e90b4613e19",
-        "runtime_files": [
-          "tempfile.py",
-          "shutil.py"
-        ]
       }
     },
     {
@@ -81,10 +196,10 @@
       },
       "products": [
         {
-          "@id": "pkg:apk/alpine/busybox@1.37.0-r31?arch=x86_64&distro=alpine-3.24.2"
+          "@id": "pkg:apk/alpine/busybox-binsh@1.37.0-r31?arch=x86_64&distro=alpine-3.24.2&upstream=busybox"
         },
         {
-          "@id": "pkg:apk/alpine/busybox-binsh@1.37.0-r31?arch=x86_64&distro=alpine-3.24.2&upstream=busybox"
+          "@id": "pkg:apk/alpine/busybox@1.37.0-r31?arch=x86_64&distro=alpine-3.24.2"
         },
         {
           "@id": "pkg:apk/alpine/ssl_client@1.37.0-r31?arch=x86_64&distro=alpine-3.24.2&upstream=busybox"
@@ -92,8 +207,36 @@
       ],
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path",
-      "impact_statement": "Aplicable exclusivamente al producto decoder con imagen, entrypoint, launcher y hashes indicados en decoder-evidence.proposed.json. El applet wget vulnerable SIGUE presente: no esta parcheado ni retirado. validator.py solo invoca ffprobe/ffmpeg con argv fijos, contenido multimedia nunca se usa como URL/command; FFmpeg solo admite protocolos file/pipe. Launcher impone red none, UID65532, readonly, caps ALL drop, no-new-privileges y un unico input readonly. No cubre ejecucion generica de la imagen, entrypoint override, red habilitada, comandos de operador o launcher distinto. Revalidar ante cualquier cambio; revision debida 2026-10-21. APROBADO el 2026-10-07; aplicacion condicionada a hashes verificados.",
-      "review_due": "2026-10-21"
+      "impact_statement": "Fallo del applet wget de BusyBox. El validador solo lanza ffprobe y ffmpeg por vectores fijos, sin shell, y el contenedor no tiene red. Dossier, grupo B (D5-D7).",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-116566"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/python3@3.14.10-r1?arch=x86_64&distro=alpine-3.24.2"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere llamar a socket.getaddrinfo con host o puerto de entrada; el validador nunca carga socket y no hay red. Dossier, grupo E (D9).",
+      "review_due": "2027-02-05"
+    },
+    {
+      "vulnerability": {
+        "@id": "CVE-2026-103995"
+      },
+      "products": [
+        {
+          "@id": "pkg:apk/alpine/python3@3.14.10-r1?arch=x86_64&distro=alpine-3.24.2"
+        }
+      ],
+      "status": "not_affected",
+      "justification": "vulnerable_code_not_in_execute_path",
+      "impact_statement": "Requiere leer una respuesta HTTP con http.client, que el validador nunca carga. Dossier, grupo E (D15).",
+      "review_due": "2027-02-05"
     }
   ]
 }
