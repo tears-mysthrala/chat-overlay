@@ -10,11 +10,12 @@ Comprueba el handle y el identificador inmutable de la cuenta vinculada, y verif
 al titular por el canal de administración existente. Una petición procedente
 solo de una sesión del panel no autoriza registrar o reemplazar el factor.
 Usa el artefacto revisado, un terminal privado y un directorio nuevo en almacenamiento
-cifrado. En Linux se crean directorio 0700 y archivos 0600. En Windows configura
-una ACL exclusiva del operador antes de generar secretos.
+cifrado, bajo un directorio padre de acceso exclusivo del operador. En Linux,
+usa `umask 077` en ambos pasos para restringir los permisos desde la creación.
+En Windows configura una ACL exclusiva del operador antes de generar secretos.
 
 ```sh
-MIX_ENV=prod mix run --no-start scripts/provision_totp.exs prepare /private/alice alice twitch USER_ID
+(umask 077 && MIX_ENV=prod mix run --no-start scripts/provision_totp.exs prepare /private/alice alice twitch USER_ID)
 ```
 
 Abre `/private/alice/enrollment.txt` localmente e importa la URI en la aplicación
@@ -22,7 +23,7 @@ de autenticación del titular. No la copies a chats, logs, issues ni servicios Q
 Confirma el código mostrado, por stdin, sin incluirlo en argumentos o historial:
 
 ```sh
-MIX_ENV=prod mix run --no-start scripts/provision_totp.exs confirm /private/alice
+(umask 077 && MIX_ENV=prod mix run --no-start scripts/provision_totp.exs confirm /private/alice)
 ```
 
 Solo entonces aparece `credentials.json`; se retiran los archivos provisionales.
